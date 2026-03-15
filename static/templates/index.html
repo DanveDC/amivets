@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AmiVets - Sistema de Gestión Veterinaria</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+                    <circle cx="20" cy="20" r="18" fill="#4F46E5" />
+                    <path d="M20 10C15 10 12 13 12 18C12 22 15 25 20 30C25 25 28 22 28 18C28 13 25 10 20 10Z"
+                        fill="white" />
+                </svg>
+                <h1>AmiVets</h1>
+            </div>
+            <nav class="nav">
+                <a href="#" class="nav-link active" data-section="agenda">Agenda</a>
+                <a href="#" class="nav-link" data-section="consultorio">Consultorio</a>
+                <a href="#" class="nav-link" data-section="informes">Informes</a>
+            </nav>
+            <div class="user-menu">
+                <span id="userNameDisplay" style="margin-right: 1rem; font-weight: 500; color: #4F46E5;"></span>
+                <button class="btn-primary" id="btnRegistrarPropietario">+ Registrar Propietario</button>
+                <button class="btn-secondary" onclick="logout()">Cerrar Sesión</button>
+            </div>
+        </header>
+
+        <!-- Modal Registrar Propietario -->
+        <div id="modalPropietario" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Registrar Propietario</h2>
+                    <span class="close" data-modal="modalPropietario">&times;</span>
+                </div>
+                <form id="formPropietario">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="propietarioNombre">Nombre *</label>
+                            <input type="text" id="propietarioNombre" required placeholder="Ej: Juan">
+                        </div>
+                        <div class="form-group">
+                            <label for="propietarioApellido">Apellido *</label>
+                            <input type="text" id="propietarioApellido" required placeholder="Ej: Pérez">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="propietarioCedula">Paso/Cédula/ID *</label>
+                        <input type="text" id="propietarioCedula" required placeholder="Ej: 12345678">
+                    </div>
+                    <div class="form-group">
+                        <label for="propietarioTelefono">Teléfono *</label>
+                        <input type="tel" id="propietarioTelefono" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="propietarioEmail">Email</label>
+                        <input type="email" id="propietarioEmail">
+                    </div>
+                    <div class="form-group">
+                        <label for="propietarioDireccion">Dirección</label>
+                        <textarea id="propietarioDireccion" rows="3"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalPropietario">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Propietario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Mascota -->
+        <div id="modalMascota" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Registrar Mascota</h2>
+                    <span class="close" data-modal="modalMascota">&times;</span>
+                </div>
+                <form id="formMascota">
+                    <div class="form-group">
+                        <label for="mascotaNombre">Nombre de la Mascota *</label>
+                        <input type="text" id="mascotaNombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaEspecie">Especie *</label>
+                        <select id="mascotaEspecie" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Perro">Perro</option>
+                            <option value="Gato">Gato</option>
+                            <option value="Ave">Ave</option>
+                            <option value="Conejo">Conejo</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaRaza">Raza</label>
+                        <div id="selectMascotaRazaContainer" class="custom-select-container">
+                            <!-- Custom Select will be rendered here -->
+                        </div>
+                        <input type="hidden" id="mascotaRaza" name="raza">
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaEstadoReproductivo">Estado Reproductivo</label>
+                        <select id="mascotaEstadoReproductivo">
+                            <option value="No especificado">Seleccionar...</option>
+                            <option value="Esterilizado">Esterilizado</option>
+                            <option value="No Esterilizado">No Esterilizado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaFechaNacimiento">Fecha de Nacimiento</label>
+                        <input type="date" id="mascotaFechaNacimiento">
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaSexo">Sexo</label>
+                        <select id="mascotaSexo">
+                            <option value="">Seleccionar...</option>
+                            <option value="Macho">Macho</option>
+                            <option value="Hembra">Hembra</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaColor">Color</label>
+                        <input type="text" id="mascotaColor">
+                    </div>
+                    <div class="form-group">
+                        <label for="mascotaPropietarioId">Asociar Propietario (Cédula o Nombre) *</label>
+                        <div id="selectMascotaPropietarioContainer" class="custom-select-container">
+                            <!-- Custom Select will be rendered here -->
+                        </div>
+                        <input type="hidden" id="mascotaPropietarioId" name="propietario_id" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalMascota">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Mascota</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Editar Propietario -->
+        <div id="modalEditarPropietario" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Editar Propietario</h2>
+                    <span class="close" data-modal="modalEditarPropietario">&times;</span>
+                </div>
+                <form id="formEditarPropietario">
+                    <input type="hidden" id="editPropietarioId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editPropietarioNombre">Nombre *</label>
+                            <input type="text" id="editPropietarioNombre" required placeholder="Ej: Juan">
+                        </div>
+                        <div class="form-group">
+                            <label for="editPropietarioApellido">Apellido *</label>
+                            <input type="text" id="editPropietarioApellido" required placeholder="Ej: Pérez">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editPropietarioCedula">Paso/Cédula/ID *</label>
+                        <input type="text" id="editPropietarioCedula" required placeholder="Ej: 12345678">
+                    </div>
+                    <div class="form-group">
+                        <label for="editPropietarioTelefono">Teléfono *</label>
+                        <input type="tel" id="editPropietarioTelefono" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editPropietarioEmail">Email</label>
+                        <input type="email" id="editPropietarioEmail">
+                    </div>
+                    <div class="form-group">
+                        <label for="editPropietarioDireccion">Dirección</label>
+                        <textarea id="editPropietarioDireccion" rows="3"></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalEditarPropietario">Cancelar</button>
+                        <button type="submit" class="btn-primary">Actualizar Propietario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Editar Mascota -->
+        <div id="modalEditarMascota" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Editar Mascota</h2>
+                    <span class="close" data-modal="modalEditarMascota">&times;</span>
+                </div>
+                <form id="formEditarMascota">
+                    <input type="hidden" id="editMascotaId">
+                    <div class="form-group">
+                        <label for="editMascotaNombre">Nombre de la Mascota *</label>
+                        <input type="text" id="editMascotaNombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMascotaEspecie">Especie *</label>
+                        <select id="editMascotaEspecie" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="Perro">Perro</option>
+                            <option value="Gato">Gato</option>
+                            <option value="Ave">Ave</option>
+                            <option value="Conejo">Conejo</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMascotaRaza">Raza</label>
+                        <div id="editSelectMascotaRazaContainer" class="custom-select-container"></div>
+                        <input type="hidden" id="editMascotaRaza">
+                    </div>
+                    <div class="form-group">
+                        <label for="editMascotaEstadoReproductivo">Estado Reproductivo</label>
+                        <select id="editMascotaEstadoReproductivo">
+                            <option value="No especificado">Seleccionar...</option>
+                            <option value="Esterilizado">Esterilizado</option>
+                            <option value="No Esterilizado">No Esterilizado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMascotaFechaNacimiento">Fecha de Nacimiento</label>
+                        <input type="date" id="editMascotaFechaNacimiento">
+                    </div>
+                    <div class="form-group">
+                        <label for="editMascotaSexo">Sexo</label>
+                        <select id="editMascotaSexo">
+                            <option value="">Seleccionar...</option>
+                            <option value="Macho">Macho</option>
+                            <option value="Hembra">Hembra</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="editMascotaColor">Color</label>
+                        <input type="text" id="editMascotaColor">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalEditarMascota">Cancelar</button>
+                        <button type="submit" class="btn-primary">Actualizar Mascota</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Consulta -->
+        <div id="modalConsulta" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Registrar Consulta</h2>
+                    <span class="close" data-modal="modalConsulta">&times;</span>
+                </div>
+                <form id="formConsulta">
+                    <div class="form-group">
+                        <label for="consultaMascotaId">ID Mascota *</label>
+                        <input type="number" id="consultaMascotaId" required placeholder="Ingrese ID de la mascota">
+                    </div>
+                    <div class="form-group">
+                        <label for="consultaMotivo">Motivo de Consulta *</label>
+                        <textarea id="consultaMotivo" rows="2" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="consultaExamen">Detalles del Examen Físico *</label>
+                        <textarea id="consultaExamen" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="consultaProblemas">Listado de Problemas / Diagnóstico</label>
+                        <textarea id="consultaProblemas" rows="2"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="consultaPruebas">Pruebas de Laboratorio (Hemograma, Rayos X, etc.)</label>
+                        <textarea id="consultaPruebas" rows="2"
+                            placeholder="Describa las pruebas realizadas o solicitadas"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="consultaPeso">Peso (kg)</label>
+                            <input type="number" id="consultaPeso" step="0.01">
+                        </div>
+                        <div class="form-group">
+                            <label for="consultaTemperatura">Temperatura (°C)</label>
+                            <input type="number" id="consultaTemperatura" step="0.1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="consultaICC">ICC</label>
+                            <input type="text" id="consultaICC">
+                        </div>
+                        <div class="form-group">
+                            <label for="consultaTLLC">TLLC</label>
+                            <input type="text" id="consultaTLLC">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalConsulta">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Consulta</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Cita -->
+        <div id="modalCita" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Nueva Cita</h2>
+                    <span class="close" data-modal="modalCita">&times;</span>
+                </div>
+                <form id="formCita">
+                    <div class="form-group">
+                        <label for="citaMascotaId">ID Mascota *</label>
+                        <input type="number" id="citaMascotaId" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="citaFecha">Fecha y Hora *</label>
+                        <input type="datetime-local" id="citaFecha" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="citaMotivo">Motivo *</label>
+                        <input type="text" id="citaMotivo" required placeholder="Ej: Consulta General, Vacuna...">
+                    </div>
+                    <div class="form-group">
+                        <label for="citaVeterinarioId">Asignar Médico/Veterinario *</label>
+                        <select id="citaVeterinarioId" required>
+                            <option value="">Seleccionar médico...</option>
+                            <!-- Populated via JS -->
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalCita">Cancelar</button>
+                        <button type="submit" class="btn-primary">Agendar Cita</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Receta -->
+        <div id="modalReceta" class="modal">
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-header">
+                    <h2>Nueva Receta / Prescripción</h2>
+                    <span class="close" data-modal="modalReceta">&times;</span>
+                </div>
+                <form id="formReceta">
+                    <input type="hidden" id="recetaConsultaId">
+                    <div class="form-group">
+                        <label for="recetaIndicaciones">Indicaciones Generales</label>
+                        <textarea id="recetaIndicaciones" rows="2"
+                            placeholder="Ej: Reposo, dieta estricta..."></textarea>
+                    </div>
+
+                    <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid #e5e7eb;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="margin: 0;">Medicamentos</h4>
+                        <button type="button" class="btn-secondary btn-sm" id="btnAddMedicamentoToReceta">+ Añadir
+                            medicamento</button>
+                    </div>
+
+                    <div id="recetaDetallesContainer">
+                        <!-- Items de medicina se inyectan acá -->
+                    </div>
+
+                    <div class="modal-footer" style="margin-top: 2rem;">
+                        <button type="button" class="btn-secondary" data-close="modalReceta">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Receta</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Registrar Producto (Inventario) -->
+        <div id="modalProducto" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Nuevo Producto</h2>
+                    <span class="close" data-modal="modalProducto">&times;</span>
+                </div>
+                <form id="formProducto">
+                    <div class="form-group">
+                        <label for="prodNombre">Nombre *</label>
+                        <input type="text" id="prodNombre" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="prodTipo">Tipo *</label>
+                        <select id="prodTipo" required>
+                            <option value="Medicamento">Medicamento</option>
+                            <option value="Alimento">Alimento</option>
+                            <option value="Accesorio">Accesorio</option>
+                            <option value="Insumo">Insumo</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="prodStock">Stock Inicial *</label>
+                            <input type="number" id="prodStock" required min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="prodMinimo">Stock Mínimo</label>
+                            <input type="number" id="prodMinimo" value="5" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="prodPrecio">Precio Unitario ($)</label>
+                        <input type="number" id="prodPrecio" step="0.01">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalProducto">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Producto</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <!-- Modal Nuevo Usuario (Admin) -->
+        <div id="modalNuevoUsuario" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Registrar Nuevo Usuario</h2>
+                    <span class="close" data-modal="modalNuevoUsuario">&times;</span>
+                </div>
+                <form id="formNuevoUsuario">
+                    <div class="form-group">
+                        <label for="userUsername">Nombre de Usuario *</label>
+                        <input type="text" id="userUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userEmail">Email *</label>
+                        <input type="email" id="userEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userPassword">Contraseña *</label>
+                        <input type="password" id="userPassword" required minlength="4">
+                    </div>
+                    <div class="form-group">
+                        <label for="userRole">Rol *</label>
+                        <select id="userRole" required>
+                            <option value="user">Usuario Estándar</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalNuevoUsuario">Cancelar</button>
+                        <button type="submit" class="btn-primary">Crear Usuario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal Transferir Mascota -->
+        <div id="modalTransferir" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Transferir Mascota</h2>
+                    <span class="close" data-modal="modalTransferir">&times;</span>
+                </div>
+                <form id="formTransferir">
+                    <p>Transferir a <strong><span id="transferNombreMascota"></span></strong> a un nuevo
+                        propietario.</p>
+                    <div class="form-group">
+                        <label for="transferNuevoPropietarioId">ID del Nuevo Propietario *</label>
+                        <input type="number" id="transferNuevoPropietarioId" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="transferMotivo">Motivo de la Transferencia *</label>
+                        <input type="text" id="transferMotivo" required placeholder="Ej: Venta, Adopción, etc.">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalTransferir">Cancelar</button>
+                        <button type="submit" class="btn-primary">Confirmar Transferencia</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="search-box">
+                    <input type="text" placeholder="Buscar paciente..." class="search-input" id="sidebarSearch">
+                    <div id="search-results" class="search-results-dropdown"></div>
+                </div>
+
+                <div class="tabs">
+                    <div class="tab-header">Módulos</div>
+                </div>
+
+                <div class="menu-list">
+                    <a href="#" class="menu-item active" data-target="sec-consultorio">
+                        <span class="icon">🩺</span>
+                        <span>Consultorio</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="sec-agenda">
+                        <span class="icon">📅</span>
+                        <span>Agenda</span>
+                        <span class="badge" id="badgeCitas">0</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="sec-propietarios">
+                        <span class="icon">👥</span>
+                        <span>Propietarios</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="sec-inventario">
+                        <span class="icon">📦</span>
+                        <span>Inventario</span>
+                        <span class="badge" id="badgeStock">!</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="sec-reportes">
+                        <span class="icon">📊</span>
+                        <span>Reportes y KPIs</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="sec-ordenes-medico">
+                        <span class="icon">👨‍⚕️</span>
+                        <span>Órdenes (Médico)</span>
+                        <span class="badge" id="badgeOrdenesMedico">0</span>
+                    </a>
+                    <a href="#" class="menu-item admin-only" data-target="sec-usuarios" style="display: none;">
+                        <span class="icon">⚙️</span>
+                        <span>Usuarios (Admin)</span>
+                    </a>
+                </div>
+            </aside>
+
+            <!-- Content Area: Consultorio -->
+            <section id="sec-consultorio" class="content-area spa-section">
+                <div class="content-header">
+                    <h2>Consultorio Clínico</h2>
+                </div>
+
+                <div style="display: flex; gap: 2rem;">
+                    <!-- Columna Izquierda: Buscador de Pacientes -->
+                    <div
+                        style="flex: 1; min-width: 250px; max-width: 320px; border-right: 1px solid #e5e7eb; padding-right: 1.5rem;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3 style="margin: 0; font-size: 1.1rem; color: #374151;">Pacientes</h3>
+                            <button class="btn-add btn-sm" id="btnRegistrarMascota"
+                                style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">+ Nuevo</button>
+                        </div>
+                        <input type="text" id="consultorioSearchMascota" placeholder="🔍 Buscar por nombre o código..."
+                            class="search-input" style="width: 100%; margin-bottom: 1rem;">
+
+                        <div id="consultorioMascotasList"
+                            style="max-height: 60vh; overflow-y: auto; padding-right: 0.5rem;">
+                            <p style="text-align: center; color: #9ca3af; font-size: 0.9rem; margin-top: 2rem;">Use el
+                                buscador para listar pacientes.</p>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha: Historial Clínico -->
+                    <div style="flex: 2;">
+                        <div id="patientWrapper" style="display: none;">
+                            <!-- New Pet Profile Layout -->
+                            <div class="pet-layout">
+                                <!-- Pet Sidebar -->
+                                <aside class="pet-sidebar">
+                                    <div class="pet-nav-item active" data-tab="historia">
+                                        <span><span class="icon">📄</span> Historia</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="consultas">
+                                        <span><span class="icon">🩺</span> Consultas</span>
+                                        <span class="count" id="count-consultas">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="vacunas">
+                                        <span><span class="icon">💉</span> Vacunaciones</span>
+                                        <span class="count" id="count-vacunas">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="recetas">
+                                        <span><span class="icon">💊</span> Fórmulas Médicas</span>
+                                        <span class="count" id="count-recetas">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="desparasitaciones">
+                                        <span><span class="icon">🪱</span> Desparasitaciones</span>
+                                        <span class="count" id="count-desparasitaciones">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="hospitalizaciones">
+                                        <span><span class="icon">🏥</span> Hospitalizaciones</span>
+                                        <span class="count" id="count-hosp">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="procedimientos">
+                                        <span><span class="icon">🔪</span> Cirugías / Proc.</span>
+                                        <span class="count" id="count-proc">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="ordenes">
+                                        <span><span class="icon">📋</span> Órdenes</span>
+                                        <span class="count" id="count-ordenes">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="laboratorio">
+                                        <span><span class="icon">🔬</span> Laboratorio</span>
+                                        <span class="count" id="count-lab">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="imagenes">
+                                        <span><span class="icon">🖼️</span> Imágenes</span>
+                                        <span class="count" id="count-img">0</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="guarderia">
+                                        <span><span class="icon">🐾</span> Guardería</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="seguimientos">
+                                        <span><span class="icon">📈</span> Seguimientos</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="documentos">
+                                        <span><span class="icon">📁</span> Documentos</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="remisiones">
+                                        <span><span class="icon">🚚</span> Remisiones</span>
+                                    </div>
+                                    <div class="pet-nav-item" data-tab="citas-pet">
+                                        <span><span class="icon">📅</span> Citas</span>
+                                    </div>
+                                </aside>
+
+                                <!-- Pet Content Area -->
+                                <div class="pet-content">
+                                    <div class="pet-content-header">
+                                        <div>
+                                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                                <span id="displayNombreMascota" style="color: #4F46E5; font-size: 1.5rem;"></span>
+                                                <button class="btn-secondary btn-sm" id="btnEditarMascota" title="Editar datos básicos">✏️</button>
+                                                <button class="btn-secondary btn-sm" id="btnTransferirMascota" title="Transferir a otro dueño">🔄</button>
+                                                <button class="btn-secondary btn-sm" id="btnEliminarMascota" title="Eliminar mascota" style="color: #ef4444; border-color: #fca5a5;">🗑️</button>
+                                            </h3>
+                                            <p id="displayInfoMascota" style="color: #6b7280; margin: 0; font-size: 0.85rem;"></p>
+                                        </div>
+                                        <div class="actions" id="petTabActions">
+                                            <!-- Dynamic actions based on tab -->
+                                            <button class="btn-primary" id="btnActionAdd">+ Registrar</button>
+                                        </div>
+                                    </div>
+                                    <div class="pet-content-body" id="petTabContent">
+                                        <!-- Dynamic content based on tab -->
+                                        <div class="empty-state">
+                                            <div class="icon">📋</div>
+                                            <p>Seleccione una categoría para ver el registro.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Panel estado vacío -->
+                        <div id="emptyPatientWrapper"
+                            style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; border: 2px dashed #e5e7eb; border-radius: 8px; color: #9ca3af; padding: 3rem;">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" style="margin-bottom: 1rem; opacity: 0.5;">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                            <p style="font-size: 1.1rem; margin: 0;">Seleccione un paciente de la lista para ver su
+                                historial médico.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Area: Agenda -->
+            <section id="sec-agenda" class="content-area spa-section" style="display: none;">
+                <div class="content-header">
+                    <h2>Agenda y Calendario Médico</h2>
+                    <div style="display: flex; gap: 1rem;">
+                        <button class="btn-secondary" id="btnGenerarOrden">+ Generar Orden de Consulta</button>
+                        <button class="btn-primary" id="btnNuevaCita">+ Agendar Cita</button>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 2rem; height: calc(100% - 80px);">
+                    <!-- Columna Izquierda: Sala de Espera / Órdenes -->
+                    <div style="flex: 1; max-width: 350px; display: flex; flex-direction: column;">
+                        <h3 style="margin-bottom: 1rem; font-size: 1.1rem; color: var(--text-secondary);">Órdenes / Sala
+                            de Espera</h3>
+                        <div id="agenda-list" style="overflow-y: auto; flex: 1; padding-right: 0.5rem;">
+                            <!-- Loaded via JS -->
+                            <p style="text-align: center; color: var(--text-secondary);">Cargando citas...</p>
+                        </div>
+                    </div>
+                    <!-- Columna Derecha: Calendario -->
+                    <div
+                        style="flex: 2; height: 100%; background: var(--surface); border-radius: var(--radius-lg); padding: 1rem; border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+                        <div id="calendar" style="height: 100%;"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Area: Propietarios -->
+            <section id="sec-propietarios" class="content-area spa-section" style="display: none;">
+                <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 1.5rem;">
+                    <h2>Listado de Propietarios</h2>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <input type="text" id="searchPropietario" placeholder="🔍 Buscar por nombre, apellido o cédula..." 
+                               class="search-input" style="width: 300px; margin: 0;">
+                        <button class="btn-primary" id="btnRegistrarPropietarioAlt">+ Nuevo Propietario</button>
+                    </div>
+                </div>
+                <table class="consultas-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nombre Completo</th>
+                            <th>Cédula/Paso</th>
+                            <th>Teléfono</th>
+                            <th>Email</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="propietariosTableBody">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Content Area: Usuarios (Admin) -->
+            <section id="sec-usuarios" class="content-area spa-section" style="display: none;">
+                <div class="content-header">
+                    <h2>Gestión de Usuarios</h2>
+                    <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
+                </div>
+                <table class="consultas-table">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Rol</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usuariosTableBody">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Content Area: Inventario -->
+            <section id="sec-inventario" class="content-area spa-section" style="display: none;">
+                <div class="content-header">
+                    <h2>Inventario de Productos</h2>
+                    <button class="btn-primary" id="btnNuevoProducto">+ Nuevo Producto</button>
+                </div>
+                <table class="consultas-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Stock</th>
+                            <th>Precio</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventarioTableBody">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Content Area: Reportes -->
+            <section id="sec-reportes" class="content-area spa-section" style="display: none;">
+                <div class="content-header">
+                    <h2>Reportes y KPIs</h2>
+                </div>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <h3>Citas Hoy</h3>
+                        <div class="value" id="kpiCitas">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h3>Pacientes Atendidos</h3>
+                        <div class="value" id="kpiPacientes">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <h3>Bajo Stock</h3>
+                        <div class="value warning" id="kpiStock">0</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Area: Órdenes Médico -->
+            <section id="sec-ordenes-medico" class="content-area spa-section" style="display: none;">
+                <div class="content-header">
+                    <h2>Órdenes de Consulta Asignadas</h2>
+                </div>
+                <div class="kpi-grid" style="margin-bottom: 2rem;">
+                    <div class="kpi-card">
+                        <h3>Pendientes</h3>
+                        <div class="value" id="kpiOrdenesPendientes">0</div>
+                    </div>
+                </div>
+                <div id="ordenesMedicoList">
+                    <!-- Loaded via JS -->
+                    <p style="text-align: center; color: var(--text-secondary);">No tiene órdenes asignadas.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/auth.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,456 @@
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from typing import Optional, List
+from datetime import datetime, date
+
+
+# ========== PROPIETARIO SCHEMAS ==========
+class PropietarioBase(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=100)
+    apellido: str = Field(..., min_length=1, max_length=100)
+    cedula: str = Field(..., min_length=5, max_length=20)
+    telefono: Optional[str] = Field(None, max_length=20)
+    email: Optional[EmailStr] = None
+    direccion: Optional[str] = None
+    activo: bool = True
+
+
+class PropietarioCreate(PropietarioBase):
+    pass
+
+
+class PropietarioUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+    apellido: Optional[str] = Field(None, min_length=1, max_length=100)
+    telefono: Optional[str] = Field(None, max_length=20)
+    email: Optional[EmailStr] = None
+    direccion: Optional[str] = None
+    activo: Optional[bool] = None
+
+
+class PropietarioResponse(PropietarioBase):
+    id: int
+    fecha_registro: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ========== MASCOTA SCHEMAS ==========
+class MascotaBase(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=100)
+    especie: str = Field(..., min_length=1, max_length=50)
+    raza: Optional[str] = Field(None, max_length=100)
+    sexo: Optional[str] = Field(None, max_length=10)
+    fecha_nacimiento: Optional[date] = None
+    color: Optional[str] = Field(None, max_length=50)
+    peso: Optional[float] = Field(None, gt=0)
+    observaciones: Optional[str] = None
+    foto_url: Optional[str] = None
+    estado_reproductivo: Optional[str] = Field(None, max_length=50)
+    microchip: Optional[str] = Field(None, max_length=50)
+    activo: bool = True
+
+
+class MascotaCreate(MascotaBase):
+    propietario_id: int = Field(..., gt=0)
+
+
+class MascotaUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+    especie: Optional[str] = Field(None, min_length=1, max_length=50)
+    raza: Optional[str] = Field(None, max_length=100)
+    sexo: Optional[str] = Field(None, max_length=10)
+    fecha_nacimiento: Optional[date] = None
+    color: Optional[str] = Field(None, max_length=50)
+    peso: Optional[float] = Field(None, gt=0)
+    observaciones: Optional[str] = None
+    foto_url: Optional[str] = None
+    estado_reproductivo: Optional[str] = Field(None, max_length=50)
+    microchip: Optional[str] = Field(None, max_length=50)
+    activo: Optional[bool] = None
+
+
+class MascotaResponse(MascotaBase):
+    id: int
+    propietario_id: int
+    fecha_registro: datetime
+    codigo_historia: Optional[str] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def append_apellido(cls, data):
+        # Si es un objeto de base de datos (SQLAlchemy)
+        if hasattr(data, '__table__'):
+            try:
+                # Comprobar si tenemos el objeto propietario cargado
+                # Usamos getattr para evitar errores de carga diferida (lazy loading) si no se usó eager loading
+                propietario = getattr(data, 'propietario', None)
+                if propietario and hasattr(propietario, 'apellido'):
+                    base_name = data.nombre.split(' ')[0]
+                    # Solo modificamos el nombre para el esquema de respuesta, no en la BD
+                    data.nombre = f"{base_name} {propietario.apellido}"
+            except Exception:
+                pass
+        return data
+    
+    class Config:
+        from_attributes = True
+
+
+class MascotaTransfer(BaseModel):
+    nuevo_propietario_id: int
+    motivo: str
+
+
+# ========== CONSULTA SCHEMAS ==========
+class ConsultaBase(BaseModel):
+    motivo: str = Field(..., min_length=1, max_length=255)
+    sintomas: Optional[str] = None
+    diagnostico: Optional[str] = None
+    tratamiento: Optional[str] = None
+    peso: Optional[float] = Field(None, gt=0)
+    temperatura: Optional[float] = Field(None, gt=0, lt=50)
+    frecuencia_cardiaca: Optional[float] = Field(None, gt=0)
+    observaciones: Optional[str] = None
+    veterinario: Optional[str] = Field(None, max_length=100)
+    proxima_cita: Optional[datetime] = None
+
+    @field_validator('temperatura')
+    @classmethod
+    def validar_temperatura(cls, v):
+        if v is not None and (v < 30.0 or v > 45.0):
+            raise ValueError('Temperatura fuera de rango fisiológico (30.0 - 45.0 °C)')
+        return v
+
+    @field_validator('frecuencia_cardiaca')
+    @classmethod
+    def validar_frecuencia(cls, v):
+        if v is not None and (v < 20 or v > 300):
+            raise ValueError('Frecuencia cardíaca fuera de rango (20 - 300 bpm)')
+        return v
+
+
+class ConsultaCreate(ConsultaBase):
+    mascota_id: int = Field(..., gt=0)
+
+
+class ConsultaUpdate(BaseModel):
+    motivo: Optional[str] = Field(None, min_length=1, max_length=255)
+    sintomas: Optional[str] = None
+    diagnostico: Optional[str] = None
+    tratamiento: Optional[str] = None
+    peso: Optional[float] = Field(None, gt=0)
+    temperatura: Optional[float] = Field(None, gt=0, lt=50)
+    frecuencia_cardiaca: Optional[float] = Field(None, gt=0)
+    observaciones: Optional[str] = None
+    veterinario: Optional[str] = Field(None, max_length=100)
+    proxima_cita: Optional[datetime] = None
+
+
+class ConsultaResponse(ConsultaBase):
+    id: int
+    mascota_id: int
+    fecha_consulta: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ========== RECETA SCHEMAS ==========
+class DetalleRecetaBase(BaseModel):
+    medicamento_id: int = Field(..., gt=0)
+    dosis: str = Field(..., min_length=1, max_length=100)
+    frecuencia: str = Field(..., min_length=1, max_length=100)
+    duracion: str = Field(..., min_length=1, max_length=100)
+
+class DetalleRecetaCreate(DetalleRecetaBase):
+    pass
+
+class DetalleRecetaResponse(DetalleRecetaBase):
+    id: int
+    receta_id: int
+    # Podriamos querer retornar mas detalles del inventario (nombre_medicamento, etc.)
+    # pero mantendremos simple para schema base.
+
+    class Config:
+        from_attributes = True
+
+class RecetaBase(BaseModel):
+    indicaciones_generales: Optional[str] = None
+
+class RecetaCreate(RecetaBase):
+    consulta_id: int = Field(..., gt=0)
+    detalles: List[DetalleRecetaCreate] = Field(..., min_length=1)
+
+class RecetaResponse(RecetaBase):
+    id: int
+    consulta_id: int
+    fecha_emision: datetime
+    detalles: List[DetalleRecetaResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+# ========== CITA SCHEMAS ==========
+class CitaBase(BaseModel):
+    fecha_cita: datetime
+    hora_llegada: Optional[datetime] = None
+    hora_inicio_atencion: Optional[datetime] = None
+    hora_fin_atencion: Optional[datetime] = None
+    tipo: str = Field(..., min_length=1, max_length=50)
+    observaciones: Optional[str] = None
+
+
+class CitaCreate(CitaBase):
+    veterinario_id: int = Field(..., gt=0)
+    propietario_id: int = Field(..., gt=0)
+    mascota_id: int = Field(..., gt=0)
+
+
+class CitaUpdate(BaseModel):
+    fecha_cita: Optional[datetime] = None
+    tipo: Optional[str] = Field(None, min_length=1, max_length=50)
+    estado: Optional[str] = Field(None, max_length=50)
+    observaciones: Optional[str] = None
+
+
+class CitaResponse(CitaBase):
+    id: int
+    veterinario_id: int
+    propietario_id: int
+    mascota_id: int
+    estado: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ========== PRUEBA COMPLEMENTARIA SCHEMAS ==========
+class PruebaComplementariaBase(BaseModel):
+    tipo: str = Field(..., min_length=1, max_length=50)
+    archivo_url: Optional[str] = None
+    resultado: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+class PruebaComplementariaCreate(PruebaComplementariaBase):
+    mascota_id: int = Field(..., gt=0)
+    consulta_id: Optional[int] = None
+
+
+class PruebaComplementariaUpdate(BaseModel):
+    tipo: Optional[str] = Field(None, min_length=1, max_length=50)
+    archivo_url: Optional[str] = None
+    resultado: Optional[str] = None
+    observaciones: Optional[str] = None
+
+
+class PruebaComplementariaResponse(PruebaComplementariaBase):
+    id: int
+    mascota_id: int
+    consulta_id: Optional[int]
+    fecha: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ========== INVENTARIO SCHEMAS ==========
+class InventarioBase(BaseModel):
+    codigo: str = Field(..., min_length=1, max_length=50)
+    nombre: str = Field(..., min_length=1, max_length=200)
+    descripcion: Optional[str] = None
+    categoria: Optional[str] = Field(None, max_length=50)
+    precio_unitario: float = Field(..., ge=0)
+    stock_actual: int = Field(default=0, ge=0, description="El stock jamás puede ser negativo")
+    stock_minimo: int = Field(default=5, ge=0)
+    fecha_vencimiento: Optional[date] = None
+    proveedor: Optional[str] = Field(None, max_length=200)
+    ubicacion: Optional[str] = Field(None, max_length=100)
+    activo: bool = True
+    
+    @field_validator('precio_unitario')
+    @classmethod
+    def validar_precio_positivo(cls, v):
+        if v < 0:
+            raise ValueError('El precio no puede ser negativo')
+        return v
+
+
+class InventarioCreate(InventarioBase):
+    pass
+
+
+class InventarioUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=200)
+    descripcion: Optional[str] = None
+    categoria: Optional[str] = Field(None, max_length=50)
+    precio_unitario: Optional[float] = Field(None, ge=0)
+    stock_actual: Optional[int] = Field(None, ge=0)
+    stock_minimo: Optional[int] = Field(None, ge=0)
+    fecha_vencimiento: Optional[date] = None
+    proveedor: Optional[str] = Field(None, max_length=200)
+    ubicacion: Optional[str] = Field(None, max_length=100)
+    activo: Optional[bool] = None
+
+
+class InventarioResponse(InventarioBase):
+    id: int
+    fecha_registro: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+# ========== FACTURA SCHEMAS ==========
+class DetalleFacturaBase(BaseModel):
+    producto_id: Optional[int] = None
+    cantidad: int = Field(..., gt=0)
+    precio_unitario: float = Field(..., ge=0)
+    descripcion: Optional[str] = Field(None, max_length=255)
+    
+    @field_validator('precio_unitario')
+    @classmethod
+    def validar_precio_positivo(cls, v):
+        if v < 0:
+            raise ValueError('El precio no puede ser negativo')
+        return v
+
+
+class DetalleFacturaCreate(DetalleFacturaBase):
+    pass
+
+
+class DetalleFacturaResponse(DetalleFacturaBase):
+    id: int
+    factura_id: int
+    subtotal: float
+    
+    class Config:
+        from_attributes = True
+
+
+class FacturaBase(BaseModel):
+    propietario_id: int = Field(..., gt=0)
+    es_presupuesto: bool = False
+    descuento: float = Field(default=0.0, ge=0)
+    impuesto: float = Field(default=0.0, ge=0)
+    metodo_pago: Optional[str] = Field(None, max_length=50)
+    total_pagado: float = Field(default=0.0, ge=0)
+    observaciones: Optional[str] = None
+
+    @model_validator(mode='after')
+    def validar_pagos(self) -> 'FacturaBase':
+        # En una factura real, el total se calcula después, 
+        # pero para presupuestos o pagos parciales validamos que no paguen de más aquí
+        # aunque el saldo pendiente se calcula en el servidor.
+        return self
+
+
+class FacturaCreate(FacturaBase):
+    detalles: List[DetalleFacturaCreate] = Field(..., min_length=1)
+
+
+class FacturaUpdate(BaseModel):
+    estado: Optional[str] = Field(None, max_length=20)
+    metodo_pago: Optional[str] = Field(None, max_length=50)
+    observaciones: Optional[str] = None
+
+
+class FacturaResponse(FacturaBase):
+    id: int
+    numero_factura: str
+    fecha_emision: datetime
+    es_presupuesto: bool
+    subtotal: float
+    total: float
+    estado: str
+    detalles: List[DetalleFacturaResponse] = []
+    
+    class Config:
+        from_attributes = True
+
+
+# ========== AUTH SCHEMAS ==========
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+
+class UsuarioBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    role: Optional[str] = "user"
+
+
+class UsuarioCreate(UsuarioBase):
+    password: str = Field(..., min_length=4)
+
+
+class UsuarioResponse(UsuarioBase):
+    id: int
+    is_active: bool
+    
+    class Config:
+        from_attributes = True
+
+
+# ========== NUEVOS MÓDULOS PROFESIONALES ==========
+
+class HospitalizacionBase(BaseModel):
+    mascota_id: int
+    motivo: str
+    estado_paciente: Optional[str] = None
+    jaula_nro: Optional[str] = None
+    observaciones_ingreso: Optional[str] = None
+
+class HospitalizacionCreate(HospitalizacionBase):
+    pass
+
+class HospitalizacionResponse(HospitalizacionBase):
+    id: int
+    fecha_ingreso: datetime
+    fecha_egreso: Optional[datetime]
+    activo: bool
+    class Config:
+        from_attributes = True
+
+class CirugiaBase(BaseModel):
+    mascota_id: int
+    consulta_id: Optional[int] = None
+    tipo_procedimiento: str
+    cirujano_id: Optional[int] = None
+    informe_quirurgico: Optional[str] = None
+    complicaciones: Optional[str] = None
+    riesgo_asa: Optional[str] = None
+
+class CirugiaCreate(CirugiaBase):
+    pass
+
+class CirugiaResponse(CirugiaBase):
+    id: int
+    fecha_cirugia: datetime
+    class Config:
+        from_attributes = True
+
+class PlanSaludBase(BaseModel):
+    mascota_id: int
+    tipo_preventivo: str # VACUNA, DESPARASITACION
+    nombre_producto: str
+    fecha_aplicacion: date
+    fecha_proxima_refuerzo: Optional[date] = None
+    lote: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class PlanSaludCreate(PlanSaludBase):
+    pass
+
+class PlanSaludResponse(PlanSaludBase):
+    id: int
+    class Config:
+        from_attributes = True
