@@ -135,9 +135,34 @@ class Consulta(Base):
     mascota = relationship("Mascota", back_populates="consultas")
     pruebas = relationship("PruebaComplementaria", back_populates="consulta", cascade="all, delete-orphan")
     recetas = relationship("Receta", back_populates="consulta", cascade="all, delete-orphan")
+    vacunaciones = relationship("Vacunacion", back_populates="consulta", cascade="all, delete-orphan")
+    desparasitaciones = relationship("Desparasitacion", back_populates="consulta", cascade="all, delete-orphan")
+    cirugias = relationship("Cirugia", back_populates="consulta")
+    hospitalizaciones = relationship("Hospitalizacion", back_populates="consulta")
+    servicios = relationship("ServicioConsulta", back_populates="consulta", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Consulta {self.id} - {self.fecha_consulta}>"
+
+class ServicioConsulta(Base):
+    """Pivot node for any action taken logically inside a consultation"""
+    __tablename__ = "servicios_consulta"
+
+    id = Column(Integer, primary_key=True, index=True)
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=False)
+    tipo_servicio = Column(String(50), nullable=False) # VACUNACION, CIRUGIA, HOSPITALIZACION, LABORATORIO, INSUMO, ESTETICA
+    referencia_id = Column(Integer, nullable=True) # ID to specific clinical table or Inventory (Insumos)
+    nombre_servicio = Column(String(255))
+    cantidad = Column(Float, nullable=False, default=1.0)
+    precio_unitario = Column(Float, nullable=False, default=0.0)
+    estado = Column(String(50), default="Pendiente") # Pendiente, Aplicado
+    detalles_clinicos = Column(Text, nullable=True) # Datos de aplicacion (lote, dosis, hallazgos, etc)
+    is_deleted = Column(Boolean, default=False) # Soft delete for auditing
+
+    consulta = relationship("Consulta", back_populates="servicios")
+
+    def subtotal(self):
+        return self.cantidad * self.precio_unitario
 
 class Receta(Base):
     """Modelo para recetas medicas"""
@@ -177,6 +202,9 @@ class PruebaComplementaria(Base):
     archivo_url = Column(String(255))
     resultado = Column(Text)
     observaciones = Column(Text)
+    precio_aplicado = Column(Float, nullable=False, default=0.0)
+    facturado = Column(Boolean, default=False)
+    estado_orden = Column(String(50), default="Pendiente") # Pendiente, Enviado, Resultado Recibido
 
     # Claves foraneas
     consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=True) # Puede estar vinculada a una consulta o no
@@ -311,10 +339,17 @@ class Hospitalizacion(Base):
     motivo = Column(Text, nullable=False)
     estado_paciente = Column(String(50)) # Estable, Critico, Reservado
     jaula_nro = Column(String(20))
+    dias_cama = Column(Integer, default=1)
+    monitoreo_constantes = Column(JSON, nullable=True) # Constantes por turno
     observaciones_ingreso = Column(Text)
+    precio_aplicado = Column(Float, nullable=False, default=0.0)
+    facturado = Column(Boolean, default=False)
     activo = Column(Boolean, default=True)
     
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=True)
+
     mascota = relationship("Mascota")
+    consulta = relationship("Consulta", back_populates="hospitalizaciones")
     hojas_tratamiento = relationship("HojaTratamiento", back_populates="hospitalizacion")
 
 
@@ -348,8 +383,14 @@ class Cirugia(Base):
     informe_quirurgico = Column(Text)
     complicaciones = Column(Text)
     riesgo_asa = Column(String(10)) # ASA I-V
+    honorarios_medicos = Column(Float, default=0.0)
+    costo_anestesia = Column(Float, default=0.0)
+    costo_insumos = Column(Float, default=0.0)
+    precio_aplicado = Column(Float, nullable=False, default=0.0)
+    facturado = Column(Boolean, default=False)
     
     mascota = relationship("Mascota")
+    consulta = relationship("Consulta", back_populates="cirugias")
     protocolo_anestesico = relationship("ProtocoloAnestesico", back_populates="cirugia", uselist=False)
 
 
@@ -396,3 +437,36 @@ class PlanSalud(Base):
     observaciones = Column(Text)
     
     mascota = relationship("Mascota")
+
+class Vacunacion(Base):
+    """Subfamilia Clínica: Registro de Vacunaciones"""
+    __tablename__ = "vacunaciones"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=False)
+    vacuna_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    lote = Column(String(50), nullable=True)
+    fecha_aplicacion = Column(DateTime(timezone=True), server_default=func.now())
+    fecha_refuerzo = Column(DateTime(timezone=True), nullable=True)
+    precio_aplicado = Column(Float, nullable=False, default=0.0)
+    facturado = Column(Boolean, default=False)
+    
+    consulta = relationship("Consulta", back_populates="vacunaciones")
+    vacuna = relationship("Inventario")
+
+class Desparasitacion(Base):
+    """Subfamilia Clínica: Registro de Desparasitaciones"""
+    __tablename__ = "desparasitaciones"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=False)
+    tipo = Column(String(50), nullable=False) # Interna, Externa
+    producto_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    dosis = Column(String(100), nullable=False)
+    fecha_aplicacion = Column(DateTime(timezone=True), server_default=func.now())
+    precio_aplicado = Column(Float, nullable=False, default=0.0)
+    facturado = Column(Boolean, default=False)
+    
+    consulta = relationship("Consulta", back_populates="desparasitaciones")
+    producto = relationship("Inventario")
+

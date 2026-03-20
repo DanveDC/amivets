@@ -8,169 +8,204 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import SessionLocal
 from app.core.security import get_password_hash
-from app.models.models import Usuario, Propietario, Mascota, Consulta, Inventario, Cita, CitaEstado
+from app.models.models import (
+    Usuario, Propietario, Mascota, Consulta, Inventario, Cita, CitaEstado,
+    Vacunacion, Desparasitacion, PruebaComplementaria,
+    ServicioConsulta, Hospitalizacion, Cirugia, Receta, DetalleReceta
+)
 
 def seed_data():
-    print("Iniciando carga de datos de prueba...")
+    print("🚀 Iniciando carga masiva de datos profesionales...")
     db = SessionLocal()
     try:
-        # 1. Crear Médicos (5 usuarios)
+        # 1. Médicos (10 usuarios)
         medicos = []
-        for i in range(1, 6):
-            username = f"doctor{i}"
+        nombres_medicos = ["Pérez", "García", "Rodríguez", "Martínez", "López", "Sánchez", "González", "Díaz", "Fernández", "Moreno"]
+        for i, apellido in enumerate(nombres_medicos):
+            username = f"dr_{apellido.lower()}"
             user = db.query(Usuario).filter(Usuario.username == username).first()
             if not user:
                 user = Usuario(
                     username=username,
-                    email=f"doctor{i}@amivets.com",
+                    email=f"{username}@amivets.com",
                     hashed_password=get_password_hash("doctor123"),
                     role="user",
                     is_active=True
                 )
                 db.add(user)
             medicos.append(user)
+        db.commit()
         
-        # 2. Crear Inventario Básico (Medicamenteos para recetas)
-        productos = [
-            {"codigo": "P-001", "nombre": "Amoxicilina 500mg", "categoria": "Antibiótico", "precio": 15.0, "stock": 50},
-            {"codigo": "P-002", "nombre": "Meloxicam 2.5mg", "categoria": "Antiinflamatorio", "precio": 12.5, "stock": 30},
-            {"codigo": "P-003", "nombre": "Doxiciclina 100mg", "categoria": "Antibiótico", "precio": 18.2, "stock": 40},
-            {"codigo": "P-004", "nombre": "Prednisona 5mg", "categoria": "Corticoide", "precio": 10.0, "stock": 100},
-            {"codigo": "P-005", "nombre": "Complejo B Inyectable", "categoria": "Vitamina", "precio": 8.5, "stock": 20},
-        ]
+        # 2. Inventario Extendido (40+ items)
+        print("📦 Poblando inventario...")
+        categorias = {
+            "Antibiótico": [("Amoxicilina 500mg", 15.0), ("Enrofloxacina 100mg", 18.5), ("Cefalexina 250mg", 14.0), ("Doxiciclina 100mg", 22.0)],
+            "Antiinflamatorio": [("Meloxicam 2.5mg", 12.5), ("Carprofeno 75mg", 25.0), ("Prednisolona 10mg", 10.0), ("Firocoxib 57mg", 45.0)],
+            "Vacuna": [("Vacuna Antirrábica", 25.0), ("Vacuna Séxtuple Canina", 40.0), ("Triple Felina", 35.0), ("Leucemia Felina", 45.0), ("Tos de Perreras", 30.0)],
+            "Desparasitante": [("Bravecto Perros", 35.0), ("NexGard Spectra", 32.0), ("Frontline Plus", 28.0), ("Drontal Plus", 15.0), ("Profender Gatos", 20.0)],
+            "Insumo": [("Gasa estéril pkg", 2.5), ("Suero Fisiológico 500ml", 5.0), ("Sutura 3-0", 8.0), ("Jeringa 3ml", 0.5), ("Catéter 22G", 3.0)],
+            "Alimento": [("Royal Canin GI 2kg", 55.0), ("Hills A/D Lata", 8.0), ("Pro Plan Puppy 3kg", 48.0)],
+            "Laboratorio": [("Hemograma Completo", 45.0), ("Perfil Bioquímico", 65.0), ("Test 4DX", 55.0), ("Uroanálisis", 30.0)],
+            "Imagen": [("Rayos X (1 Vista)", 50.0), ("Ecografía Abdominal", 90.0), ("Ecocardiograma", 120.0)]
+        }
+        
+        prefixes = {
+            "Antibiótico": "AB",
+            "Antiinflamatorio": "AI",
+            "Vacuna": "VC",
+            "Desparasitante": "DP",
+            "Insumo": "IN",
+            "Alimento": "AL",
+            "Laboratorio": "LB",
+            "Imagen": "IM"
+        }
         
         inventario_docs = []
-        for p in productos:
-            item = db.query(Inventario).filter(Inventario.codigo == p["codigo"]).first()
-            if not item:
-                item = Inventario(
-                    codigo=p["codigo"],
-                    nombre=p["nombre"],
-                    categoria=p["categoria"],
-                    precio_unitario=p["precio"],
-                    stock_actual=p["stock"],
-                    stock_minimo=5,
-                    activo=True
-                )
-                db.add(item)
-            inventario_docs.append(item)
+        for cat_name, items in categorias.items():
+            prefix = prefixes.get(cat_name, cat_name[:2].upper())
+            for i, (nombre, precio) in enumerate(items):
+                codigo = f"{prefix}-{i+100}"
+                item = db.query(Inventario).filter(Inventario.codigo == codigo).first()
+                if not item:
+                    item = Inventario(
+                        codigo=codigo,
+                        nombre=nombre,
+                        categoria=cat_name,
+                        precio_unitario=precio,
+                        stock_actual=random.randint(20, 100),
+                        stock_minimo=5,
+                        activo=True
+                    )
+                    db.add(item)
+                inventario_docs.append(item)
+        db.commit()
 
-        # 3. Crear Propietarios (10)
-        propietarios_data = [
-            ("Juan", "Pérez", "12345678", "0414-1234567", "juan.perez@email.com"),
-            ("María", "González", "87654321", "0424-7654321", "maria.g@email.com"),
-            ("Carlos", "Rodríguez", "11223344", "0412-1112233", "carlos.rod@email.com"),
-            ("Ana", "Martínez", "44332211", "0416-4443322", "ana.m@email.com"),
-            ("Luis", "Sánchez", "55667788", "0414-5556677", "luis.s@email.com"),
-            ("Elena", "López", "88776655", "0424-8887766", "elena.l@email.com"),
-            ("Pedro", "Gómez", "99001122", "0412-9990011", "pedro.g@email.com"),
-            ("Laura", "Díaz", "22110099", "0416-2221100", "laura.d@email.com"),
-            ("Jorge", "Hernández", "33445566", "0414-3334455", "jorge.h@email.com"),
-            ("Sofía", "Castro", "66554433", "0424-6665544", "sofia.c@email.com"),
-        ]
+        # 3. Propietarios (40)
+        print("👥 Creando propietarios...")
+        nombres = ["Juan", "María", "Carlos", "Ana", "Luis", "Elena", "Pedro", "Laura", "Jorge", "Sofía", "Miguel", "Isabel", "Diego", "Carmen", "Andrés", "Lucía", "Roberto", "Mónica", "Fernando", "Patricia"]
+        apellidos = ["Pérez", "González", "Rodríguez", "Martínez", "Sánchez", "López", "Gómez", "Díaz", "Hernández", "Castro", "Ruiz", "Álvarez", "Jiménez", "Moreno", "Muñoz", "Romero", "Alonso", "Gutiérrez", "Navarro", "Torres"]
         
         propietarios_docs = []
-        for nom, ape, ced, tel, email in propietarios_data:
+        for i in range(40):
+            ced = str(random.randint(10000000, 30000000))
             prop = db.query(Propietario).filter(Propietario.cedula == ced).first()
             if not prop:
                 prop = Propietario(
-                    nombre=nom,
-                    apellido=ape,
+                    nombre=random.choice(nombres),
+                    apellido=random.choice(apellidos),
                     cedula=ced,
-                    telefono=tel,
-                    email=email,
-                    direccion="Calle Falsa 123",
+                    telefono=f"04{random.randint(12, 24)}-{random.randint(1000000, 9999999)}",
+                    email=f"user{i}_{ced}@gmail.com",
+                    direccion="Urbanización Central, Av. Principal",
                     activo=True
                 )
                 db.add(prop)
             propietarios_docs.append(prop)
-        
-        db.flush() # Para obtener IDs
+        db.flush()
 
-        # 4. Crear Mascotas (15)
-        mascotas_data = [
-            ("Firulais", "Perro", "Golden Retriever", "Macho", "2020-01-15", "Dorado", 25.5, 0),
-            ("Luna", "Gato", "Siamés", "Hembra", "2021-05-10", "Blanco/Gris", 4.2, 1),
-            ("Rocky", "Perro", "Pastor Alemán", "Macho", "2019-11-20", "Negro/Fuego", 32.0, 2),
-            ("Bella", "Perro", "Poodle", "Hembra", "2022-03-05", "Blanco", 6.5, 3),
-            ("Simba", "Gato", "Persa", "Macho", "2021-08-12", "Naranja", 5.0, 4),
-            ("Toby", "Perro", "Beagle", "Macho", "2020-12-01", "Tricolor", 12.8, 5),
-            ("Mia", "Gato", "Mestizo", "Hembra", "2023-01-20", "Calicó", 3.5, 6),
-            ("Max", "Perro", "Labrador", "Macho", "2018-06-15", "Chocolate", 28.3, 7),
-            ("Coco", "Perro", "Chihuahua", "Hembra", "2021-02-14", "Arena", 2.1, 8),
-            ("Daisy", "Perro", "Boxer", "Hembra", "2019-09-30", "Atigrado", 24.0, 9),
-            ("Bruno", "Perro", "Rottweiler", "Macho", "2020-04-22", "Negro/Bronce", 38.5, 0),
-            ("Nala", "Gato", "Mestizo", "Hembra", "2022-11-12", "Tabby", 3.8, 1),
-            ("Cooper", "Perro", "Golden Retriever", "Macho", "2021-07-04", "Dorado", 27.0, 2),
-            ("Molly", "Perro", "Cocker Spaniel", "Hembra", "2020-08-18", "Canela", 11.5, 3),
-            ("Baco", "Perro", "Husky", "Macho", "2019-02-28", "Gris/Blanco", 22.4, 4),
-        ]
+        # 4. Mascotas (60)
+        print("🐾 Creando pacientes (mascotas)...")
+        razas_perro = ["Golden Retriever", "Pastor Alemán", "Poodle", "Beagle", "Labrador", "Chihuahua", "Boxer", "Rottweiler", "Husky", "Cocker Spaniel", "Pug", "Dachshund"]
+        razas_gato = ["Siamés", "Persa", "Mestizo", "Bengala", "Ragdoll", "Maine Coon"]
+        nombres_mascotas = ["Firulais", "Luna", "Rocky", "Bella", "Simba", "Toby", "Mia", "Max", "Coco", "Daisy", "Bruno", "Nala", "Cooper", "Molly", "Baco", "Zeus", "Thor", "Kiwi", "Lola", "Rex", "Maya", "Pipo", "Tito", "Nina"]
         
         mascotas_docs = []
-        for i, (nom, esp, raz, sex, nac, col, pes, p_idx) in enumerate(mascotas_data):
-            p_id = propietarios_docs[p_idx].id
-            cedula = propietarios_docs[p_idx].cedula
-            codigo = f"{cedula}-{i+1}"
+        for i in range(60):
+            p = random.choice(propietarios_docs)
+            especie = random.choice(["Perro", "Gato"])
+            raza = random.choice(razas_perro) if especie == "Perro" else random.choice(razas_gato)
+            nombre = random.choice(nombres_mascotas) + f" {i}"
+            codigo = f"{p.cedula}-{i}"
+            
             mascota = db.query(Mascota).filter(Mascota.codigo_historia == codigo).first()
             if not mascota:
+                nac = datetime.now() - timedelta(days=random.randint(365, 3650))
                 mascota = Mascota(
-                    nombre=nom,
-                    especie=esp,
-                    raza=raz,
-                    sexo=sex,
-                    fecha_nacimiento=date.fromisoformat(nac),
-                    color=col,
-                    peso=pes,
-                    propietario_id=p_id,
-                    estado_reproductivo="No Esterilizado" if i % 2 == 0 else "Esterilizado",
+                    nombre=nombre,
+                    especie=especie,
+                    raza=raza,
+                    sexo=random.choice(["Macho", "Hembra"]),
+                    fecha_nacimiento=nac.date(),
+                    color=random.choice(["Blanco", "Negro", "Marrón", "Gris", "Dorado", "Manchado"]),
+                    peso=round(random.uniform(2.0, 40.0), 1),
+                    propietario_id=p.id,
+                    estado_reproductivo=random.choice(["Esterilizado", "No Esterilizado"]),
                     codigo_historia=codigo,
                     activo=True
                 )
                 db.add(mascota)
             mascotas_docs.append(mascota)
-        
-        db.commit() # Commit Owners and Pets
-        print("Mascotas y propietarios creados.")
+        db.commit()
 
-        # 5. Crear Consultas (unas pocas)
-        for i in range(5):
-            m = mascotas_docs[i]
+        # 5. Carga Histórica de Consultas (250 consultas en el último año)
+        print("🩺 Generando historial clínico denso (último año)...")
+        motivos = ["Chequeo General", "Vacunación", "Vómitos y diarrea", "Control post-op", "Problemas de piel", "Cojera", "Fiebre", "Limpieza dental", "Accidente doméstico", "Pérdida de apetito"]
+        diagnosticos = ["Paciente Sano", "Dermatitis alérgica", "Gastroenteritis bacteriana", "Fractura por trauma", "Alergia alimentaria", "Otitis externa", "Parásitos intestinales", "Gingivitis leve", "Deshidratación", "Insuficiencia renal leve"]
+        
+        vacunas = [i for i in inventario_docs if i.categoria == "Vacuna"]
+        desparasitantes = [i for i in inventario_docs if i.categoria == "Desparasitante"]
+        medicamentos = [i for i in inventario_docs if i.categoria in ["Antibiótico", "Antiinflamatorio"]]
+        laboratorios = [i for i in inventario_docs if i.categoria == "Laboratorio"]
+        imagenes = [i for i in inventario_docs if i.categoria == "Imagen"]
+        insumos = [i for i in inventario_docs if i.categoria == "Insumo"]
+
+        for c_idx in range(250):
+            m = random.choice(mascotas_docs)
+            dr = random.choice(medicos)
+            dias_atras = random.randint(0, 365)
+            fecha = datetime.now() - timedelta(days=dias_atras, hours=random.randint(0, 8))
+            
             consulta = Consulta(
                 mascota_id=m.id,
-                motivo="Chequeo General",
-                sintomas="Ninguno aparente, revisión de rutina.",
-                diagnostico="Paciente sano.",
-                peso=m.peso,
-                temperatura=38.5,
-                frecuencia_cardiaca=70.0,
-                veterinario=f"Dr. {medicos[i].username}",
-                observaciones="Se recomienda desparasitación el próximo mes."
+                motivo=random.choice(motivos),
+                sintomas="Descripción semiológica de los signos clínicos observados...",
+                diagnostico=random.choice(diagnosticos),
+                tratamiento="Plan terapéutico indicado según hallazgos...",
+                peso=round(m.weight + random.uniform(-0.5, 0.5) if hasattr(m, 'weight') else m.peso + random.uniform(-0.5, 0.5), 2),
+                temperatura=round(random.uniform(37.8, 40.1), 1),
+                frecuencia_cardiaca=random.randint(70, 140),
+                veterinario=f"Dr. {dr.username.split('_')[1].capitalize()}",
+                fecha_consulta=fecha
             )
+            # Fix: weight might be .peso in model
+            consulta.peso = round(m.peso + random.uniform(-0.5, 0.5), 2)
+            
             db.add(consulta)
-        db.commit()
-        print("Consultas creadas.")
+            db.flush()
 
-        # 6. Crear Citas/Órdenes (unas pocas)
-        for i in range(5, 8):
-            m = mascotas_docs[i]
-            cita = Cita(
-                fecha_cita=datetime.now() + timedelta(days=1, hours=i),
-                tipo="Consulta Especializada",
-                estado=CitaEstado.PENDIENTE,
-                mascota_id=m.id,
-                propietario_id=m.propietario_id,
-                veterinario_id=medicos[i-5].id,
-                observaciones="Requiere ayuno."
-            )
-            db.add(cita)
+            # --- 1. Fórmulas (50% prob) ---
+            if random.random() < 0.5:
+                receta = Receta(consulta_id=consulta.id, fecha_emision=fecha, indicaciones_generales="Administrar según dosis indicada.")
+                db.add(receta)
+                db.flush()
+                for _ in range(random.randint(1, 3)):
+                    med = random.choice(medicamentos)
+                    db.add(DetalleReceta(receta_id=receta.id, medicamento_id=med.id, dosis="X ml", frecuencia="12h", duracion="5d"))
+
+            # --- 2. Hospitalizaciones (15% prob) ---
+            if random.random() < 0.15:
+                hosp = Hospitalizacion(mascota_id=m.id, consulta_id=consulta.id, fecha_ingreso=fecha, motivo="Observación", estado_paciente="Estable", jaula_nro="UCI-01", dias_cama=random.randint(1, 4), precio_aplicado=150.0, activo=False )
+                db.add(hosp)
+                db.flush()
+                db.add(ServicioConsulta(consulta_id=consulta.id, tipo_servicio="HOSPITALIZACION", referencia_id=hosp.id, nombre_servicio="Hospitalización", cantidad=float(hosp.dias_cama), precio_unitario=50.0, estado="Aplicado"))
+
+            # --- 3. Cirugías (7% prob) ---
+            if random.random() < 0.07:
+                ciru = Cirugia(mascota_id=m.id, consulta_id=consulta.id, fecha_cirugia=fecha, tipo_procedimiento="Cirugía General", cirujano_id=dr.id, informe_quirurgico="Sin incidentes.", riesgo_asa="ASA II", precio_aplicado=300.0)
+                db.add(ciru)
+                db.flush()
+                db.add(ServicioConsulta(consulta_id=consulta.id, tipo_servicio="CIRUGIA", referencia_id=ciru.id, nombre_servicio="Cirugía Programada", cantidad=1.0, precio_unitario=300.0, estado="Aplicado"))
+
+            if c_idx % 50 == 0:
+                db.commit()
+                print(f"   ... {c_idx} consultas generadas")
 
         db.commit()
-        print("Datos de prueba cargados exitosamente.")
-        print(f"Resumen: {len(medicos)} médicos, {len(propietarios_docs)} propietarios, {len(mascotas_docs)} mascotas.")
+        print("\n✅ SEEDING COMPLETADO CON ÉXITO")
         
     except Exception as e:
         db.rollback()
-        print(f"Error al cargar datos de prueba: {e}")
+        print(f"❌ Error durante el seeding: {e}")
         import traceback
         traceback.print_exc()
     finally:

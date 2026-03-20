@@ -19,7 +19,7 @@ def crear_producto(
     if existe:
         raise HTTPException(status_code=400, detail="El codigo del producto ya existe")
         
-    nuevo_producto = Inventario(**producto.dict())
+    nuevo_producto = Inventario(**producto.model_dump())
     db.add(nuevo_producto)
     db.commit()
     db.refresh(nuevo_producto)
@@ -77,7 +77,7 @@ def actualizar_producto(
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
         
-    for key, value in producto_update.dict(exclude_unset=True).items():
+    for key, value in producto_update.model_dump(exclude_unset=True).items():
         setattr(producto, key, value)
     
     db.commit()

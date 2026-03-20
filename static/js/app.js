@@ -38,6 +38,29 @@ const fetchAPI = async (endpoint, options = {}) => {
         console.error('Error en fetchAPI:', error);
         throw error;
     }
+};const showNotification = (message, type = 'info') => {
+    const container = document.getElementById('notification-container') || document.body;
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        background: ${type === 'success' ? '#10b981' : '#4F46E5'};
+        color: white; padding: 1rem 1.5rem; border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        display: flex; align-items: center; gap: 0.75rem;
+        transform: translateX(120%); transition: transform 0.3s ease;
+        font-weight: 500;
+    `;
+    notification.innerHTML = `
+        <span>${type === 'success' ? '✅' : 'ℹ️'}</span>
+        <span>${message}</span>
+    `;
+    container.appendChild(notification);
+    setTimeout(() => notification.style.transform = 'translateX(0)', 10);
+    setTimeout(() => {
+        notification.style.transform = 'translateX(120%)';
+        setTimeout(() => notification.remove(), 300);
+    }, 4000);
 };
 
 /**
@@ -193,6 +216,7 @@ const setupNavigation = () => {
             if (targetId === 'sec-reportes') loadReportes();
             if (targetId === 'sec-propietarios') loadPropietarios();
             if (targetId === 'sec-usuarios') loadUsuarios();
+            if (targetId === 'sec-perfil') loadPerfil();
         });
     });
 };
@@ -223,11 +247,24 @@ const loadAgenda = async () => {
     container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Cargando agenda...</p>';
 
     try {
-        const citas = await fetchAPI('/citas/?skip=0&limit=100'); // Fetch more for calendar
+        const [citasRaw, consultasRaw, mascotas] = await Promise.all([
+            fetchAPI('/citas/?skip=0&limit=100').catch(()=>[]),
+            fetchAPI('/consultas/?skip=0&limit=100').catch(()=>[]),
+            fetchAPI('/mascotas/?skip=0&limit=300').catch(()=>[])
+        ]);
+        const mascotasMap = {};
+        if (Array.isArray(mascotas)) {
+            mascotas.forEach(m => mascotasMap[m.id] = m.nombre);
+        }
 
-        // 1. Render List (Órdenes / Espera)
-        const hoy = new Date().toISOString().split('T')[0];
-        const hoyCitas = citas.filter(c => c.fecha.startsWith(hoy));
+        // 1. Render List (Órdenes / Espera) (Solo Citas de Hoy)
+        const hoy = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+        const safeCitas = Array.isArray(citasRaw) ? citasRaw : [];
+        const hoyCitas = safeCitas.filter(c => {
+            if (!c) return false;
+            const fecha = (c.fecha_cita || c.fecha || '').toString();
+            return fecha && typeof fecha.startsWith === 'function' && fecha.startsWith(hoy);
+        });
 
         if (hoyCitas.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">No hay pacientes en espera.</p>';
@@ -236,11 +273,11 @@ const loadAgenda = async () => {
                 <div class="card-item">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem;">
                         <div>
-                            <strong style="color: var(--text-primary); font-size: 0.9rem;">${new Date(cita.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
+                            <strong style="color: var(--text-primary); font-size: 0.9rem;">${new Date(cita.fecha || cita.fecha_cita).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
                             <span class="badge" style="background: ${getStatusColor(cita.estado)}; margin-left: 0.5rem;">${cita.estado}</span>
                         </div>
                     </div>
-                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Mascota ID: ${cita.mascota_id}</p>
+                    <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">${mascotasMap[cita.mascota_id] || `Mascota ID: #${cita.mascota_id}`}</p>
                     <p style="font-size: 0.875rem; font-weight: 500;">${cita.motivo}</p>
                     <div style="margin-top: 1rem; text-align: right;">
                         ${cita.estado === 'Programada' ? `<button onclick="checkInCita(${cita.id})" class="btn-secondary btn-sm">Marcar Check-in</button>` : ''}
@@ -250,7 +287,34 @@ const loadAgenda = async () => {
             `).join('');
         }
 
-        // 2. Render Calendar
+        // 2. Prepare combined events for Calendar
+        const allEvents = [];
+        safeCitas.forEach(c => {
+            const petName = mascotasMap[c.mascota_id] || `Mascota #${c.mascota_id}`;
+            allEvents.push({
+                id: 'cita_' + c.id,
+                title: `${petName} - ${c.motivo || c.tipo}`,
+                start: c.fecha_cita || c.fecha,
+                backgroundColor: getStatusColor(c.estado),
+                borderColor: getStatusColor(c.estado),
+                extendedProps: { ...c, mascota_nombre: petName, esConsultaPasada: false }
+            });
+        });
+        
+        const safeConsultas = Array.isArray(consultasRaw) ? consultasRaw : [];
+        safeConsultas.forEach(c => {
+            const petName = mascotasMap[c.mascota_id] || `Mascota #${c.mascota_id}`;
+            allEvents.push({
+                id: 'cons_' + c.id,
+                title: `${petName} - Cons. Histórica`,
+                start: c.fecha_consulta || c.fecha,
+                backgroundColor: '#10b981', // Verde estilo consulta completada past
+                borderColor: '#059669',
+                extendedProps: { ...c, mascota_nombre: petName, esConsultaPasada: true }
+            });
+        });
+
+        // 3. Render Calendar
         const calEl = document.getElementById('calendar');
         if (!calendarInstance) {
             calendarInstance = new FullCalendar.Calendar(calEl, {
@@ -262,30 +326,29 @@ const loadAgenda = async () => {
                 },
                 locale: 'es',
                 height: '100%',
-                events: citas.map(c => ({
-                    id: c.id,
-                    title: `Mascota #${c.mascota_id} - ${c.motivo}`,
-                    start: c.fecha,
-                    backgroundColor: getStatusColor(c.estado),
-                    borderColor: getStatusColor(c.estado)
-                })),
+                events: allEvents,
                 eventClick: function (info) {
-                    alert('Cita: ' + info.event.title);
+                    mostrarResumenDia(info.event.startStr.split('T')[0], calendarInstance.getEvents());
+                },
+                dateClick: function (info) {
+                    mostrarResumenDia(info.dateStr, calendarInstance.getEvents());
                 }
             });
-            calendarInstance.render();
+            const observer = new IntersectionObserver((entries) => {
+                if (entries[0].isIntersecting) {
+                    calendarInstance.updateSize();
+                    calendarInstance.render();
+                    observer.disconnect();
+                }
+            });
+            observer.observe(calEl);
         } else {
             calendarInstance.removeAllEvents();
-            citas.forEach(c => {
-                calendarInstance.addEvent({
-                    id: c.id,
-                    title: `Pac: #${c.mascota_id} - ${c.tipo}`,
-                    start: c.fecha_cita,
-                    backgroundColor: getStatusColor(c.estado),
-                    borderColor: getStatusColor(c.estado),
-                    extendedProps: { ...c }
-                });
-            });
+            allEvents.forEach(evt => calendarInstance.addEvent(evt));
+            setTimeout(() => { 
+                calendarInstance.updateSize(); 
+                calendarInstance.render();
+            }, 300);
         }
 
     } catch (error) {
@@ -421,7 +484,7 @@ const abrirEditarPropietario = async (id) => {
         document.getElementById('editPropietarioEmail').value = p.email || '';
         document.getElementById('editPropietarioDireccion').value = p.direccion || '';
         
-        document.getElementById('modalEditarPropietario').style.display = 'block';
+        openModal('modalEditarPropietario');
     } catch (error) {
         alert("Error al cargar datos del propietario");
     }
@@ -509,23 +572,24 @@ const handleNuevoUsuarioSubmit = async (e) => {
 // ============ EVOLUCION DE PESO (CHART) ============
 let weightChart = null;
 
-const toggleWeightChart = async () => {
+const loadWeightChart = async () => {
     const container = document.getElementById('chartContainer');
-    if (container.style.display === 'block') {
-        container.style.display = 'none';
-        return;
-    }
-
-    if (!currentMascotaId) return;
+    if (!container || !currentMascotaId) return;
 
     try {
         const data = await fetchAPI(`/mascotas/${currentMascotaId}/peso-history`);
-        if (data.length === 0) {
-            alert('No hay suficientes datos de peso para mostrar la gráfica.');
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:2rem;">No hay registros de peso para mostrar la gráfica.</p>';
             return;
         }
 
         container.style.display = 'block';
+        
+        // Ensure canvas exists if container was overwritten previously
+        if (!document.getElementById('weightChart')) {
+            container.innerHTML = '<canvas id="weightChart"></canvas>';
+        }
+        
         const ctx = document.getElementById('weightChart').getContext('2d');
 
         if (weightChart) weightChart.destroy();
@@ -634,13 +698,18 @@ const loadReportes = async () => {
         // En un caso real, llamaríamos a endpoints de reportes/stats
         // Simulamos stats básicos con las APIs existentes por ahora
         const citas = await fetchAPI('/citas/?skip=0&limit=100');
-        const today = new Date().toISOString().split('T')[0];
-        const citasHoy = citas.filter(c => c.fecha.startsWith(today)).length;
+        const today = new Date().toLocaleDateString('en-CA');
+        const safeCitas = Array.isArray(citas) ? citas : [];
+        const citasHoy = safeCitas.filter(c => {
+            if (!c) return false;
+            const fecha = (c.fecha_cita || c.fecha || '').toString();
+            return fecha && typeof fecha.startsWith === 'function' && fecha.startsWith(today);
+        }).length;
 
         // const reporteKpis = await fetchAPI('/reportes/kpis'); // Si existiera
 
         document.getElementById('kpiCitas').textContent = citasHoy;
-        document.getElementById('kpiPacientes').textContent = citas.filter(c => c.estado === 'Finalizada').length; // Approx
+        document.getElementById('kpiPacientes').textContent = safeCitas.filter(c => c && c.estado === 'Finalizada').length; // Approx
 
         // El stock ya se actualiza en loadInventario si se visita
     } catch (error) {
@@ -829,7 +898,7 @@ const abrirEditarMascota = async (id) => {
             editRazaSelectInstance?.setValue('', 'Escriba para buscar raza...');
         }
 
-        document.getElementById('modalEditarMascota').style.display = 'block';
+        openModal('modalEditarMascota');
     } catch (error) {
         alert("Error al cargar datos de la mascota");
     }
@@ -850,26 +919,75 @@ const confirmEliminarMascota = async (id, nombre) => {
     }
 };
 
+const abrirFormularioConsulta = () => {
+    const role = localStorage.getItem('role');
+    const isAdmin = (role === 'admin' || role === 'recepcionista');
+    
+    // Si es administrador, forzamos la creación de una "Orden de Turno" (Cita en sala), no el registro médico
+    if (isAdmin) {
+        showNotification("Modo Administración: Usted generará una orden para atención médica.", "info");
+        document.getElementById('citaMascotaId').value = currentMascotaId;
+        const inputSearch = document.getElementById('citaMascotaSearch');
+        const nom = document.getElementById('displayNombreMascota')?.textContent || 'Paciente Seleccionado';
+        if (inputSearch) inputSearch.value = nom;
+        
+        // Cargar fecha actual
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+        document.getElementById('citaFecha').value = localISOTime;
+        document.getElementById('citaMotivo').value = "Turno para evaluación médica";
+        
+        openModal('modalCita');
+        return;
+    }
+
+    const clinFields = document.querySelector('.clinical-field');
+    const adminMsg = document.getElementById('adminConsultaMsg');
+    const examenTextarea = document.getElementById('consultaExamen');
+
+    // Modo Médico (Doctor)
+    if (clinFields) clinFields.style.display = 'block';
+    if (adminMsg) adminMsg.style.display = 'none';
+    if (examenTextarea) examenTextarea.required = true;
+    
+    // Pre-seleccionar al doctor actual si está logueado
+    const user = localStorage.getItem('username');
+    const selectVet = document.getElementById('consultaVeterinario');
+    if (selectVet && user) {
+        for (let opt of selectVet.options) {
+            if (opt.text.toLowerCase().includes(user.toLowerCase())) {
+                selectVet.value = opt.value;
+                break;
+            }
+        }
+    }
+    
+    openModal('modalConsulta');
+};
+
 const handleConsultaSubmit = async (e) => {
     e.preventDefault();
     try {
-        const pruebas = document.getElementById('consultaPruebas')?.value || 'Ninguna prueba registrada';
+        const isAdmin = localStorage.getItem('role') === 'admin';
         const icc = document.getElementById('consultaICC').value || 'N/D';
         const tllc = document.getElementById('consultaTLLC').value || 'N/D';
 
         const data = {
             mascota_id: parseInt(document.getElementById('consultaMascotaId').value),
+            veterinario: document.getElementById('consultaVeterinario').value,
             motivo: document.getElementById('consultaMotivo').value,
-            sintomas: document.getElementById('consultaExamen').value,
+            sintomas: document.getElementById('consultaExamen').value || "Evaluación Clínica",
             diagnostico: document.getElementById('consultaProblemas').value || "No especificado",
             peso: parseFloat(document.getElementById('consultaPeso').value) || null,
             temperatura: parseFloat(document.getElementById('consultaTemperatura').value) || null,
-            observaciones: `ICC: ${icc}, TLLC: ${tllc} | Pruebas: ${pruebas}`
+            observaciones: `ICC: ${icc}, TLLC: ${tllc} | Pruebas: ${document.getElementById('consultaPruebas')?.value || 'N/A'}`
         };
         await fetchAPI('/consultas/', { method: 'POST', body: JSON.stringify(data) });
-        alert('Consulta registrada correctamente.');
+        showNotification('📜 Consulta registrada y archivada correctamente.', 'success');
         closeModal('modalConsulta');
         if (currentMascotaId) cargarConsultas(currentMascotaId);
+        cargarBadgeOrdenes();
     } catch (error) {
         alert('Error: ' + error.message);
     }
@@ -924,6 +1042,254 @@ const renderMascotasList = (mascotas, container) => {
     `).join('');
 };
 
+let currentViewedConsultaId = null;
+
+window.verConsultaCompleta = async (consultaId, mascotaId) => {
+    try {
+        currentViewedConsultaId = consultaId;
+        const c = await fetchAPI(`/consultas/${consultaId}`);
+        document.getElementById('detalleConsultaTitle').textContent = `Expediente Clínico - C.${c.id}`;
+        
+        let htmlMed = `
+            <p><strong>Fecha:</strong> ${new Date(c.fecha_consulta).toLocaleString()}</p>
+            <p><strong>Profesional:</strong> ${c.veterinario}</p>
+            <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
+            <p><strong>Motivo:</strong> ${c.motivo}</p>
+            <p><strong>Síntomas:</strong> ${c.sintomas || 'N/A'}</p>
+            <p><strong>Diagnóstico:</strong> ${c.diagnostico || 'N/A'}</p>
+            <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
+            <div style="display:flex; gap: 1rem;">
+                <span><strong>Peso:</strong> ${c.peso ? parseFloat(c.peso).toFixed(2) : '-'} kg</span>
+                <span><strong>Temp:</strong> ${c.temperatura ? parseFloat(c.temperatura).toFixed(2) : '-'} °C</span>
+                <span><strong>FC:</strong> ${c.frecuencia_cardiaca || '-'} bpm</span>
+            </div>
+            <p><strong>Tratamiento Médico Pautado:</strong><br/> ${c.tratamiento ? c.tratamiento.replace(/\\n/g, '<br>') : 'N/A'}</p>
+        `;
+        document.getElementById('detalleConsultaMedica').innerHTML = htmlMed;
+
+        document.getElementById('addServicioConsultaId').value = c.id;
+        
+        // Render Servicios Carrito
+        renderDetalleServicios(c.servicios || []);
+
+        openModal('modalDetalleConsulta');
+    } catch (e) {
+        alert("Error cargando expediente: " + e.message);
+    }
+};
+
+const renderDetalleServicios = (servicios) => {
+    const listDiv = document.getElementById('detalleConsultaServiciosList');
+    if (!servicios || servicios.length === 0) {
+        listDiv.innerHTML = '<p style="color: #6b7280; font-style: italic; text-align: center; padding: 1rem;">No hay registros clínicos o cargos anexados.</p>';
+        const el = document.getElementById('detalleConsultaTotal');
+        if (el) el.textContent = "$0.00";
+        return;
+    }
+
+    let total = 0;
+    const activos = servicios.filter(s => !s.is_deleted);
+    
+    let html = activos.map(s => {
+        total += (s.cantidad * s.precio_unitario);
+        
+        let statusIcon = s.estado === 'Aplicado' ? '✅' : '⏳';
+        let badgeColor = s.estado === 'Aplicado' ? 'background: #f0fdf4; color: #16a34a;' : 'background: #fffbeb; color: #d97706;';
+        
+        return `
+            <div class="clinical-data-row" style="${badgeColor} margin-bottom: 0.75rem; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
+                        ${statusIcon} ${s.nombre_servicio || s.tipo_servicio}
+                    </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button onclick="eliminarServicioConsulta(${s.id})" title="Eliminar registro" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem;">×</button>
+                    </div>
+                </div>
+                
+                <div style="font-size: 0.85rem; color: #475569; margin-top: 2px;">
+                    <strong>Categoría:</strong> ${s.tipo_servicio} 
+                </div>
+
+                ${s.detalles_clinicos ? `
+                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.5); border-radius: 4px; font-size: 0.8rem; color: #334155; border-left: 3px solid #cbd5e1;">
+                         📄 ${s.detalles_clinicos}
+                    </div>
+                ` : ''}
+
+                <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 2px 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 0.75rem; cursor: pointer; background: white;">
+                        <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
+                        <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>✅ Aplicado</option>
+                    </select>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    listDiv.innerHTML = html;
+    const el = document.getElementById('detalleConsultaTotal');
+    if (el) el.textContent = `$${total.toFixed(2)}`;
+};
+
+const cambiarEstadoServicio = async (servicioId, newState) => {
+    try {
+        await fetchAPI(`/consultas/servicios/${servicioId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ estado: newState })
+        });
+        // Refrescar
+        verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
+    } catch (e) {
+        alert("Error cambiando estado: " + e.message);
+        verConsultaCompleta(currentViewedConsultaId, currentMascotaId); // revert GUI
+    }
+};
+
+const eliminarServicioConsulta = async (servicioId) => {
+    if (!confirm("¿Seguro que desea quitar este cargo? Se revertirá stock si estaba Aplicado.")) return;
+    try {
+        await fetchAPI(`/consultas/servicios/${servicioId}`, { method: 'DELETE' });
+        verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
+    } catch (e) {
+        alert("Error quitando servicio: " + e.message);
+    }
+};
+
+let currentInventoryItems = [];
+
+// SMART FORM LOGIC: Category Change
+document.getElementById('addServicioTipo').addEventListener('change', async (e) => {
+    const tipo = e.target.value;
+    const searchInput = document.getElementById('addServicioItemSearch');
+    const label = document.getElementById('labelSeleccionDinamica');
+    const datalist = document.getElementById('listadoInventario');
+    
+    // Reset
+    searchInput.value = '';
+    document.getElementById('addServicioReferenciaId').value = '';
+    datalist.innerHTML = '';
+    currentInventoryItems = [];
+
+    if (tipo === 'INSUMO' || tipo === 'VACUNACION') {
+        label.textContent = tipo === 'VACUNACION' ? 'BUSCAR VACUNA EN STOCK' : 'BUSCAR PRODUCTO / MEDICAMENTO';
+        searchInput.placeholder = 'Escriba nombre o código...';
+        try {
+            // Fetch relevant inventory
+            const cat = tipo === 'VACUNACION' ? 'Vacunas' : null; // You might want to filter by category if your DB has it
+            const items = await fetchAPI(`/inventario/?limit=200${cat ? `&categoria=${cat}` : ''}`);
+            currentInventoryItems = items;
+            datalist.innerHTML = items.map(i => `<option value="${i.nombre} [Stock: ${i.stock_actual}]" data-id="${i.id}">`).join('');
+        } catch(err) { console.error("Error fetching inventory", err); }
+    } else {
+        label.textContent = 'REFERENCIA ADICIONAL';
+        searchInput.placeholder = 'Ej: Nombre de la cirugía o examen...';
+    }
+});
+
+// SMART FORM LOGIC: Item Selection
+document.getElementById('addServicioItemSearch').addEventListener('input', (e) => {
+    const val = e.target.value;
+    const tipo = document.getElementById('addServicioTipo').value;
+    
+    if (tipo === 'INSUMO' || tipo === 'VACUNACION') {
+        // Find if the value matches one of our options
+        const match = currentInventoryItems.find(i => `${i.nombre} [Stock: ${i.stock_actual}]` === val);
+        if (match) {
+            document.getElementById('addServicioNombre').value = match.nombre;
+            document.getElementById('addServicioPrecio').value = match.precio_unitario;
+            document.getElementById('addServicioReferenciaId').value = match.id;
+            
+            // Pre-fill clinical data with template for lot/expiry
+            const detField = document.getElementById('addServicioDetalles');
+            if (!detField.value) {
+                detField.value = `Lote: \nExp: \nVia: \nObs: `;
+            }
+            // Focus quantity
+            document.getElementById('addServicioCantidad').focus();
+        }
+    } else {
+        // For other types, just copy search to name
+        document.getElementById('addServicioNombre').value = val;
+    }
+});
+
+const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
+    // Si jump es true, es un módulo especializado que debe abrirse abajo en el perfil del paciente
+    const complexModules = {
+        'CIRUGIA': { tab: 'procedimientos', formId: 'formCirugia' },
+        'HOSPITALIZACION': { tab: 'hospitalizaciones', formId: 'formHospitalizacion' },
+        'LABORATORIO': { tab: 'laboratorio', formId: 'formPrueba' },
+        'VACUNACION': { tab: 'vacunas', formId: 'formVacuna' }
+    };
+
+    if (jump && complexModules[tipo]) {
+        const config = complexModules[tipo];
+        
+        // Cerramos el modal actual para permitir navegación en el fondo
+        closeModal('modalDetalleConsulta');
+        
+        // Cambiar a la pestaña correspondiente en el perfil de paciente (abajo)
+        switchPetTab(config.tab);
+        
+        // Scroll hacia abajo para que el usuario note que se abrió la sección
+        setTimeout(() => {
+            const el = document.getElementById('petTabContent');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Abrir el formulario correspondiente
+            const form = document.getElementById(config.formId);
+            if (form) {
+                form.style.display = 'block';
+                const combo = form.querySelector('.combo-consultas');
+                if (combo) combo.value = currentViewedConsultaId;
+            }
+        }, 300);
+        return;
+    }
+
+    // Default: Acto manual en el formulario azul
+    const selector = document.getElementById('addServicioTipo');
+    selector.value = tipo;
+    selector.dispatchEvent(new Event('change'));
+    
+    // Enfocar búsqueda
+    const search = document.getElementById('addServicioItemSearch');
+    if (fallbackSearch) search.value = fallbackSearch;
+    search.focus();
+    search.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+
+document.getElementById('formAgregarServicio').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cid = document.getElementById('addServicioConsultaId').value;
+    const refId = document.getElementById('addServicioReferenciaId').value;
+    
+    const body = {
+        consulta_id: parseInt(cid),
+        tipo_servicio: document.getElementById('addServicioTipo').value,
+        nombre_servicio: document.getElementById('addServicioNombre').value,
+        referencia_id: refId ? parseInt(refId) : null,
+        cantidad: parseFloat(document.getElementById('addServicioCantidad').value) || 1.0,
+        precio_unitario: parseFloat(document.getElementById('addServicioPrecio').value) || 0,
+        detalles_clinicos: document.getElementById('addServicioDetalles').value,
+        estado: 'Aplicado'
+    };
+    
+    try {
+        await fetchAPI(`/consultas/${cid}/servicios`, {
+            method: 'POST',
+            body: JSON.stringify(body)
+        });
+        e.target.reset(); 
+        document.getElementById('addServicioReferenciaId').value = '';
+        verConsultaCompleta(cid, currentMascotaId);
+        showNotification("Acto médico registrado correctamente", "success");
+    } catch(err) {
+        alert("Error agregando cargo: " + err.message);
+    }
+});
+
 const cargarConsultas = async (mascotaId) => {
     const tableBody = document.getElementById('consultasTableBody');
     tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>';
@@ -939,17 +1305,20 @@ const cargarConsultas = async (mascotaId) => {
                 <td>${c.motivo}</td>
                 <td>${c.diagnostico || '-'}</td>
                 <td style="font-size: 0.9em;">
-                    ${c.peso ? `<b>Peso:</b> ${c.peso}kg<br>` : ''}
-                    ${c.temperatura ? `<b>Temp:</b> ${c.temperatura}°C` : ''}
+                    ${c.peso ? `<b>Peso:</b> ${parseFloat(c.peso).toFixed(2)}kg<br>` : ''}
+                    ${c.temperatura ? `<b>Temp:</b> ${parseFloat(c.temperatura).toFixed(2)}°C` : ''}
                 </td>
                 <td style="text-align: right;">
+                    <button class="btn-primary btn-sm" onclick="verConsultaCompleta(${c.id}, ${mascotaId})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px;">🔍 Completa</button><br>
                     <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #ecfdf5; color: #047857; border-color: #059669;">💊 Recetar</button>
-                    <button class="btn-secondary btn-sm" onclick="verRecetas(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px;">Ver Recetas</button>
+                    <button class="btn-secondary btn-sm" onclick="switchPetTab('hospitalizaciones'); setTimeout(()=>toggleForm('formHospitalizacion'), 200);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fee2e2; color: #b91c1c; border-color: #ef4444;">🏥 Internar</button>
                 </td>
             </tr>
         `).join('');
-        document.getElementById('btnVerPeso').style.display = 'inline-block';
+        const btnVerPeso = document.getElementById('btnVerPeso');
+        if (btnVerPeso) btnVerPeso.style.display = 'inline-block';
     } catch (error) {
+        console.error("Error cargando consultas:", error);
         tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Error loading.</td></tr>';
     }
 };
@@ -992,6 +1361,14 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
     const btnDel = document.getElementById('btnEliminarMascota');
     if (btnEdit) btnEdit.onclick = () => abrirEditarMascota(id);
     if (btnDel) btnDel.onclick = () => confirmEliminarMascota(id, nombre);
+    
+    const btnAction = document.getElementById('btnActionAdd');
+    if (btnAction) btnAction.onclick = () => {
+        document.getElementById('consultaMascotaId').value = id;
+        abrirFormularioConsulta();
+    };
+    
+    setTimeout(updatePetNavArrows, 500);
 };
 
 const switchPetTab = (tabName) => {
@@ -1018,8 +1395,9 @@ const switchPetTab = (tabName) => {
         case 'consultas':
             actionsArea.innerHTML = `<button class="btn-primary" id="btnRegistrarConsulta">+ Nueva Consulta</button>`;
             document.getElementById('btnRegistrarConsulta').onclick = () => {
+                if (!currentMascotaId) return;
                 document.getElementById('consultaMascotaId').value = currentMascotaId;
-                openModal('modalConsulta');
+                abrirFormularioConsulta();
             };
             contentArea.innerHTML = `
                 <table class="consultas-table">
@@ -1031,8 +1409,25 @@ const switchPetTab = (tabName) => {
             cargarConsultas(currentMascotaId);
             break;
         case 'vacunas':
-            actionsArea.innerHTML = `<button class="btn-primary" onclick="alert('Funcionalidad de registro de vacunas próximamente')">+ Registrar Vacuna</button>`;
+            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formVacuna')">+ Registrar Vacuna</button>`;
             cargarVacunasPet(currentMascotaId);
+            break;
+        case 'desparasitaciones':
+            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formDesparasitacion')">+ Registrar Desparasitante</button>`;
+            cargarDesparasitacionesPet(currentMascotaId);
+            break;
+        case 'hospitalizaciones':
+            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formHospitalizacion')">+ Registrar Hosp.</button>`;
+            cargarHospitalizacionesPet(currentMascotaId);
+            break;
+        case 'procedimientos':
+            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formCirugia')">+ Registrar Cirugía</button>`;
+            cargarCirugiasPet(currentMascotaId);
+            break;
+        case 'laboratorio':
+        case 'imagenes':
+            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formPrueba')">+ Registrar Prueba</button>`;
+            cargarPruebasPet(currentMascotaId, tabName);
             break;
         case 'recetas':
             actionsArea.innerHTML = `<button class="btn-primary" onclick="alert('Las recetas se crean desde una consulta')">Ver Recetas</button>`;
@@ -1040,6 +1435,17 @@ const switchPetTab = (tabName) => {
             break;
         case 'ordenes':
             contentArea.innerHTML = '<div class="empty-state">No hay órdenes registradas.</div>';
+            break;
+        case 'peso':
+            contentArea.innerHTML = `
+                <div style="background: white; border-radius: 8px; padding: 1.5rem;">
+                    <h3 style="margin-top: 0; color: #1f2937; text-align: center;">Evolución de Peso</h3>
+                    <div id="chartContainer" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
+                        <canvas id="weightChart"></canvas>
+                    </div>
+                </div>
+            `;
+            setTimeout(loadWeightChart, 100);
             break;
         default:
             contentArea.innerHTML = `<div class="empty-state">Módulo <b>${tabName}</b> en desarrollo.</div>`;
@@ -1050,6 +1456,15 @@ const renderHistoriaTab = async () => {
     const res = document.getElementById('historiaResumen');
     try {
         const m = await fetchAPI(`/mascotas/${currentMascotaId}`);
+        const v = await fetchAPI(`/clinico/vacunaciones/${currentMascotaId}`).catch(()=>[]);
+        
+        let vacunasHTML = '';
+        if (v.length > 0) {
+            vacunasHTML = `<div style="margin-top:1rem;"><b>Vacunas aplicadas:</b><br><ul style="margin:0; padding-left:1.5rem; color:#4b5563;">` +
+                v.map(vac => `<li>${vac.vacuna_nombre} (Lote: ${vac.lote})</li>`).join('') +
+                `</ul></div>`;
+        }
+
         res.innerHTML = `
             <div style="background: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
@@ -1057,24 +1472,174 @@ const renderHistoriaTab = async () => {
                     <div><b>Raza:</b> ${m.raza || 'N/A'}</div>
                     <div><b>Sexo:</b> ${m.sexo || 'N/A'}</div>
                     <div><b>Color:</b> ${m.color || 'N/A'}</div>
-                    <div><b>Peso actual:</b> ${m.peso || 'N/A'} kg</div>
+                    <div><b>Peso actual:</b> ${m.peso ? parseFloat(m.peso).toFixed(2) : 'N/A'} kg</div>
                     <div><b>Estado:</b> ${m.estado_reproductivo || 'N/A'}</div>
                 </div>
                 <hr style="margin: 1rem 0; border: 0; border-top: 1px solid #e2e8f0;">
                 <div><b>Observaciones:</b><br>${m.observaciones || 'Sin observaciones.'}</div>
+                ${vacunasHTML}
             </div>`;
     } catch (e) {}
 };
 
+const toggleForm = (formId) => {
+    const el = document.getElementById(formId);
+    if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+const buildClinicoForm = (type) => {
+    // Shared select for Consultas
+    const comboConsultas = `<div class="form-group">
+        <label>Asociar a Consulta (Requiere consulta previa)</label>
+        <select name="consulta_id" class="form-control combo-consultas" required><option value="">Seleccione consulta...</option></select>
+    </div>`;
+
+    if (type === 'vacuna') return `<form onsubmit="submitClinico(event, 'vacunacion')" id="formVacuna" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
+        <h4 style="margin-top:0; color:#4F46E5;">Aplicar Vacunación</h4>
+        ${comboConsultas}
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group"><label>Vacuna (ID Inventario)</label><input type="number" name="vacuna_id" class="form-control" required placeholder="Ej: 3"></div>
+            <div class="form-group"><label>Lote</label><input type="text" name="lote" class="form-control" required></div>
+        </div>
+        <button type="submit" class="btn-primary">Guardar Registro</button>
+    </form>`;
+
+    if (type === 'desparasitacion') return `<form onsubmit="submitClinico(event, 'desparasitacion')" id="formDesparasitacion" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
+        <h4 style="margin-top:0; color:#4F46E5;">Aplicar Desparasitante</h4>
+        ${comboConsultas}
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group"><label>Producto (ID Inventario)</label><input type="number" name="producto_id" class="form-control" required></div>
+            <div class="form-group"><label>Tipo</label><select name="tipo" class="form-control"><option>Interna</option><option>Externa</option></select></div>
+            <div class="form-group"><label>Dosis</label><input type="text" name="dosis" class="form-control" required></div>
+        </div>
+        <button type="submit" class="btn-primary">Guardar Registro</button>
+    </form>`;
+
+    if (type === 'hospitalizacion') return `<form onsubmit="submitClinico(event, 'hospitalizacion')" id="formHospitalizacion" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
+        <h4 style="margin-top:0; color:#4F46E5;">Registrar Ingreso Hospitalario</h4>
+        ${comboConsultas}
+        <div class="form-group"><label>Motivo</label><input type="text" name="motivo" class="form-control" required></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group"><label>Estado Paciente</label><select name="estado_paciente" class="form-control"><option>Estable</option><option>Crítico</option><option>Reservado</option></select></div>
+            <div class="form-group"><label>Jaula No.</label><input type="text" name="jaula_nro" class="form-control"></div>
+        </div>
+        <button type="submit" class="btn-primary">Guardar Registro</button>
+    </form>`;
+
+    if (type === 'cirugia') return `<form onsubmit="submitClinico(event, 'cirugia')" id="formCirugia" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
+        <h4 style="margin-top:0; color:#4F46E5;">Registrar Intervención Quirúrgica</h4>
+        ${comboConsultas}
+        <div class="form-group"><label>Procedimiento</label><input type="text" name="tipo_procedimiento" class="form-control" required></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group"><label>Riesgo ASA</label><select name="riesgo_asa" class="form-control"><option>I</option><option>II</option><option>III</option><option>IV</option><option>V</option></select></div>
+            <div class="form-group"><label>Cirujano ID</label><input type="number" name="cirujano_id" class="form-control"></div>
+        </div>
+        <button type="submit" class="btn-primary">Guardar Registro</button>
+    </form>`;
+
+    if (type === 'prueba') return `<form onsubmit="submitClinico(event, 'prueba_complementaria')" id="formPrueba" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
+        <h4 style="margin-top:0; color:#4F46E5;">Registrar Estudio</h4>
+        ${comboConsultas}
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group"><label>Tipo</label><select name="tipo" class="form-control"><option>Laboratorio</option><option>Rayos X</option><option>Ecografía</option></select></div>
+            <div class="form-group"><label>URL Resultado</label><input type="text" name="archivo_url" class="form-control"></div>
+        </div>
+        <div class="form-group"><label>Resultados</label><input type="text" name="resultado" class="form-control" required></div>
+        <button type="submit" class="btn-primary">Guardar Registro</button>
+    </form>`;
+    return '';
+};
+
+const hydrateCombos = async () => {
+    try {
+        const consultas = await fetchAPI(`/consultas/?mascota_id=${currentMascotaId}`);
+        const opts = consultas.map(c => `<option value="${c.id}">Cons #${c.id} - ${new Date(c.fecha_consulta).toLocaleDateString()}</option>`).join('');
+        document.querySelectorAll('.combo-consultas').forEach(el => el.innerHTML = opts);
+    } catch (e) {}
+};
+
+const submitClinico = async (e, endpoint) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    if (data.consulta_id) data.consulta_id = parseInt(data.consulta_id);
+    if (data.vacuna_id) data.vacuna_id = parseInt(data.vacuna_id);
+    if (data.producto_id) data.producto_id = parseInt(data.producto_id);
+    if (data.cirujano_id) data.cirujano_id = parseInt(data.cirujano_id);
+    data.mascota_id = currentMascotaId;
+    
+    try {
+        await fetchAPI(`/clinico/${endpoint}`, { method: 'POST', body: JSON.stringify(data) });
+        alert('Registro clínico guardado exitosamente.');
+        e.target.reset();
+        e.target.style.display = 'none';
+        
+        switchPetTab(document.querySelector('.pet-nav-item.active').dataset.tab);
+    } catch (err) { alert('Error: ' + err.message); }
+};
+
 const cargarVacunasPet = async (mascotaId) => {
-    const contentArea = document.getElementById('petTabContent');
-    contentArea.innerHTML = `
-        <div style="background: white; border-radius: 8px;">
-            <table class="consultas-table">
-                <thead><tr><th>Fecha</th><th>Vacuna</th><th>Lote</th><th>Próxima</th></tr></thead>
-                <tbody><tr><td colspan="4" style="text-align:center; padding:2rem; color:#9ca3af;">No hay vacunas registradas.</td></tr></tbody>
-            </table>
-        </div>`;
+    const cnt = document.getElementById('petTabContent');
+    cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    hydrateCombos();
+    try {
+        const data = await fetchAPI(`/clinico/vacunaciones/${mascotaId}`);
+        const tbody = document.getElementById('tblVac');
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay vacunas registradas.</td></tr>`;
+        else tbody.innerHTML = data.map(v => `<tr><td>${new Date(v.fecha_aplicacion).toLocaleDateString()}</td><td>${v.vacuna_nombre}</td><td>${v.lote || '-'}</td></tr>`).join('');
+    } catch (e) {}
+};
+
+const cargarDesparasitacionesPet = async (mascotaId) => {
+    const cnt = document.getElementById('petTabContent');
+    cnt.innerHTML = buildClinicoForm('desparasitacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr></thead><tbody id="tblDesp"><tr><td colspan="4" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    hydrateCombos();
+    try {
+        const data = await fetchAPI(`/clinico/desparasitaciones/${mascotaId}`);
+        const tbody = document.getElementById('tblDesp');
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#9ca3af;">No hay registros.</td></tr>`;
+        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_aplicacion).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.producto_nombre}</td><td>${d.dosis}</td></tr>`).join('');
+    } catch (e) {}
+};
+
+const cargarHospitalizacionesPet = async (mascotaId) => {
+    const cnt = document.getElementById('petTabContent');
+    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="4" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    hydrateCombos();
+    try {
+        const data = await fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`);
+        const tbody = document.getElementById('tblHosp');
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#9ca3af;">No hay registros de hospitalización.</td></tr>`;
+        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_ingreso).toLocaleDateString()}</td><td>${d.motivo}</td><td>${d.estado_paciente||'-'}</td><td>${d.jaula_nro||'-'}</td></tr>`).join('');
+    } catch (e) {}
+};
+
+const cargarCirugiasPet = async (mascotaId) => {
+    const cnt = document.getElementById('petTabContent');
+    cnt.innerHTML = buildClinicoForm('cirugia') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Riesgo ASA</th></tr></thead><tbody id="tblCir"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    hydrateCombos();
+    try {
+        const data = await fetchAPI(`/clinico/cirugias/${mascotaId}`);
+        const tbody = document.getElementById('tblCir');
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay cirugías registradas.</td></tr>`;
+        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_cirugia).toLocaleDateString()}</td><td>${d.tipo_procedimiento}</td><td>${d.riesgo_asa||'-'}</td></tr>`).join('');
+    } catch (e) {}
+};
+
+const cargarPruebasPet = async (mascotaId, filterType) => {
+    const cnt = document.getElementById('petTabContent');
+    cnt.innerHTML = buildClinicoForm('prueba') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Resultados</th></tr></thead><tbody id="tblPrueba"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    hydrateCombos();
+    try {
+        const data = await fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`);
+        const tbody = document.getElementById('tblPrueba');
+        
+        let filtered = data;
+        if (filterType === 'laboratorio') filtered = data.filter(d => d.tipo === 'Laboratorio');
+        if (filterType === 'imagenes') filtered = data.filter(d => d.tipo !== 'Laboratorio');
+
+        if (!filtered.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay estudios registrados.</td></tr>`;
+        else tbody.innerHTML = filtered.map(d => `<tr><td>${new Date(d.fecha).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.resultado} ${d.archivo_url ? `<a href="${d.archivo_url}" target="_blank">[Ver Link]</a>` : ''}</td></tr>`).join('');
+    } catch (e) {}
 };
 
 const cargarRecetasPet = async (mascotaId) => {
@@ -1110,15 +1675,33 @@ const cargarRecetasPet = async (mascotaId) => {
     }
 };
 
+// Removida duplicación antigua de verConsultaCompleta
+
 const actualizarCountsPet = async (mascotaId) => {
     try {
-        const consultas = await fetchAPI(`/consultas/?mascota_id=${mascotaId}`);
-        document.getElementById('count-consultas').textContent = consultas.length;
+        const setTxt = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
         
-        // Mocking others for now to show the UI works
-        document.getElementById('count-recetas').textContent = '...';
-        document.getElementById('count-vacunas').textContent = '0';
-        document.getElementById('count-proc').textContent = '0';
+        Promise.all([
+            fetchAPI(`/consultas/?mascota_id=${mascotaId}`).catch(()=>[]),
+            fetchAPI(`/clinico/vacunaciones/${mascotaId}`).catch(()=>[]),
+            fetchAPI(`/clinico/desparasitaciones/${mascotaId}`).catch(()=>[]),
+            fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`).catch(()=>[]),
+            fetchAPI(`/clinico/cirugias/${mascotaId}`).catch(()=>[]),
+            fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`).catch(()=>[])
+        ]).then(([cons, vac, desp, hosp, cir, pru]) => {
+            setTxt('count-consultas', cons?.length || 0);
+            setTxt('count-vacunas', vac?.length || 0);
+            setTxt('count-desparasitaciones', desp?.length || 0);
+            setTxt('count-hosp', hosp?.length || 0);
+            setTxt('count-proc', cir?.length || 0);
+            
+            const p = pru || [];
+            setTxt('count-lab', p.filter(x => x.tipo === 'Laboratorio').length);
+            setTxt('count-img', p.filter(x => x.tipo !== 'Laboratorio').length);
+        }).catch(e => console.warn(e));
+
+        setTxt('count-recetas', '-');
+        setTxt('count-ordenes', '-');
     } catch (e) {}
 };
 
@@ -1228,8 +1811,25 @@ const closeModal = (modalId) => {
     if (modal) {
         modal.classList.remove('show');
         document.body.style.overflow = 'auto';
-        const form = modal.querySelector('form');
-        if (form) form.reset();
+        try {
+            const form = modal.querySelector('form');
+            if (form) form.reset();
+        } catch (err) {
+            console.warn("Error resetting form in modal:", err);
+        }
+    }
+};
+
+const showSection = (targetId) => {
+    const btn = document.querySelector(`.menu-item[data-target="${targetId}"]`);
+    if (btn) {
+        btn.click(); // Trigger native SPA routing
+    } else {
+        document.querySelectorAll('.spa-section').forEach(s => s.style.display = 'none');
+        const target = document.getElementById(targetId);
+        if (target) {
+            target.style.display = 'block';
+        }
     }
 };
 
@@ -1396,9 +1996,35 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Por favor selecciona un paciente primero.');
             return;
         }
-        openModal('modalConsulta');
+        abrirFormularioConsulta();
     });
-    document.getElementById('btnNuevaCita')?.addEventListener('click', () => openModal('modalCita'));
+    document.getElementById('btnGenerarOrden')?.addEventListener('click', () => {
+        if (!currentMascotaId) {
+            alert('Para generar una orden, primero busque y seleccione el paciente en el Módulo de Consultorio.');
+            showSection('sec-consultorio');
+            return;
+        }
+        abrirFormularioConsulta();
+    });
+    document.getElementById('btnNuevaCita')?.addEventListener('click', async () => {
+        const input = document.getElementById('citaMascotaSearch');
+        if (input && !input.dataset.initialized) {
+            input.dataset.initialized = 'true';
+            try {
+                const mascotas = await fetchAPI('/mascotas/?skip=0&limit=300');
+                const options = mascotas.map(m => ({
+                    value: m.id,
+                    label: `${m.nombre} - [${m.especie}] (Cód: ${m.codigo_historia || m.id})`
+                }));
+                initSearchableSelect(input, options, (val) => {
+                    document.getElementById('citaMascotaId').value = val;
+                });
+            } catch (e) {
+                console.error("Error fetching mascotas for select", e);
+            }
+        }
+        openModal('modalCita');
+    });
 
     // Forms Handlers
     document.getElementById('formPropietario')?.addEventListener('submit', handlePropietarioSubmit);
@@ -1420,18 +2046,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cargarVeterinarios();
     cargarBadgeOrdenes();
+    
+    // Global modal close handlers
+    document.addEventListener('click', (e) => {
+        // Close via 'X' or 'Cancelar'
+        const closeBtn = e.target.closest('.close');
+        if (closeBtn && closeBtn.dataset.modal) {
+            closeModal(closeBtn.dataset.modal);
+            return;
+        }
+        const cancelBtn = e.target.closest('[data-close]');
+        if (cancelBtn) {
+            closeModal(cancelBtn.dataset.close);
+            return;
+        }
+        // Close via backdrop click
+        if (e.target.classList.contains('modal')) {
+            closeModal(e.target.id);
+        }
+    });
+    
+    // Profile Form Handlers
+    const formPerfil = document.getElementById('formPerfilPassword');
+    if (formPerfil) {
+        formPerfil.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const curr = document.getElementById('profileCurrentPassword').value;
+            const nuev = document.getElementById('profileNewPassword').value;
+            const conf = document.getElementById('profileConfirmPassword').value;
+            if (nuev !== conf) { alert("Las contraseñas no coinciden"); return; }
+            try {
+                await fetchAPI('/usuarios/me/password', {
+                    method: 'PUT',
+                    body: JSON.stringify({ current_password: curr, new_password: nuev })
+                });
+                alert('Contraseña actualizada con éxito');
+                e.target.reset();
+            } catch (err) { alert('Error: ' + err.message); }
+        });
+    }
+
+    // Set default section
+    showSection('sec-consultorio');
 });
 
 const cargarVeterinarios = async () => {
-    const select = document.getElementById('citaVeterinarioId');
-    if (!select) return;
     try {
-        const usuarios = await fetchAPI('/auth/users'); // Need this endpoint or similar
-        select.innerHTML = '<option value="">Seleccionar médico...</option>' + 
+        const usuarios = await fetchAPI('/usuarios/veterinarios');
+        const opts1 = '<option value="">Seleccionar médico...</option>' + 
             usuarios.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
+        const opts2 = '<option value="">Seleccionar médico...</option>' + 
+            usuarios.map(u => `<option value="${u.username}">${u.username} (${u.role})</option>`).join('');
+            
+        const scita = document.getElementById('citaVeterinarioId');
+        if (scita) scita.innerHTML = opts1;
+        
+        const scons = document.getElementById('consultaVeterinario');
+        if (scons) scons.innerHTML = opts2;
     } catch (e) {
-        // Fallback or demo
-        select.innerHTML = '<option value="">Seleccionar médico...</option><option value="1">Dr. Smith</option>';
+        console.warn("No se pudieron cargar vets", e);
+    }
+};
+
+const loadPerfil = async () => {
+    try {
+        const user = await fetchAPI('/usuarios/me');
+        const elInitial = document.getElementById('profileInitial');
+        const elUser = document.getElementById('profileUsername');
+        const elRole = document.getElementById('profileUserRole');
+        
+        if (elInitial) elInitial.textContent = user.username ? user.username.charAt(0).toUpperCase() : 'U';
+        if (elUser) elUser.textContent = user.username || 'Usuario';
+        if (elRole) elRole.textContent = user.role === 'admin' ? 'Administrador' : user.role;
+    } catch (e) {
+        console.warn('Error fetching profile', e);
     }
 };
 
@@ -1443,7 +2131,8 @@ const cargarBadgeOrdenes = async () => {
         const mIsAdmin = localStorage.getItem('role') === 'admin';
         const mUser = localStorage.getItem('username');
         // Simple logic: filter pending ones assigned to me (or all if admin)
-        const misOrdenes = citas.filter(c => c.estado === 'pendiente');
+        const safeCitas = Array.isArray(citas) ? citas : [];
+        const misOrdenes = safeCitas.filter(c => c && c.estado === 'pendiente');
         badge.textContent = misOrdenes.length;
         document.getElementById('kpiOrdenesPendientes').textContent = misOrdenes.length;
         
@@ -1467,6 +2156,61 @@ const cargarBadgeOrdenes = async () => {
     } catch (e) {}
 };
 
+const mostrarResumenDia = (dateStr, allEvents) => {
+    const resumenFecha = document.getElementById('resumenDiaFecha');
+    const resumenCuerpo = document.getElementById('resumenDiaCuerpo');
+    if (!resumenFecha || !resumenCuerpo) return;
+    
+    resumenFecha.textContent = new Date(dateStr + 'T00:00:00').toLocaleDateString();
+    
+    const safeAllEvents = Array.isArray(allEvents) ? allEvents : [];
+    const eventosDia = safeAllEvents.filter(ev => {
+        if (!ev) return false;
+        // Fullcalendar Event Object has 'startStr' for the ISO string (YYYY-MM-DD...)
+        const evStart = ev.startStr || (ev.start ? ev.start.toISOString() : '');
+        return evStart.startsWith(dateStr);
+    });
+    
+    if (eventosDia.length === 0) {
+        resumenCuerpo.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 2rem;">No hubo actividad este día.</p>';
+    } else {
+        resumenCuerpo.innerHTML = eventosDia.map(ev => {
+            const type = ev.extendedProps?.type;
+            let icon = '📅';
+            let color = '#4F46E5';
+            let label = 'Cita';
+            let detail = ev.extendedProps?.motivo || ev.extendedProps?.tipo || 'Sin motivo';
+
+            if (type === 'consulta') { icon = '🩺'; color = '#10b981'; label = 'Consulta'; }
+            if (type === 'cirugia') { icon = '🔪'; color = '#ef4444'; label = 'Cirugía'; detail = ev.extendedProps?.tipo_procedimiento; }
+            if (type === 'prueba') { icon = '🧪'; color = '#8b5cf6'; label = 'Prueba/Lab'; detail = ev.extendedProps?.tipo; }
+
+            return `
+                <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6; border-left: 4px solid ${color}; margin-bottom: 0.8rem; background: #f8fafc; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 700; color: ${color}; font-size: 0.9rem; text-transform: uppercase;">
+                            ${icon} ${label}
+                        </span>
+                        <span style="font-size: 0.85rem; color: #6b7280;">
+                            ${new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    </div>
+                    <div style="margin-top: 0.5rem; font-size: 1.05rem; color: #1f2937; font-weight: 600;">
+                        ${ev.extendedProps?.mascota_nombre || `Paciente ID #${ev.extendedProps?.mascota_id}`}
+                    </div>
+                    <div style="font-size: 0.95rem; color: #4b5563; margin-top: 0.25rem;">
+                        ${detail}
+                    </div>
+                    <div style="margin-top: 0.8rem;">
+                        <button class="btn-primary btn-sm" onclick="verDetallesDesdeAgenda(${ev.extendedProps?.mascota_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Ver Consultas</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    openModal('modalResumenDia');
+};
+
 const atenderOrden = (citaId, mascotaId) => {
     // Show pet profile and open consultation
     seleccionarMascotaBasica(mascotaId);
@@ -1475,7 +2219,16 @@ const atenderOrden = (citaId, mascotaId) => {
     setTimeout(() => {
         const input = document.getElementById('consultaMascotaId');
         if (input) input.value = mascotaId;
-        openModal('modalConsulta');
+        abrirFormularioConsulta();
     }, 500);
 };
 
+window.verDetallesDesdeAgenda = (mascotaId) => {
+    closeModal('modalResumenDia');
+    seleccionarMascotaBasica(mascotaId);
+    showSection('sec-consultorio');
+    setTimeout(() => { switchPetTab('consultas'); }, 100);
+};
+
+/* --- PET PROFILE UI --- */
+// Logic for horizontal scroll has been removed in favor of a vertical sidebar as per user feedback

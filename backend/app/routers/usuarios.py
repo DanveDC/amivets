@@ -5,7 +5,7 @@ from typing import List
 from app.core.database import get_db
 from app.core import security
 from app.models.models import Usuario
-from app.schemas.schemas import UsuarioCreate, UsuarioResponse
+from app.schemas.schemas import UsuarioCreate, UsuarioResponse, PasswordUpdate
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from app.core.config import settings
@@ -79,7 +79,35 @@ def listar_usuarios(
     """Lista todos los usuarios (Solo Admin)"""
     return db.query(Usuario).all()
 
+@router.get("/veterinarios", response_model=List[UsuarioResponse])
+def listar_veterinarios(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Lista doctores/veterinarios habilitados"""
+    vets = db.query(Usuario).filter(Usuario.role == "veterinario").all()
+    if not vets: # Fallback just in case
+        return db.query(Usuario).filter(Usuario.username != "admin").all()
+    return vets
+
 @router.get("/me", response_model=UsuarioResponse)
 async def read_users_me(current_user: Usuario = Depends(get_current_user)):
     """Obtiene la informacion del usuario actual autenticado"""
     return current_user
+
+@router.put("/me/password", status_code=status.HTTP_200_OK)
+def update_password(
+    password_data: PasswordUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Actualiza la contraseña del usuario actual"""
+    if not security.verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La contraseña actual es incorrecta"
+        )
+    
+    current_user.hashed_password = security.get_password_hash(password_data.new_password)
+    db.commit()
+    return {"message": "Contraseña actualizada exitosamente"}

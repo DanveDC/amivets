@@ -20,6 +20,16 @@ async function login(username, password) {
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('token_type', data.token_type);
 
+        // EXTRA: Fetch user details to store role
+        const userRes = await fetch(`${API_URL}/api/usuarios/me`, {
+            headers: { 'Authorization': `Bearer ${data.access_token}` }
+        });
+        if (userRes.ok) {
+            const userData = await userRes.json();
+            localStorage.setItem('role', userData.role);
+            localStorage.setItem('username', userData.username);
+        }
+
         // Redirigir al dashboard
         window.location.href = '/';
         return true;
@@ -33,13 +43,11 @@ async function login(username, password) {
         return false;
     }
 }
-
-// Función para cerrar sesión
 function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('token_type');
-    window.location.href = '/login.html'; // Ajustar ruta si es necesario
+    localStorage.clear(); 
+    window.location.href = '/login.html'; 
 }
+window.logout = logout;
 
 // Verificar token al cargar la página (solo si no estamos en login)
 function checkAuth() {

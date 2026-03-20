@@ -17,7 +17,7 @@ def agendar_cita(
 ):
     """Agenda una nueva cita con verificación de disponibilidad"""
     # Impedir fechas al pasado
-    if cita.fecha_cita.replace(tzinfo=timezone.utc) < datetime.utcnow().replace(tzinfo=timezone.utc):
+    if cita.fecha_cita.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="No se pueden agendar citas en el pasado.")
         
     # Lógica de bloqueo de Agenda (Asumimos 30 min por cita)
@@ -99,7 +99,7 @@ def checkin_paciente(
         raise HTTPException(status_code=400, detail=f"Estado invalido. Permitidos: {[e.value for e in CitaEstado]}")
         
     # Registrar timestamps automáticos
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if nuevo_estado == CitaEstado.EN_ESPERA and not cita.hora_llegada:
         cita.hora_llegada = now
     elif nuevo_estado == CitaEstado.EN_CONSULTA and not cita.hora_inicio_atencion:
@@ -123,7 +123,7 @@ def actualizar_cita(
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")
 
-    for key, value in cita_update.dict(exclude_unset=True).items():
+    for key, value in cita_update.model_dump(exclude_unset=True).items():
         setattr(cita, key, value)
     
     db.commit()

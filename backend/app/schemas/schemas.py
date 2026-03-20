@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 
@@ -31,8 +31,7 @@ class PropietarioResponse(PropietarioBase):
     id: int
     fecha_registro: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== MASCOTA SCHEMAS ==========
@@ -77,24 +76,22 @@ class MascotaResponse(MascotaBase):
     codigo_historia: Optional[str] = None
 
     @model_validator(mode='before')
-    @classmethod
     def append_apellido(cls, data):
-        # Si es un objeto de base de datos (SQLAlchemy)
-        if hasattr(data, '__table__'):
+        # Si es un objeto de base de datos (SQLAlchemy) con atributos
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
             try:
                 # Comprobar si tenemos el objeto propietario cargado
-                # Usamos getattr para evitar errores de carga diferida (lazy loading) si no se usó eager loading
                 propietario = getattr(data, 'propietario', None)
                 if propietario and hasattr(propietario, 'apellido'):
                     base_name = data.nombre.split(' ')[0]
-                    # Solo modificamos el nombre para el esquema de respuesta, no en la BD
+                    # Solo modificamos el nombre para el esquema de respuesta
+                    # NOTA: Esto altera el objeto si está en sesión, pero es aceptable para este flujo SPA
                     data.nombre = f"{base_name} {propietario.apellido}"
             except Exception:
                 pass
         return data
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MascotaTransfer(BaseModel):
@@ -147,13 +144,39 @@ class ConsultaUpdate(BaseModel):
     proxima_cita: Optional[datetime] = None
 
 
+class ServicioConsultaBase(BaseModel):
+    consulta_id: int
+    tipo_servicio: str = Field(..., max_length=50) # VACUNACION, CIRUGIA, HOSPITALIZACION, LABORATORIO, INSUMO, ESTETICA
+    referencia_id: Optional[int] = None
+    nombre_servicio: Optional[str] = Field(None, max_length=255)
+    cantidad: float = Field(default=1.0, gt=0)
+    precio_unitario: float = Field(default=0.0, ge=0)
+    estado: str = Field(default="Pendiente", max_length=50)
+    detalles_clinicos: Optional[str] = None
+    is_deleted: bool = False
+
+class ServicioConsultaCreate(ServicioConsultaBase):
+    pass
+
+class ServicioConsultaUpdate(BaseModel):
+    cantidad: Optional[float] = Field(None, gt=0)
+    precio_unitario: Optional[float] = Field(None, ge=0)
+    estado: Optional[str] = Field(None, max_length=50)
+    detalles_clinicos: Optional[str] = None
+    is_deleted: Optional[bool] = None
+
+class ServicioConsultaResponse(ServicioConsultaBase):
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ConsultaResponse(ConsultaBase):
     id: int
     mascota_id: int
+    servicios: List[ServicioConsultaResponse] = []
     fecha_consulta: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ========== RECETA SCHEMAS ==========
 class DetalleRecetaBase(BaseModel):
@@ -171,8 +194,7 @@ class DetalleRecetaResponse(DetalleRecetaBase):
     # Podriamos querer retornar mas detalles del inventario (nombre_medicamento, etc.)
     # pero mantendremos simple para schema base.
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class RecetaBase(BaseModel):
     indicaciones_generales: Optional[str] = None
@@ -187,8 +209,7 @@ class RecetaResponse(RecetaBase):
     fecha_emision: datetime
     detalles: List[DetalleRecetaResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== CITA SCHEMAS ==========
@@ -222,8 +243,7 @@ class CitaResponse(CitaBase):
     estado: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== PRUEBA COMPLEMENTARIA SCHEMAS ==========
@@ -232,6 +252,9 @@ class PruebaComplementariaBase(BaseModel):
     archivo_url: Optional[str] = None
     resultado: Optional[str] = None
     observaciones: Optional[str] = None
+    precio_aplicado: float = Field(0.0, ge=0)
+    facturado: bool = False
+    estado_orden: Optional[str] = "Pendiente"
 
 
 class PruebaComplementariaCreate(PruebaComplementariaBase):
@@ -252,8 +275,7 @@ class PruebaComplementariaResponse(PruebaComplementariaBase):
     consulta_id: Optional[int]
     fecha: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== INVENTARIO SCHEMAS ==========
@@ -299,8 +321,7 @@ class InventarioResponse(InventarioBase):
     id: int
     fecha_registro: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== FACTURA SCHEMAS ==========
@@ -327,8 +348,7 @@ class DetalleFacturaResponse(DetalleFacturaBase):
     factura_id: int
     subtotal: float
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FacturaBase(BaseModel):
@@ -368,8 +388,7 @@ class FacturaResponse(FacturaBase):
     estado: str
     detalles: List[DetalleFacturaResponse] = []
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== AUTH SCHEMAS ==========
@@ -396,18 +415,27 @@ class UsuarioResponse(UsuarioBase):
     id: int
     is_active: bool
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PasswordUpdate(BaseModel):
+    current_password: str = Field(..., min_length=4)
+    new_password: str = Field(..., min_length=4)
 
 
 # ========== NUEVOS MÓDULOS PROFESIONALES ==========
 
 class HospitalizacionBase(BaseModel):
     mascota_id: int
+    consulta_id: Optional[int] = None
     motivo: str
     estado_paciente: Optional[str] = None
     jaula_nro: Optional[str] = None
+    dias_cama: int = Field(default=1, ge=1)
+    monitoreo_constantes: Optional[dict] = None
     observaciones_ingreso: Optional[str] = None
+    precio_aplicado: float = Field(0.0, ge=0)
+    facturado: bool = False
 
 class HospitalizacionCreate(HospitalizacionBase):
     pass
@@ -417,8 +445,7 @@ class HospitalizacionResponse(HospitalizacionBase):
     fecha_ingreso: datetime
     fecha_egreso: Optional[datetime]
     activo: bool
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CirugiaBase(BaseModel):
     mascota_id: int
@@ -428,6 +455,11 @@ class CirugiaBase(BaseModel):
     informe_quirurgico: Optional[str] = None
     complicaciones: Optional[str] = None
     riesgo_asa: Optional[str] = None
+    honorarios_medicos: float = Field(0.0, ge=0)
+    costo_anestesia: float = Field(0.0, ge=0)
+    costo_insumos: float = Field(0.0, ge=0)
+    precio_aplicado: float = Field(0.0, ge=0)
+    facturado: bool = False
 
 class CirugiaCreate(CirugiaBase):
     pass
@@ -435,8 +467,39 @@ class CirugiaCreate(CirugiaBase):
 class CirugiaResponse(CirugiaBase):
     id: int
     fecha_cirugia: datetime
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+class VacunacionBase(BaseModel):
+    consulta_id: int = Field(..., gt=0)
+    vacuna_id: int = Field(..., gt=0)
+    lote: Optional[str] = None
+    fecha_refuerzo: Optional[datetime] = None
+    precio_aplicado: float = Field(0.0, ge=0)
+    facturado: bool = False
+
+class VacunacionCreate(VacunacionBase):
+    pass
+
+class VacunacionResponse(VacunacionBase):
+    id: int
+    fecha_aplicacion: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class DesparasitacionBase(BaseModel):
+    consulta_id: int = Field(..., gt=0)
+    tipo: str = Field(..., min_length=1, max_length=50)
+    producto_id: int = Field(..., gt=0)
+    dosis: str = Field(..., min_length=1, max_length=100)
+    precio_aplicado: float = Field(0.0, ge=0)
+    facturado: bool = False
+
+class DesparasitacionCreate(DesparasitacionBase):
+    pass
+
+class DesparasitacionResponse(DesparasitacionBase):
+    id: int
+    fecha_aplicacion: datetime
+    model_config = ConfigDict(from_attributes=True)
 
 class PlanSaludBase(BaseModel):
     mascota_id: int
@@ -452,5 +515,4 @@ class PlanSaludCreate(PlanSaludBase):
 
 class PlanSaludResponse(PlanSaludBase):
     id: int
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

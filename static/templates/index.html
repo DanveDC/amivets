@@ -25,9 +25,9 @@
                 <h1>AmiVets</h1>
             </div>
             <nav class="nav">
-                <a href="#" class="nav-link active" data-section="agenda">Agenda</a>
-                <a href="#" class="nav-link" data-section="consultorio">Consultorio</a>
-                <a href="#" class="nav-link" data-section="informes">Informes</a>
+                <a href="#" class="nav-link menu-item active" data-target="sec-agenda">Agenda</a>
+                <a href="#" class="nav-link menu-item" data-target="sec-consultorio">Consultorio</a>
+                <a href="#" class="nav-link menu-item" data-target="sec-reportes">Informes</a>
             </nav>
             <div class="user-menu">
                 <span id="userNameDisplay" style="margin-right: 1rem; font-weight: 500; color: #4F46E5;"></span>
@@ -259,45 +259,73 @@
                     <span class="close" data-modal="modalConsulta">&times;</span>
                 </div>
                 <form id="formConsulta">
-                    <div class="form-group">
-                        <label for="consultaMascotaId">ID Mascota *</label>
-                        <input type="number" id="consultaMascotaId" required placeholder="Ingrese ID de la mascota">
-                    </div>
-                    <div class="form-group">
-                        <label for="consultaMotivo">Motivo de Consulta *</label>
-                        <textarea id="consultaMotivo" rows="2" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="consultaExamen">Detalles del Examen Físico *</label>
-                        <textarea id="consultaExamen" rows="3" required></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="consultaProblemas">Listado de Problemas / Diagnóstico</label>
-                        <textarea id="consultaProblemas" rows="2"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label for="consultaPruebas">Pruebas de Laboratorio (Hemograma, Rayos X, etc.)</label>
-                        <textarea id="consultaPruebas" rows="2"
-                            placeholder="Describa las pruebas realizadas o solicitadas"></textarea>
-                    </div>
                     <div class="form-row">
-                        <div class="form-group">
-                            <label for="consultaPeso">Peso (kg)</label>
-                            <input type="number" id="consultaPeso" step="0.01">
+                        <div class="form-group" style="flex: 1; display: none;">
+                            <label>Código de Historia</label>
+                            <input type="text" id="consultaCodigoHistoria" readonly style="background-color: #f3f4f6; color: #4b5563; font-weight: 600;">
                         </div>
-                        <div class="form-group">
-                            <label for="consultaTemperatura">Temperatura (°C)</label>
-                            <input type="number" id="consultaTemperatura" step="0.1">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="consultaMascotaId">Ref. Interna (ID)</label>
+                            <input type="number" id="consultaMascotaId" readonly style="background-color: #f3f4f6; color: #9ca3af;">
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-group">
+                        <label for="consultaVeterinario">Veterinario Tratante *</label>
+                        <select id="consultaVeterinario" class="form-control" required>
+                            <option value="">Cargando profesionales...</option>
+                        </select>
+                    </div>
+                    <div id="adminConsultaMsg" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem;">
+                        <span class="icon">ℹ️</span> <strong>Modo Administrador:</strong> Usted está generando una orden de consulta. El médico asignado completará los detalles clínicos posteriormente.
+                    </div>
+
+                    <div class="form-group">
+                        <label for="consultaMotivo">Motivo de Consulta / Triage *</label>
+                        <textarea id="consultaMotivo" rows="2" required placeholder="Ej: Vómitos, Control, Vacuna..."></textarea>
+                    </div>
+
+                    <!-- CLINICAL FIELDS (Hidden for Admins) -->
+                    <div class="clinical-field">
                         <div class="form-group">
-                            <label for="consultaICC">ICC</label>
-                            <input type="text" id="consultaICC">
+                            <label for="consultaExamen">Detalles del Examen Físico *</label>
+                            <textarea id="consultaExamen" rows="3" required></textarea>
                         </div>
                         <div class="form-group">
-                            <label for="consultaTLLC">TLLC</label>
-                            <input type="text" id="consultaTLLC">
+                            <label for="consultaProblemas">Listado de Problemas / Diagnóstico</label>
+                            <textarea id="consultaProblemas" rows="2"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="consultaPruebas">Pruebas de Laboratorio (Hemograma, Rayos X, etc.)</label>
+                            <textarea id="consultaPruebas" rows="2"
+                                placeholder="Describa las pruebas realizadas o solicitadas"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="consultaPeso">Peso (kg)</label>
+                                <input type="number" id="consultaPeso" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label for="consultaTemperatura">Temperatura (°C)</label>
+                                <input type="number" id="consultaTemperatura" step="0.1">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="consultaICC" style="display: flex; align-items: center; gap: 4px;">
+                                    ICC 
+                                    <span class="help-icon" title="Evaluación visual y táctil de la grasa corporal y masa muscular. Permite determinar si el paciente está en su peso ideal, bajo peso u obeso.">?</span>
+                                </label>
+                                <input type="text" id="consultaICC" placeholder="Ej: 3/5">
+                                <small style="font-size: 0.7rem; color: #6b7280;">Condición Corporal</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="consultaTLLC" style="display: flex; align-items: center; gap: 4px;">
+                                    TLLC
+                                    <span class="help-icon" title="Prueba para evaluar el estado de hidratación y perfusión sanguínea.">?</span>
+                                </label>
+                                <input type="text" id="consultaTLLC" placeholder="Ej: < 2s">
+                                <small style="font-size: 0.7rem; color: #6b7280;">Llenado Capilar</small>
+                            </div>
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -305,6 +333,91 @@
                         <button type="submit" class="btn-primary">Guardar Consulta</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Modal Detalle y Carrito de Consulta -->
+        <div id="modalDetalleConsulta" class="modal">
+            <div class="modal-content" style="max-width: 900px; width: 95%;">
+                <div class="modal-header">
+                    <h2 id="detalleConsultaTitle">Expediente Clínico</h2>
+                    <span class="close" data-modal="modalDetalleConsulta">&times;</span>
+                </div>
+                <div class="split-layout" style="gap: 1.5rem; padding: 1rem; align-items: flex-start;">
+                    <!-- Lado Izquierdo: Data Clínica -->
+                    <div style="flex: 1; background: #f9fafb; padding: 1rem; border-radius: 8px;">
+                        <h3 style="margin-bottom: 1rem; color: #374151; font-size: 1.1rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem;">Resumen Médico</h3>
+                        <div id="detalleConsultaMedica" style="font-size: 0.9rem; line-height: 1.6; color: #4b5563;">
+                            Cargando...
+                        </div>
+                    </div>
+                    
+                    <!-- Lado Derecho: Nodos / Carrito de Servicios -->
+                    <div style="flex: 1.2;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4F46E5; padding-bottom: 0.5rem; margin-bottom: 1rem;">
+                            <h3 style="color: #4F46E5; font-size: 1.1rem;">Servicios y Cargos</h3>
+                            <span class="badge" style="background: #e0e7ff; color: #4F46E5; display: none;" id="detalleConsultaTotal">$0.00</span>
+                        </div>
+                        
+                        <div id="detalleConsultaServiciosList" style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
+                            <!-- Listado iterativo -->
+                        </div>
+
+                        <!-- Clinical Shortcuts Toolbar -->
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px;">
+                            <span style="font-size: 0.75rem; color: #64748b; width: 100%; margin-bottom: 0.25rem; font-weight: bold; text-transform: uppercase;">Ir al registro especializado:</span>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">💉 Vacuna</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">💊 Fármaco</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('LABORATORIO', null, true)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🔬 Lab</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('CIRUGIA', null, true)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🔪 Cirugía</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('HOSPITALIZACION', null, true)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🏥 Hosp.</button>
+                        </div>
+
+                         <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 1.25rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                             <h4 style="font-size: 0.9rem; color: #1e40af; margin-bottom: 0.75rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.025em; display: flex; align-items: center; gap: 0.5rem;">
+                                 <span class="icon">➕</span> Registrar Acción Clínica o Nota
+                             </h4>
+                             <form id="formAgregarServicio" style="display: flex; gap: 0.75rem; flex-direction: column;">
+                                 <input type="hidden" id="addServicioConsultaId">
+                                 <input type="hidden" id="addServicioReferenciaId">
+                                 <input type="hidden" id="addServicioCantidad" value="1">
+                                 <input type="hidden" id="addServicioPrecio" value="0">
+                                 
+                                 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem;">
+                                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                         <label style="font-size: 0.7rem; color: #1e40af; font-weight: bold;">CATEGORÍA</label>
+                                         <select id="addServicioTipo" required style="width: 100%; padding: 0.5rem; border: 1px solid #bfdbfe; border-radius: 8px; background: white;">
+                                             <option value="">Seleccione...</option>
+                                             <option value="INSUMO">💊 Insumo / Medicina</option>
+                                             <option value="VACUNACION">💉 Vacunación</option>
+                                             <option value="ESTETICA">✂️ Estética / Peluquería</option>
+                                             <option value="OTRO">📁 Otros Hallazgos</option>
+                                         </select>
+                                     </div>
+                                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                         <label id="labelSeleccionDinamica" style="font-size: 0.7rem; color: #1e40af; font-weight: bold;">BUSCAR ITEM / PRODUCTO</label>
+                                         <input type="text" id="addServicioItemSearch" list="listadoInventario" placeholder="Escriba para buscar en inventario..." style="width: 100%; padding: 0.5rem; border: 1px solid #bfdbfe; border-radius: 8px;">
+                                         <datalist id="listadoInventario"></datalist>
+                                     </div>
+                                 </div>
+                                 
+                                 <div class="form-group">
+                                     <label style="font-size: 0.7rem; color: #1e40af; font-weight: bold;">DESCRIPCIÓN DEL ACTO MÉDICO</label>
+                                     <input type="text" id="addServicioNombre" placeholder="Nombre de la acción médica" required style="width: 100%; padding: 0.5rem; border: 1px solid #bfdbfe; border-radius: 8px;">
+                                 </div>
+
+                                 <div style="margin-top: 0.5rem; padding: 1rem; background: #f0f9ff; border: 1.5px solid #e0e7ff; border-radius: 10px;">
+                                     <label style="font-size: 0.75rem; color: #1e40af; font-weight: bold; display: block; margin-bottom: 0.5rem;">📒 REGISTRO CLÍNICO DETALLADO: (DOSIS, HALLAZGOS, OBSERVACIONES...)</label>
+                                     <textarea id="addServicioDetalles" placeholder="Ej: Se aplica vacuna Triple Canina #1, lote XXX, vía SC. Paciente se muestra colaborador..." rows="3" style="width: 100%; border: none; background: #f0f9ff; outline: none; font-size: 0.9rem; font-family: inherit; resize: vertical; color: #1e40af;"></textarea>
+                                 </div>
+
+                                 <button type="submit" class="btn-primary" style="background: #4F46E5; border-color: #4338ca; padding: 0.8rem; font-weight: bold; box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2); font-size: 1rem;">
+                                     🩺 Registrar Acción
+                                 </button>
+                             </form>
+                         </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -317,8 +430,11 @@
                 </div>
                 <form id="formCita">
                     <div class="form-group">
-                        <label for="citaMascotaId">ID Mascota *</label>
-                        <input type="number" id="citaMascotaId" required>
+                        <label for="citaMascotaId">Mascota (Paciente) *</label>
+                        <div id="citaSelectMascotaContainer" class="custom-select-container">
+                            <input type="text" id="citaMascotaSearch" class="form-control" autocomplete="off" placeholder="Buscar por nombre o cod (cédula)...">
+                        </div>
+                        <input type="hidden" id="citaMascotaId" required>
                     </div>
                     <div class="form-group">
                         <label for="citaFecha">Fecha y Hora *</label>
@@ -481,6 +597,22 @@
             </div>
         </div>
 
+        <!-- Modal Resumen del Día -->
+        <div id="modalResumenDia" class="modal">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h2>Resumen de Actividad - <span id="resumenDiaFecha"></span></h2>
+                    <span class="close" data-modal="modalResumenDia">&times;</span>
+                </div>
+                <div id="resumenDiaCuerpo" style="padding: 1.5rem; max-height: 60vh; overflow-y: auto;">
+                    <!-- Contenido dinámico -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-primary" data-close="modalResumenDia">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <main class="main-content">
             <!-- Sidebar -->
@@ -526,6 +658,10 @@
                         <span class="icon">⚙️</span>
                         <span>Usuarios (Admin)</span>
                     </a>
+                    <a href="#" class="menu-item" data-target="sec-perfil">
+                        <span class="icon">👤</span>
+                        <span>Mi Perfil</span>
+                    </a>
                 </div>
             </aside>
 
@@ -559,84 +695,71 @@
                     <div style="flex: 2;">
                         <div id="patientWrapper" style="display: none;">
                             <!-- New Pet Profile Layout -->
-                            <div class="pet-layout">
-                                <!-- Pet Sidebar -->
-                                <aside class="pet-sidebar">
-                                    <div class="pet-nav-item active" data-tab="historia">
-                                        <span><span class="icon">📄</span> Historia</span>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <!-- Pet Header Context -->
+                                <div class="pet-content-header" style="background: white; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                    <div>
+                                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                            <span id="displayNombreMascota" style="color: #4F46E5; font-size: 1.5rem;"></span>
+                                            <button class="btn-secondary btn-sm" id="btnEditarMascota" title="Editar datos básicos">✏️</button>
+                                            <button class="btn-secondary btn-sm" id="btnTransferirMascota" title="Transferir a otro dueño">🔄</button>
+                                            <button class="btn-secondary btn-sm" id="btnEliminarMascota" title="Eliminar mascota" style="color: #ef4444; border-color: #fca5a5;">🗑️</button>
+                                        </h3>
+                                        <p id="displayInfoMascota" style="color: #6b7280; margin: 0; font-size: 0.85rem;"></p>
                                     </div>
-                                    <div class="pet-nav-item" data-tab="consultas">
-                                        <span><span class="icon">🩺</span> Consultas</span>
-                                        <span class="count" id="count-consultas">0</span>
+                                    <div class="actions" id="petTabActions">
+                                        <button class="btn-primary" id="btnActionAdd">+ Registrar</button>
                                     </div>
-                                    <div class="pet-nav-item" data-tab="vacunas">
-                                        <span><span class="icon">💉</span> Vacunaciones</span>
-                                        <span class="count" id="count-vacunas">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="recetas">
-                                        <span><span class="icon">💊</span> Fórmulas Médicas</span>
-                                        <span class="count" id="count-recetas">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="desparasitaciones">
-                                        <span><span class="icon">🪱</span> Desparasitaciones</span>
-                                        <span class="count" id="count-desparasitaciones">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="hospitalizaciones">
-                                        <span><span class="icon">🏥</span> Hospitalizaciones</span>
-                                        <span class="count" id="count-hosp">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="procedimientos">
-                                        <span><span class="icon">🔪</span> Cirugías / Proc.</span>
-                                        <span class="count" id="count-proc">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="ordenes">
-                                        <span><span class="icon">📋</span> Órdenes</span>
-                                        <span class="count" id="count-ordenes">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="laboratorio">
-                                        <span><span class="icon">🔬</span> Laboratorio</span>
-                                        <span class="count" id="count-lab">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="imagenes">
-                                        <span><span class="icon">🖼️</span> Imágenes</span>
-                                        <span class="count" id="count-img">0</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="guarderia">
-                                        <span><span class="icon">🐾</span> Guardería</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="seguimientos">
-                                        <span><span class="icon">📈</span> Seguimientos</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="documentos">
-                                        <span><span class="icon">📁</span> Documentos</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="remisiones">
-                                        <span><span class="icon">🚚</span> Remisiones</span>
-                                    </div>
-                                    <div class="pet-nav-item" data-tab="citas-pet">
-                                        <span><span class="icon">📅</span> Citas</span>
-                                    </div>
-                                </aside>
+                                </div>
+
+                                 <!-- Vertical Layout for Medical History -->
+                                 <div class="pet-layout" style="display: flex; gap: 1rem; margin-top: 0.5rem; min-height: 500px;">
+                                     <aside class="pet-sidebar" style="width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px;">
+                                         <div class="pet-nav-item active" data-tab="historia">
+                                             <span><span class="icon">📄</span> Historia Clínica</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="consultas">
+                                             <span><span class="icon">🩺</span> Consultas</span>
+                                             <span class="count" id="count-consultas">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="vacunas">
+                                             <span><span class="icon">💉</span> Vacunas</span>
+                                             <span class="count" id="count-vacunas">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="recetas">
+                                             <span><span class="icon">💊</span> Fórmulas</span>
+                                             <span class="count" id="count-recetas">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="desparasitaciones">
+                                             <span><span class="icon">🪱</span> Desparas.</span>
+                                             <span class="count" id="count-desparasitaciones">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="hospitalizaciones">
+                                             <span><span class="icon">🏥</span> Hosp.</span>
+                                             <span class="count" id="count-hosp">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="procedimientos">
+                                             <span><span class="icon">🔪</span> Cirugías</span>
+                                             <span class="count" id="count-proc">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="laboratorio">
+                                             <span><span class="icon">🔬</span> Lab.</span>
+                                             <span class="count" id="count-lab">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="imagenes">
+                                             <span><span class="icon">🖼️</span> Imágenes</span>
+                                             <span class="count" id="count-img">0</span>
+                                         </div>
+                                         <div class="pet-nav-item" data-tab="peso">
+                                             <span><span class="icon">⚖️</span> Evol. Peso</span>
+                                         </div>
+                                     </aside>
+
+                                     <div class="pet-content" style="flex: 1; min-width: 0;">
 
                                 <!-- Pet Content Area -->
-                                <div class="pet-content">
-                                    <div class="pet-content-header">
-                                        <div>
-                                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                                                <span id="displayNombreMascota" style="color: #4F46E5; font-size: 1.5rem;"></span>
-                                                <button class="btn-secondary btn-sm" id="btnEditarMascota" title="Editar datos básicos">✏️</button>
-                                                <button class="btn-secondary btn-sm" id="btnTransferirMascota" title="Transferir a otro dueño">🔄</button>
-                                                <button class="btn-secondary btn-sm" id="btnEliminarMascota" title="Eliminar mascota" style="color: #ef4444; border-color: #fca5a5;">🗑️</button>
-                                            </h3>
-                                            <p id="displayInfoMascota" style="color: #6b7280; margin: 0; font-size: 0.85rem;"></p>
-                                        </div>
-                                        <div class="actions" id="petTabActions">
-                                            <!-- Dynamic actions based on tab -->
-                                            <button class="btn-primary" id="btnActionAdd">+ Registrar</button>
-                                        </div>
-                                    </div>
-                                    <div class="pet-content-body" id="petTabContent">
-                                        <!-- Dynamic content based on tab -->
+                                <div class="pet-content-body" id="petTabContent" style="background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1rem; min-height: 400px;">
+                                    <!-- Dynamic content based on tab -->
                                         <div class="empty-state">
                                             <div class="icon">📋</div>
                                             <p>Seleccione una categoría para ver el registro.</p>
@@ -798,11 +921,70 @@
                     <p style="text-align: center; color: var(--text-secondary);">No tiene órdenes asignadas.</p>
                 </div>
             </section>
+
+            <!-- Content Area: Mi Perfil -->
+            <section id="sec-perfil" class="content-area spa-section" style="display: none;">
+                <div class="content-header">
+                    <h2>Mi Perfil</h2>
+                </div>
+                
+                <div class="profile-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 1000px; padding: 1rem;">
+                    <!-- Card: Información del Usuario -->
+                    <div class="card" style="padding: 2rem; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+                        <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem;">
+                            <div style="width: 80px; height: 80px; background: #4F46E5; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700;">
+                                <span id="profileInitial">U</span>
+                            </div>
+                            <div>
+                                <h3 id="profileUsername" style="margin: 0; font-size: 1.5rem; color: #374151;">Usuario</h3>
+                                <p id="profileUserRole" style="margin: 0; color: #4F46E5; font-weight: 600; text-transform: uppercase; font-size: 0.8rem;"></p>
+                            </div>
+                        </div>
+                        
+                        <div class="info-group" style="margin-bottom: 1.5rem;">
+                            <label style="display: block; font-size: 0.8rem; color: #6b7280; margin-bottom: 0.25rem;">Correo Electrónico</label>
+                            <p id="profileEmail" style="margin: 0; font-size: 1.1rem; color: #374151; font-weight: 500;"></p>
+                        </div>
+                        
+                        <div class="info-group" style="margin-bottom: 1.5rem;">
+                            <label style="display: block; font-size: 0.8rem; color: #6b7280; margin-bottom: 0.25rem;">Estado de la Cuenta</label>
+                            <span id="profileStatus" class="badge" style="background: #10b981; color: white; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Activo</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Card: Seguridad / Cambio de Contraseña -->
+                    <div class="card" style="padding: 2rem; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+                        <h3 style="margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: #374151;">
+                            <span>🔐</span> Seguridad
+                        </h3>
+                        <p style="color: #6b7280; font-size: 0.9rem; margin-bottom: 1.5rem;">
+                            Utilice este formulario para actualizar su contraseña de acceso.
+                        </p>
+                        
+                        <form id="formPerfilPassword">
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label for="profileCurrentPassword">Contraseña Actual *</label>
+                                <input type="password" id="profileCurrentPassword" required placeholder="••••••••" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1rem;">
+                                <label for="profileNewPassword">Nueva Contraseña *</label>
+                                <input type="password" id="profileNewPassword" required minlength="4" placeholder="••••••••" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 1.5rem;">
+                                <label for="profileConfirmPassword">Confirmar Nueva Contraseña *</label>
+                                <input type="password" id="profileConfirmPassword" required minlength="4" placeholder="••••••••" style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            </div>
+                            
+                            <button type="submit" class="btn-primary" style="width: 100%; justify-content: center;">Actualizar Contraseña</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 
-    <script src="/static/js/auth.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/auth.js?v=2"></script>
+    <script src="/static/js/app.js?v=18"></script>
 </body>
 
 </html>
