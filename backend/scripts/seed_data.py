@@ -17,13 +17,13 @@ from app.models.models import (
 def seed_data():
     db = SessionLocal()
     try:
-        # Check if data already exists to avoid duplication
-        exists = db.query(Consulta).first()
-        if exists:
-            print("ℹ️ La base de datos ya contiene información clínica. Omitiendo seeding automático.")
+        # Check if full historical data already exists
+        consultas_count = db.query(Consulta).count()
+        if consultas_count > 200:
+            print(f"ℹ️ La base de datos ya contiene {consultas_count} consultas. Omitiendo seeding automático.")
             return
         
-        print("🚀 Iniciando carga masiva de datos profesionales...")
+        print(f"🚀 Iniciando carga masiva de datos profesionales (actual: {consultas_count} consultas)...")
         # 1. Médicos (10 usuarios)
         medicos = []
         nombres_medicos = ["Pérez", "García", "Rodríguez", "Martínez", "López", "Sánchez", "González", "Díaz", "Fernández", "Moreno"]
@@ -39,6 +39,9 @@ def seed_data():
                     is_active=True
                 )
                 db.add(user)
+            else:
+                # Sincronizar contraseña incluso si ya existe
+                user.hashed_password = get_password_hash("doctor123")
             medicos.append(user)
         db.commit()
         
