@@ -51,7 +51,10 @@ def create_default_admin():
             db.commit()
             logger.info("Default admin user created: admin / admin123")
         else:
-            logger.info("Default admin user already exists.")
+            logger.info("Default admin user already exists. Resetting password to ensure latest credentials...")
+            admin_user.hashed_password = security.get_password_hash("admin123")
+            db.commit()
+            logger.info("Admin password synchronized: admin123")
     except Exception as e:
         logger.error(f"Error creating default admin: {e}")
     finally:
