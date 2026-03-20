@@ -15,9 +15,15 @@ from app.models.models import (
 )
 
 def seed_data():
-    print("🚀 Iniciando carga masiva de datos profesionales...")
     db = SessionLocal()
     try:
+        # Check if data already exists to avoid duplication
+        exists = db.query(Consulta).first()
+        if exists:
+            print("ℹ️ La base de datos ya contiene información clínica. Omitiendo seeding automático.")
+            return
+        
+        print("🚀 Iniciando carga masiva de datos profesionales...")
         # 1. Médicos (10 usuarios)
         medicos = []
         nombres_medicos = ["Pérez", "García", "Rodríguez", "Martínez", "López", "Sánchez", "González", "Díaz", "Fernández", "Moreno"]

@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 import os
+import sys
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico
@@ -12,6 +13,7 @@ from app.core import security
 from sqlalchemy.orm import Session
 import time
 import logging
+import subprocess
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +56,32 @@ def create_default_admin():
         logger.error(f"Error creating default admin: {e}")
     finally:
         db.close()
+    
+    # Auto-seed check (non-blocking if possible or sequential)
+    try:
+        logger.info("Checking if database needs seeding...")
+        # Intentamos ejecutar el script de semillas. El script ya tienne su propia validación interna.
+        # Buscamos el script en las rutas posibles (Docker vs Local)
+        scripts_to_try = [
+            "/app/scripts/seed_data.py",
+            os.path.join(ROOT_DIR, "backend", "scripts", "seed_data.py"),
+            "backend/scripts/seed_data.py"
+        ]
+        
+        seed_script = None
+        for s in scripts_to_try:
+            if os.path.exists(s):
+                seed_script = s
+                break
+        
+        if seed_script:
+            logger.info(f"Running seed script: {seed_script}")
+            subprocess.run([sys.executable, seed_script], check=False)
+        else:
+            logger.warning("Seed script not found. Skipping auto-seeding.")
+            
+    except Exception as e:
+        logger.error(f"Auto-seeding failed: {e}")
 
 # Middleware de logging y manejo de errores
 @app.middleware("http")
