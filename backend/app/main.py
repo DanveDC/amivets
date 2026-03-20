@@ -39,7 +39,7 @@ def create_default_admin():
         admin_user = db.query(Usuario).filter(Usuario.username == "admin").first()
         if not admin_user:
             logger.info("Creating default admin user...")
-            hashed_password = security.get_password_hash("admin")
+            hashed_password = security.get_password_hash("admin123")
             admin = Usuario(
                 username="admin",
                 email="admin@amivets.com",
@@ -49,7 +49,7 @@ def create_default_admin():
             )
             db.add(admin)
             db.commit()
-            logger.info("Default admin user created: admin / admin")
+            logger.info("Default admin user created: admin / admin123")
         else:
             logger.info("Default admin user already exists.")
     except Exception as e:
