@@ -432,6 +432,8 @@ class HospitalizacionBase(BaseModel):
     estado_paciente: Optional[str] = None
     jaula_nro: Optional[str] = None
     dias_cama: int = Field(default=1, ge=1)
+    fecha_ingreso: Optional[datetime] = None
+    fecha_egreso: Optional[datetime] = None
     monitoreo_constantes: Optional[dict] = None
     observaciones_ingreso: Optional[str] = None
     precio_aplicado: float = Field(0.0, ge=0)
@@ -442,8 +444,6 @@ class HospitalizacionCreate(HospitalizacionBase):
 
 class HospitalizacionResponse(HospitalizacionBase):
     id: int
-    fecha_ingreso: datetime
-    fecha_egreso: Optional[datetime]
     activo: bool
     model_config = ConfigDict(from_attributes=True)
 

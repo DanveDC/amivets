@@ -1094,34 +1094,67 @@ const renderDetalleServicios = (servicios) => {
         total += (s.cantidad * s.precio_unitario);
         
         let statusIcon = s.estado === 'Aplicado' ? '✅' : '⏳';
-        let badgeColor = s.estado === 'Aplicado' ? 'background: #f0fdf4; color: #16a34a;' : 'background: #fffbeb; color: #d97706;';
+        let badgeColor = s.estado === 'Aplicado' ? 'background: #f8fafc; border: 1px solid #e2e8f0;' : 'background: #fffbeb; border: 1px solid #fde68a;';
+        let accentLine = s.estado === 'Aplicado' ? '#4F46E5' : '#d97706';
         
+        // Parse clinical details if they follow the "Key: Value | Key: Value" format
+        let detailsHtml = '';
+        if (s.detalles_clinicos) {
+            const parts = s.detalles_clinicos.split('|');
+            if (parts.length > 1) {
+                // If it looks like structured data, render as a grid of labels
+                detailsHtml = `
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed #e2e8f0;">
+                        ${parts.map(p => {
+                            const [k, v] = p.trim().split(':');
+                            if (v) return `<div style="font-size: 0.75rem; color: #475569;"><span style="font-weight: 700; color: #1e293b; text-transform: uppercase; font-size: 0.65rem; opacity: 0.7;">${k}:</span> ${v}</div>`;
+                            return `<div style="grid-column: span 2; font-size: 0.75rem; color: #475569; font-style: italic;">${p.trim()}</div>`;
+                        }).join('')}
+                    </div>
+                `;
+            } else {
+                // Regular text block
+                detailsHtml = `
+                    <div style="margin-top: 0.6rem; padding: 0.6rem; background: #f8fafc; border-radius: 6px; font-size: 0.8rem; color: #334155; border-left: 3px solid #cbd5e1;">
+                         📄 ${s.detalles_clinicos}
+                    </div>
+                `;
+            }
+        }
+
         return `
-            <div class="clinical-data-row" style="${badgeColor} margin-bottom: 0.75rem; border-radius: 8px; border: 1px solid rgba(0,0,0,0.05);">
+            <div class="clinical-data-row" style="${badgeColor} margin-bottom: 1rem; border-radius: 12px; padding: 1rem; position: relative; overflow: hidden;">
+                <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: ${accentLine};"></div>
+                
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
+                    <div style="font-weight: 800; color: #1e293b; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.02em;">
                         ${statusIcon} ${s.nombre_servicio || s.tipo_servicio}
                     </div>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <button onclick="eliminarServicioConsulta(${s.id})" title="Eliminar registro" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem;">×</button>
+                    <div style="display: flex; gap:0.5rem; align-items: center;">
+                        <button onclick="eliminarServicioConsulta(${s.id})" title="Eliminar registro" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; hover: color: #ef4444;">×</button>
                     </div>
                 </div>
                 
-                <div style="font-size: 0.85rem; color: #475569; margin-top: 2px;">
-                    <strong>Categoría:</strong> ${s.tipo_servicio} 
+                <div style="display: flex; gap: 0.75rem; margin-top: 0.25rem;">
+                    <div style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
+                         CATEGORÍA: <span style="color: #4F46E5;">${s.tipo_servicio}</span>
+                    </div>
+                    <div style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
+                         VALOR: <span style="color: #059669;">$${(s.cantidad * s.precio_unitario).toFixed(2)}</span>
+                    </div>
                 </div>
 
-                ${s.detalles_clinicos ? `
-                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.5); border-radius: 4px; font-size: 0.8rem; color: #334155; border-left: 3px solid #cbd5e1;">
-                         📄 ${s.detalles_clinicos}
-                    </div>
-                ` : ''}
+                ${detailsHtml}
 
-                <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                    <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 2px 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 0.75rem; cursor: pointer; background: white;">
-                        <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
-                        <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>✅ Aplicado</option>
-                    </select>
+                <div style="margin-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 0.65rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Estado:</span>
+                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 3px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.75rem; cursor: pointer; background: white; font-weight: 600; color: #475569;">
+                            <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
+                            <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>✅ Aplicado</option>
+                        </select>
+                    </div>
+                    <span style="font-size: 0.6rem; color: #94a3b8; font-style: italic;">Ref ID: #${s.id}</span>
                 </div>
             </div>
         `;
@@ -1164,19 +1197,26 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
     const searchInput = document.getElementById('addServicioItemSearch');
     const label = document.getElementById('labelSeleccionDinamica');
     const datalist = document.getElementById('listadoInventario');
+    const dynContainer = document.getElementById('containerCamposDinamicos');
     
-    // Reset
+    // Reset basic fields
     searchInput.value = '';
     document.getElementById('addServicioReferenciaId').value = '';
     datalist.innerHTML = '';
     currentInventoryItems = [];
+    
+    // Reset dynamic container
+    if (dynContainer) {
+        dynContainer.innerHTML = '';
+        dynContainer.style.display = 'none';
+    }
 
+    // A. Inventory Logic
     if (tipo === 'INSUMO' || tipo === 'VACUNACION') {
         label.textContent = tipo === 'VACUNACION' ? 'BUSCAR VACUNA EN STOCK' : 'BUSCAR PRODUCTO / MEDICAMENTO';
         searchInput.placeholder = 'Escriba nombre o código...';
         try {
-            // Fetch relevant inventory
-            const cat = tipo === 'VACUNACION' ? 'Vacunas' : null; // You might want to filter by category if your DB has it
+            const cat = tipo === 'VACUNACION' ? 'Vacunas' : null;
             const items = await fetchAPI(`/inventario/?limit=200${cat ? `&categoria=${cat}` : ''}`);
             currentInventoryItems = items;
             datalist.innerHTML = items.map(i => `<option value="${i.nombre} [Stock: ${i.stock_actual}]" data-id="${i.id}">`).join('');
@@ -1184,6 +1224,62 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
     } else {
         label.textContent = 'REFERENCIA ADICIONAL';
         searchInput.placeholder = 'Ej: Nombre de la cirugía o examen...';
+    }
+
+    // B. Dynamic Fields Logic (Medical Detail)
+    if (dynContainer && tipo) {
+        let fieldsHtml = '';
+        const now = new Date().toISOString().slice(0, 16);
+
+        if (tipo === 'HOSPITALIZACION') {
+            fieldsHtml = `
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🔥 FECHA INGRESO</label>
+                    <input type="datetime-local" class="dinamico-hosp-ingreso" value="${now}" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🏁 FECHA EGRESO (OPC)</label>
+                    <input type="datetime-local" class="dinamico-hosp-egreso" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🌡️ ESTADO PACIENTE</label>
+                    <select class="dinamico-hosp-estado" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                        <option>Estable</option><option>Crítico</option><option>Reservado</option>
+                    </select>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🏠 NRO. JAULA</label>
+                    <input type="text" placeholder="Ej: A-01" class="dinamico-hosp-jaula" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                </div>
+            `;
+            document.getElementById('addServicioNombre').value = "Ingreso a Hospitalización";
+        } else if (tipo === 'VACUNACION') {
+            fieldsHtml = `
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">📦 LOTE / SERIE</label>
+                    <input type="text" placeholder="Lote" class="dinamico-vac-lote" style="padding:0.5rem; border:1px solid #bfdbfe; border-radius:8px; font-size:0.9rem;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">📅 FECHA REFUERZO</label>
+                    <input type="date" class="dinamico-vac-refuerzo" style="padding:0.5rem; border:1px solid #bfdbfe; border-radius:8px; font-size:0.9rem;">
+                </div>
+            `;
+        } else if (tipo === 'CIRUGIA') {
+            fieldsHtml = `
+                <div style="display:flex; flex-direction:column; gap:0.2rem;">
+                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🫀 RIESGO ASA</label>
+                    <select class="dinamico-cir-asa" style="padding:0.5rem; border:1px solid #bfdbfe; border-radius:8px; font-size:0.9rem;">
+                        <option>I</option><option>II</option><option>III</option><option>IV</option><option>V</option>
+                    </select>
+                </div>
+            `;
+            document.getElementById('addServicioNombre').value = "Cirugía / Procedimiento";
+        }
+
+        if (fieldsHtml) {
+            dynContainer.innerHTML = fieldsHtml;
+            dynContainer.style.display = 'grid';
+        }
     }
 });
 
@@ -1215,7 +1311,7 @@ document.getElementById('addServicioItemSearch').addEventListener('input', (e) =
 });
 
 const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
-    // Si jump es true, es un módulo especializado que debe abrirse abajo en el perfil del paciente
+    // Complex modules configuration
     const complexModules = {
         'CIRUGIA': { tab: 'procedimientos', formId: 'formCirugia' },
         'HOSPITALIZACION': { tab: 'hospitalizaciones', formId: 'formHospitalizacion' },
@@ -1248,31 +1344,57 @@ const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
         return;
     }
 
-    // Default: Acto manual en el formulario azul
+    // Default: Acto en el formulario azul del modal
     const selector = document.getElementById('addServicioTipo');
-    selector.value = tipo;
-    selector.dispatchEvent(new Event('change'));
+    if (selector) {
+        selector.value = tipo;
+        selector.dispatchEvent(new Event('change'));
+    }
     
-    // Enfocar búsqueda
+    // Enfocar búsqueda de item para que el usuario pueda escribir (ej: nombre de vacuna o fármaco)
     const search = document.getElementById('addServicioItemSearch');
-    if (fallbackSearch) search.value = fallbackSearch;
-    search.focus();
-    search.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (search) {
+        if (fallbackSearch) search.value = fallbackSearch;
+        search.focus();
+    }
 };
 
 document.getElementById('formAgregarServicio').addEventListener('submit', async (e) => {
     e.preventDefault();
     const cid = document.getElementById('addServicioConsultaId').value;
     const refId = document.getElementById('addServicioReferenciaId').value;
+    const tipo = document.getElementById('addServicioTipo').value;
+    const nombre = document.getElementById('addServicioNombre').value;
     
+    let detallesExtra = "";
+    
+    if (tipo === 'HOSPITALIZACION') {
+        const ing = e.target.querySelector('.dinamico-hosp-ingreso')?.value;
+        const egr = e.target.querySelector('.dinamico-hosp-egreso')?.value;
+        const est = e.target.querySelector('.dinamico-hosp-estado')?.value;
+        const jau = e.target.querySelector('.dinamico-hosp-jaula')?.value;
+        detallesExtra = `📅 ENTRADA: ${ing || 'N/D'} | 🏁 SALIDA: ${egr || 'En curso'} | 🏥 JAULA: ${jau || 'N/A'} | 🌡️ ESTADO: ${est}\n`;
+    } else if (tipo === 'VACUNACION') {
+        const lote = e.target.querySelector('.dinamico-vac-lote')?.value;
+        const refu = e.target.querySelector('.dinamico-vac-refuerzo')?.value;
+        detallesExtra = `💉 LOTE: ${lote || 'N/D'} | 📅 REFUERZO: ${refu || 'N/D'}\n`;
+    } else if (tipo === 'CIRUGIA') {
+        const asa = e.target.querySelector('.dinamico-cir-asa')?.value;
+        const px = e.target.querySelector('.dinamico-cir-precio')?.value;
+        detallesExtra = `🔪 RIESGO ASA: ${asa} ${px ? `| 💰 RECARGO: $${px}` : ''}\n`;
+    } else if (tipo === 'LABORATORIO') {
+        const labTipo = e.target.querySelector('.dinamico-lab-tipo')?.value;
+        detallesExtra = `🔬 MUESTRA/TIPO: ${labTipo || 'N/D'}\n`;
+    }
+
     const body = {
         consulta_id: parseInt(cid),
-        tipo_servicio: document.getElementById('addServicioTipo').value,
-        nombre_servicio: document.getElementById('addServicioNombre').value,
+        tipo_servicio: tipo,
+        nombre_servicio: (tipo + ": " + nombre).toUpperCase(),
         referencia_id: refId ? parseInt(refId) : null,
         cantidad: parseFloat(document.getElementById('addServicioCantidad').value) || 1.0,
         precio_unitario: parseFloat(document.getElementById('addServicioPrecio').value) || 0,
-        detalles_clinicos: document.getElementById('addServicioDetalles').value,
+        detalles_clinicos: detallesExtra + document.getElementById('addServicioDetalles').value,
         estado: 'Aplicado'
     };
     
@@ -1283,8 +1405,11 @@ document.getElementById('formAgregarServicio').addEventListener('submit', async 
         });
         e.target.reset(); 
         document.getElementById('addServicioReferenciaId').value = '';
+        const container = document.getElementById('containerCamposDinamicos');
+        if (container) { container.innerHTML = ''; container.style.display = 'none'; }
+        
         verConsultaCompleta(cid, currentMascotaId);
-        showNotification("Acto médico registrado correctamente", "success");
+        showNotification("🎨 Acto médico y registro clínico guardados.", "success");
     } catch(err) {
         alert("Error agregando cargo: " + err.message);
     }
@@ -1520,6 +1645,8 @@ const buildClinicoForm = (type) => {
         ${comboConsultas}
         <div class="form-group"><label>Motivo</label><input type="text" name="motivo" class="form-control" required></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+            <div class="form-group"><label>Fecha Ingreso</label><input type="datetime-local" name="fecha_ingreso" class="form-control"></div>
+            <div class="form-group"><label>Fecha Egreso (Opcional)</label><input type="datetime-local" name="fecha_egreso" class="form-control"></div>
             <div class="form-group"><label>Estado Paciente</label><select name="estado_paciente" class="form-control"><option>Estable</option><option>Crítico</option><option>Reservado</option></select></div>
             <div class="form-group"><label>Jaula No.</label><input type="text" name="jaula_nro" class="form-control"></div>
         </div>
@@ -1569,11 +1696,20 @@ const submitClinico = async (e, endpoint) => {
     
     try {
         await fetchAPI(`/clinico/${endpoint}`, { method: 'POST', body: JSON.stringify(data) });
-        alert('Registro clínico guardado exitosamente.');
+        showNotification('📜 Registro clínico guardado y vinculado a la consulta.', 'success');
         e.target.reset();
         e.target.style.display = 'none';
         
-        switchPetTab(document.querySelector('.pet-nav-item.active').dataset.tab);
+        // Refrescar counts y tab actual
+        actualizarCountsPet(currentMascotaId);
+        const activeTab = document.querySelector('.pet-nav-item.active')?.dataset.tab;
+        if (activeTab) switchPetTab(activeTab);
+
+        // Si tenemos el expediente abierto en el fondo o acabamos de llenarlo, 
+        // refrescamos la vista de cargos/servicios del expediente actual
+        if (currentViewedConsultaId) {
+            verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
+        }
     } catch (err) { alert('Error: ' + err.message); }
 };
 
@@ -1603,13 +1739,19 @@ const cargarDesparasitacionesPet = async (mascotaId) => {
 
 const cargarHospitalizacionesPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="4" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Egreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="5" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`);
         const tbody = document.getElementById('tblHosp');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#9ca3af;">No hay registros de hospitalización.</td></tr>`;
-        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_ingreso).toLocaleDateString()}</td><td>${d.motivo}</td><td>${d.estado_paciente||'-'}</td><td>${d.jaula_nro||'-'}</td></tr>`).join('');
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#9ca3af;">No hay registros de hospitalización.</td></tr>`;
+        else tbody.innerHTML = data.map(d => `<tr>
+            <td>${new Date(d.fecha_ingreso).toLocaleString()}</td>
+            <td>${d.fecha_egreso ? new Date(d.fecha_egreso).toLocaleString() : '<span style="color:#d97706; font-style:italic;">En curso</span>'}</td>
+            <td>${d.motivo}</td>
+            <td><span class="badge" style="background:#f3f4f6; color:#374151;">${d.estado_paciente||'-'}</span></td>
+            <td>${d.jaula_nro||'-'}</td>
+        </tr>`).join('');
     } catch (e) {}
 };
 

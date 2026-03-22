@@ -187,23 +187,88 @@ def seed_data():
                 receta = Receta(consulta_id=consulta.id, fecha_emision=fecha, indicaciones_generales="Administrar según dosis indicada.")
                 db.add(receta)
                 db.flush()
-                for _ in range(random.randint(1, 3)):
+                for _ in range(random.randint(1, 2)):
                     med = random.choice(medicamentos)
                     db.add(DetalleReceta(receta_id=receta.id, medicamento_id=med.id, dosis="X ml", frecuencia="12h", duracion="5d"))
 
-            # --- 2. Hospitalizaciones (15% prob) ---
-            if random.random() < 0.15:
-                hosp = Hospitalizacion(mascota_id=m.id, consulta_id=consulta.id, fecha_ingreso=fecha, motivo="Observación", estado_paciente="Estable", jaula_nro="UCI-01", dias_cama=random.randint(1, 4), precio_aplicado=150.0, activo=False )
+            # --- 2. Hospitalizaciones (10% prob) ---
+            if random.random() < 0.10:
+                hosp = Hospitalizacion(
+                    mascota_id=m.id, consulta_id=consulta.id, fecha_ingreso=fecha, 
+                    motivo=random.choice(["Observación 24h", "Post-operatorio", "Deshidratación"]), 
+                    estado_paciente=random.choice(["Estable", "Reservado"]), jaula_nro=f"A-{random.randint(1, 10)}", 
+                    dias_cama=random.randint(1, 3), precio_aplicado=120.0, activo=False 
+                )
                 db.add(hosp)
                 db.flush()
-                db.add(ServicioConsulta(consulta_id=consulta.id, tipo_servicio="HOSPITALIZACION", referencia_id=hosp.id, nombre_servicio="Hospitalización", cantidad=float(hosp.dias_cama), precio_unitario=50.0, estado="Aplicado"))
+                db.add(ServicioConsulta(
+                    consulta_id=consulta.id, tipo_servicio="HOSPITALIZACION", referencia_id=hosp.id, 
+                    nombre_servicio=f"HOSPITALIZACIÓN: {hosp.motivo.upper()}", cantidad=float(hosp.dias_cama), precio_unitario=40.0, 
+                    detalles_clinicos=f"Ingreso: {hosp.fecha_ingreso.strftime('%d/%m/%Y')} | Egreso: {(hosp.fecha_ingreso + timedelta(days=hosp.dias_cama)).strftime('%d/%m/%Y')} | Jaula: {hosp.jaula_nro} | Estado: {hosp.estado_paciente}",
+                    estado="Aplicado"
+                ))
 
-            # --- 3. Cirugías (7% prob) ---
-            if random.random() < 0.07:
-                ciru = Cirugia(mascota_id=m.id, consulta_id=consulta.id, fecha_cirugia=fecha, tipo_procedimiento="Cirugía General", cirujano_id=dr.id, informe_quirurgico="Sin incidentes.", riesgo_asa="ASA II", precio_aplicado=300.0)
+            # --- 3. Cirugías (5% prob) ---
+            if random.random() < 0.05:
+                ciru = Cirugia(
+                    mascota_id=m.id, consulta_id=consulta.id, fecha_cirugia=fecha, 
+                    tipo_procedimiento=random.choice(["Esterilización", "Limpieza Dental", "Sutura de Herida"]), 
+                    cirujano_id=dr.id, informe_quirurgico="Procedimiento realizado con éxito.", 
+                    riesgo_asa=random.choice(["ASA I", "ASA II"]), precio_aplicado=250.0
+                )
                 db.add(ciru)
                 db.flush()
-                db.add(ServicioConsulta(consulta_id=consulta.id, tipo_servicio="CIRUGIA", referencia_id=ciru.id, nombre_servicio="Cirugía Programada", cantidad=1.0, precio_unitario=300.0, estado="Aplicado"))
+                db.add(ServicioConsulta(
+                    consulta_id=consulta.id, tipo_servicio="CIRUGIA", referencia_id=ciru.id, 
+                    nombre_servicio=f"CIRUGÍA: {ciru.tipo_procedimiento.upper()}", cantidad=1.0, precio_unitario=250.0, 
+                    detalles_clinicos=f"Riesgo ASA: {ciru.riesgo_asa} | Cirujano: Dr. {dr.username.split('_')[1].capitalize()}",
+                    estado="Aplicado"
+                ))
+
+            # --- 4. Vacunaciones (25% prob) ---
+            if random.random() < 0.25:
+                v_prod = random.choice(vacunas)
+                v_lote = f"LOT-{random.randint(100, 999)}"
+                refu = fecha + timedelta(days=365)
+                vac = Vacunacion(consulta_id=consulta.id, vacuna_id=v_prod.id, lote=v_lote, fecha_refuerzo=refu, precio_aplicado=35.0)
+                db.add(vac)
+                db.flush()
+                db.add(ServicioConsulta(
+                    consulta_id=consulta.id, tipo_servicio="VACUNACION", referencia_id=vac.id,
+                    nombre_servicio=f"VACUNA: {v_prod.nombre.upper()}", cantidad=1.0, precio_unitario=35.0,
+                    detalles_clinicos=f"Lote: {v_lote} | Refuerzo: {refu.strftime('%d/%m/%Y')}",
+                    estado="Aplicado"
+                ))
+
+            # --- 5. Laboratorio (10% prob) ---
+            if random.random() < 0.10:
+                l_prod = random.choice(laboratorios)
+                prue = PruebaComplementaria(
+                    mascota_id=m.id, consulta_id=consulta.id, tipo=l_prod.nombre, 
+                    resultado="Valores dentro del rango fisiológico normal.", observaciones="Sin hallazgos patológicos.",
+                    precio_aplicado=l_prod.precio_unitario, facturado=True
+                )
+                db.add(prue)
+                db.flush()
+                db.add(ServicioConsulta(
+                    consulta_id=consulta.id, tipo_servicio="LABORATORIO", referencia_id=prue.id,
+                    nombre_servicio=f"ESTUDIO: {prue.tipo.upper()}", cantidad=1.0, precio_unitario=prue.precio_aplicado,
+                    detalles_clinicos=f"Resultado: {prue.resultado[:50]}... | Obs: {prue.observaciones[:30]}",
+                    estado="Aplicado"
+                ))
+
+            # --- 6. Desparasitación (20% prob) ---
+            if random.random() < 0.20:
+                d_prod = random.choice(desparasitantes)
+                desp = Desparasitacion(consulta_id=consulta.id, tipo=random.choice(["Interna", "Externa"]), producto_id=d_prod.id, dosis="Dosis según peso", precio_aplicado=15.0)
+                db.add(desp)
+                db.flush()
+                db.add(ServicioConsulta(
+                    consulta_id=consulta.id, tipo_servicio="DESPARASITACION", referencia_id=desp.id,
+                    nombre_servicio=f"DESPARASITACIÓN: {d_prod.nombre.upper()}", cantidad=1.0, precio_unitario=15.0,
+                    detalles_clinicos=f"Tipo: {desp.tipo} | Dosis: {desp.dosis}",
+                    estado="Aplicado"
+                ))
 
             if c_idx % 50 == 0:
                 db.commit()

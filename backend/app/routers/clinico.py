@@ -60,8 +60,21 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
         precio_aplicado=precio_aplicado,
         facturado=False
     )
-    
     db.add(db_vacunacion)
+    db.flush() # Get ID
+
+    # Create Service record for the consultation cart
+    servicio = models.ServicioConsulta(
+        consulta_id=vacunacion.consulta_id,
+        tipo_servicio="VACUNACION",
+        referencia_id=db_vacunacion.id,
+        nombre_servicio=f"VACUNA: {producto.nombre}",
+        cantidad=1.0,
+        precio_unitario=precio_aplicado,
+        detalles_clinicos=f"Lote: {vacunacion.lote or 'N/D'} | Refuerzo: {vacunacion.fecha_refuerzo or 'No programado'}",
+        estado="Aplicado"
+    )
+    db.add(servicio)
     
     # Add to inventory history
     mov = models.MovimientoInventario(
@@ -118,6 +131,20 @@ def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Dep
         facturado=False
     )
     db.add(db_desp)
+    db.flush()
+
+    # Create Service record
+    servicio = models.ServicioConsulta(
+        consulta_id=desp.consulta_id,
+        tipo_servicio="DESPARASITACION",
+        referencia_id=db_desp.id,
+        nombre_servicio=f"DESPARASITACIÓN: {producto.nombre}",
+        cantidad=1.0,
+        precio_unitario=precio_aplicado,
+        detalles_clinicos=f"Tipo: {desp.tipo} | Dosis: {desp.dosis}",
+        estado="Aplicado"
+    )
+    db.add(servicio)
 
     mov = models.MovimientoInventario(
         producto_id=producto.id,
@@ -149,12 +176,29 @@ def crear_hospitalizacion(hosp: schemas.HospitalizacionCreate, db: Session = Dep
         motivo=hosp.motivo,
         estado_paciente=hosp.estado_paciente,
         jaula_nro=hosp.jaula_nro,
+        fecha_ingreso=hosp.fecha_ingreso,
+        fecha_egreso=hosp.fecha_egreso,
         observaciones_ingreso=hosp.observaciones_ingreso,
         precio_aplicado=hosp.precio_aplicado,
         facturado=False,
         activo=True
     )
     db.add(db_hosp)
+    
+    if hosp.consulta_id:
+        db.flush()
+        servicio = models.ServicioConsulta(
+            consulta_id=hosp.consulta_id,
+            tipo_servicio="HOSPITALIZACION",
+            referencia_id=db_hosp.id,
+            nombre_servicio=f"HOSPITALIZACIÓN: {hosp.motivo[:50]}",
+            cantidad=float(hosp.dias_cama or 1),
+            precio_unitario=hosp.precio_aplicado,
+            detalles_clinicos=f"Ingreso: {hosp.fecha_ingreso or 'Justo ahora'} | Egreso: {hosp.fecha_egreso or 'En curso'} | Jaula: {hosp.jaula_nro or 'N/A'} | Estado: {hosp.estado_paciente or 'Estable'}",
+            estado="Aplicado"
+        )
+        db.add(servicio)
+
     db.commit()
     db.refresh(db_hosp)
     return db_hosp
@@ -182,6 +226,21 @@ def crear_cirugia(cir: schemas.CirugiaCreate, db: Session = Depends(get_db)):
         facturado=False
     )
     db.add(db_cir)
+
+    if cir.consulta_id:
+        db.flush()
+        servicio = models.ServicioConsulta(
+            consulta_id=cir.consulta_id,
+            tipo_servicio="CIRUGIA",
+            referencia_id=db_cir.id,
+            nombre_servicio=f"CIRUGÍA: {cir.tipo_procedimiento}",
+            cantidad=1.0,
+            precio_unitario=cir.precio_aplicado,
+            detalles_clinicos=f"Riesgo ASA: {cir.riesgo_asa or 'N/D'} | Cirujano ID: {cir.cirujano_id or 'N/D'}",
+            estado="Aplicado"
+        )
+        db.add(servicio)
+
     db.commit()
     db.refresh(db_cir)
     return db_cir
@@ -208,6 +267,21 @@ def crear_prueba_complementaria(prueba: schemas.PruebaComplementariaCreate, db: 
         facturado=False
     )
     db.add(db_prueba)
+
+    if prueba.consulta_id:
+        db.flush()
+        servicio = models.ServicioConsulta(
+            consulta_id=prueba.consulta_id,
+            tipo_servicio="LABORATORIO" if "Lab" in prueba.tipo else "DIAGNOSTICO",
+            referencia_id=db_prueba.id,
+            nombre_servicio=f"ESTUDIO: {prueba.tipo}",
+            cantidad=1.0,
+            precio_unitario=prueba.precio_aplicado,
+            detalles_clinicos=f"Resultado: {prueba.resultado[:100] if prueba.resultado else 'Pendiente'} | Obs: {prueba.observaciones[:50] if prueba.observaciones else 'N/A'}",
+            estado="Aplicado"
+        )
+        db.add(servicio)
+
     db.commit()
     db.refresh(db_prueba)
     return db_prueba

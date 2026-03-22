@@ -368,9 +368,9 @@
                             <span style="font-size: 0.75rem; color: #64748b; width: 100%; margin-bottom: 0.25rem; font-weight: bold; text-transform: uppercase;">Ir al registro especializado:</span>
                             <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">💉 Vacuna</button>
                             <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">💊 Fármaco</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('LABORATORIO', null, true)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🔬 Lab</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('CIRUGIA', null, true)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🔪 Cirugía</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('HOSPITALIZACION', null, true)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🏥 Hosp.</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('LABORATORIO', null, false)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🔬 Lab</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('CIRUGIA', null, false)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🔪 Cirugía</button>
+                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('HOSPITALIZACION', null, false)" style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: white; border-color: #4F46E5; color: #4F46E5;">🏥 Hosp.</button>
                         </div>
 
                          <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 1.25rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
@@ -390,6 +390,9 @@
                                              <option value="">Seleccione...</option>
                                              <option value="INSUMO">💊 Insumo / Medicina</option>
                                              <option value="VACUNACION">💉 Vacunación</option>
+                                             <option value="LABORATORIO">🔬 Lab / Estudio</option>
+                                             <option value="CIRUGIA">🔪 Cirugía / Proc.</option>
+                                             <option value="HOSPITALIZACION">🏥 Hospitalización</option>
                                              <option value="ESTETICA">✂️ Estética / Peluquería</option>
                                              <option value="OTRO">📁 Otros Hallazgos</option>
                                          </select>
@@ -405,7 +408,10 @@
                                      <label style="font-size: 0.7rem; color: #1e40af; font-weight: bold;">DESCRIPCIÓN DEL ACTO MÉDICO</label>
                                      <input type="text" id="addServicioNombre" placeholder="Nombre de la acción médica" required style="width: 100%; padding: 0.5rem; border: 1px solid #bfdbfe; border-radius: 8px;">
                                  </div>
-
+                                 <div id="containerCamposDinamicos" style="margin-top: 0.5rem; display: none; grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+                                     <!-- Se llenará dinámicamente según la categoría -->
+                                 </div>
+                                 
                                  <div style="margin-top: 0.5rem; padding: 1rem; background: #f0f9ff; border: 1.5px solid #e0e7ff; border-radius: 10px;">
                                      <label style="font-size: 0.75rem; color: #1e40af; font-weight: bold; display: block; margin-bottom: 0.5rem;">📒 REGISTRO CLÍNICO DETALLADO: (DOSIS, HALLAZGOS, OBSERVACIONES...)</label>
                                      <textarea id="addServicioDetalles" placeholder="Ej: Se aplica vacuna Triple Canina #1, lote XXX, vía SC. Paciente se muestra colaborador..." rows="3" style="width: 100%; border: none; background: #f0f9ff; outline: none; font-size: 0.9rem; font-family: inherit; resize: vertical; color: #1e40af;"></textarea>
