@@ -16,16 +16,14 @@ def agendar_cita(
     db: Session = Depends(get_db)
 ):
     """Agenda una nueva cita con verificación de disponibilidad"""
-    # Impedir fechas de días anteriores, pero permitir el mismo día (incluso si la hora ya pasó para registro de llegadas)
-    now = datetime.now(timezone.utc)
-    fecha_cita_utc = cita.fecha_cita.replace(tzinfo=timezone.utc)
-    
-    if fecha_cita_utc.date() < now.date():
+    # Solo impedir citas de días anteriores a hoy
+    now_utc = datetime.now(timezone.utc)
+    # Ignoramos la hora para comparar fechas puras (el mismo día es válido siempre)
+    if cita.fecha_cita.date() < now_utc.date():
         raise HTTPException(status_code=400, detail="No se pueden agendar citas de días anteriores.")
         
-    # Si es el mismo día, permitimos hasta 2 horas de retraso en el registro (para turnos ya iniciados)
-    if fecha_cita_utc < (now - timedelta(hours=2)):
-        raise HTTPException(status_code=400, detail="La hora seleccionada es demasiado antigua. Por favor, registre una hora más cercana a la actual.")
+    # El mismo día se permite a cualquier hora para facilitar el registro de llegadas en recepción
+    # (Evitamos conflictos de zona horaria entre el navegador y el servidor)
         
     # Lógica de bloqueo de Agenda (Asumimos 30 min por cita)
     hora_fin_estimada = cita.fecha_cita + timedelta(minutes=30)
