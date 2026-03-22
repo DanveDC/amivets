@@ -110,6 +110,7 @@ class ConsultaBase(BaseModel):
     frecuencia_cardiaca: Optional[float] = Field(None, gt=0)
     observaciones: Optional[str] = None
     veterinario: Optional[str] = Field(None, max_length=100)
+    fecha_consulta: Optional[datetime] = None
     proxima_cita: Optional[datetime] = None
 
     @field_validator('temperatura')
@@ -174,7 +175,6 @@ class ConsultaResponse(ConsultaBase):
     id: int
     mascota_id: int
     servicios: List[ServicioConsultaResponse] = []
-    fecha_consulta: datetime
     
     model_config = ConfigDict(from_attributes=True)
 

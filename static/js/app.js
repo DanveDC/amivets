@@ -946,6 +946,15 @@ const abrirFormularioConsulta = () => {
     const adminMsg = document.getElementById('adminConsultaMsg');
     const examenTextarea = document.getElementById('consultaExamen');
 
+    // Pre-poblar fecha actual
+    const consultaFecha = document.getElementById('consultaFecha');
+    if (consultaFecha) {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
+        consultaFecha.value = localISOTime;
+    }
+
     // Modo Médico (Doctor)
     if (clinFields) clinFields.style.display = 'block';
     if (adminMsg) adminMsg.style.display = 'none';
@@ -981,6 +990,7 @@ const handleConsultaSubmit = async (e) => {
             diagnostico: document.getElementById('consultaProblemas').value || "No especificado",
             peso: parseFloat(document.getElementById('consultaPeso').value) || null,
             temperatura: parseFloat(document.getElementById('consultaTemperatura').value) || null,
+            fecha_consulta: document.getElementById('consultaFecha')?.value || null,
             observaciones: `ICC: ${icc}, TLLC: ${tllc} | Pruebas: ${document.getElementById('consultaPruebas')?.value || 'N/A'}`
         };
         await fetchAPI('/consultas/', { method: 'POST', body: JSON.stringify(data) });
