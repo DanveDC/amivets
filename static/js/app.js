@@ -1441,18 +1441,25 @@ const cargarConsultas = async (mascotaId) => {
     tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>';
     try {
         const consultas = await fetchAPI(`/consultas/?mascota_id=${mascotaId}`);
-        if (consultas.length === 0) {
+        if (!consultas || consultas.length === 0) {
             tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay historial clínico.</td></tr>';
             return;
         }
-        tableBody.innerHTML = consultas.map(c => `
+        tableBody.innerHTML = consultas.map(c => {
+            const fecha = c.fecha_consulta ? new Date(c.fecha_consulta).toLocaleDateString() : 'N/D';
+            const motivo = c.motivo || 'Sin motivo';
+            const diagn = c.diagnostico || '-';
+            const peso = c.peso ? parseFloat(c.peso).toFixed(2) : '-';
+            const temp = c.temperatura ? parseFloat(c.temperatura).toFixed(2) : '-';
+            
+            return `
             <tr>
-                <td>${new Date(c.fecha_consulta).toLocaleDateString()}</td>
-                <td>${c.motivo}</td>
-                <td>${c.diagnostico || '-'}</td>
+                <td>${fecha}</td>
+                <td>${motivo}</td>
+                <td>${diagn}</td>
                 <td style="font-size: 0.9em;">
-                    ${c.peso ? `<b>Peso:</b> ${parseFloat(c.peso).toFixed(2)}kg<br>` : ''}
-                    ${c.temperatura ? `<b>Temp:</b> ${parseFloat(c.temperatura).toFixed(2)}°C` : ''}
+                    ${c.peso ? `<b>Peso:</b> ${peso}kg<br>` : ''}
+                    ${c.temperatura ? `<b>Temp:</b> ${temp}C` : ''}
                 </td>
                 <td style="text-align: right;">
                     <button class="btn-primary btn-sm" onclick="verConsultaCompleta(${c.id}, ${mascotaId})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px;">🔍 Completa</button><br>
@@ -1463,8 +1470,8 @@ const cargarConsultas = async (mascotaId) => {
                     }
                     <button class="btn-secondary btn-sm" onclick="switchPetTab('hospitalizaciones'); setTimeout(()=>toggleForm('formHospitalizacion'), 200);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fee2e2; color: #b91c1c; border-color: #ef4444;">🏥 Internar</button>
                 </td>
-            </tr>
-        `).join('');
+            </tr>`;
+        }).join('');
         const btnVerPeso = document.getElementById('btnVerPeso');
         if (btnVerPeso) btnVerPeso.style.display = 'inline-block';
     } catch (error) {

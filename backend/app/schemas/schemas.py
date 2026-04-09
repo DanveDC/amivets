@@ -154,7 +154,7 @@ class ServicioConsultaBase(BaseModel):
     tipo_servicio: str = Field(..., max_length=50) # VACUNACION, CIRUGIA, HOSPITALIZACION, LABORATORIO, INSUMO, ESTETICA
     referencia_id: Optional[int] = None
     nombre_servicio: Optional[str] = Field(None, max_length=255)
-    cantidad: float = Field(default=1.0, gt=0)
+    cantidad: float = Field(default=1.0, ge=0)
     precio_unitario: float = Field(default=0.0, ge=0)
     estado: str = Field(default="Pendiente", max_length=50)
     detalles_clinicos: Optional[str] = None
@@ -336,7 +336,7 @@ class InventarioResponse(InventarioBase):
 # ========== FACTURA SCHEMAS ==========
 class DetalleFacturaBase(BaseModel):
     producto_id: Optional[int] = None
-    cantidad: int = Field(..., gt=0)
+    cantidad: int = Field(..., ge=0)
     precio_unitario: float = Field(..., ge=0)
     descripcion: Optional[str] = Field(None, max_length=255)
     
@@ -368,6 +368,7 @@ class FacturaBase(BaseModel):
     impuesto: float = Field(default=0.0, ge=0)
     metodo_pago: Optional[str] = Field(None, max_length=50)
     total_pagado: float = Field(default=0.0, ge=0)
+    saldo_pendiente: float = Field(default=0.0, ge=0)
     observaciones: Optional[str] = None
     consulta_id: Optional[int] = None
 
