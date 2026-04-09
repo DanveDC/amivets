@@ -46,4 +46,4 @@ USER vetuser
 EXPOSE 8000
 
 # Comando de ejecución
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
