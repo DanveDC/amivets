@@ -94,8 +94,13 @@ class FacturacionService:
                 ))
             
             # Cálculo financiero profesional
-            total = subtotal - factura_data.descuento + factura_data.impuesto
-            saldo_pendiente = total - factura_data.total_pagado
+            subtotal = subtotal or 0.0
+            descuento = (factura_data.descuento or 0.0)
+            impuesto = (factura_data.impuesto or 0.0)
+            pago = (factura_data.total_pagado or 0.0)
+            
+            total = subtotal - descuento + impuesto
+            saldo_pendiente = total - pago
             estado = "PAGADA" if saldo_pendiente <= 0 else "PENDIENTE"
             
             nueva_factura = Factura(
@@ -104,10 +109,10 @@ class FacturacionService:
                 consulta_id=factura_data.consulta_id,
                 es_presupuesto=factura_data.es_presupuesto,
                 subtotal=subtotal,
-                descuento=factura_data.descuento,
-                impuesto=factura_data.impuesto,
+                descuento=descuento,
+                impuesto=impuesto,
                 total=total,
-                total_pagado=factura_data.total_pagado,
+                total_pagado=pago,
                 saldo_pendiente=max(0, saldo_pendiente),
                 estado=estado,
                 metodo_pago=factura_data.metodo_pago,
@@ -298,12 +303,12 @@ class FacturacionService:
         items = []
         
         # 1. El costo de la consulta misma
-        if consulta.estado_pago == "POR_COBRAR" and consulta.precio_consulta > 0:
+        if (consulta.estado_pago or "POR_COBRAR") == "POR_COBRAR" and (consulta.precio_consulta or 0) > 0:
             items.append({
                 "descripcion": f"Consulta Veterinaria - {consulta.motivo}",
                 "cantidad": 1,
-                "precio_unitario": consulta.precio_consulta,
-                "subtotal": consulta.precio_consulta,
+                "precio_unitario": consulta.precio_consulta or 0.0,
+                "subtotal": consulta.precio_consulta or 0.0,
                 "tipo": "CONSULTA",
                 "id_interno": consulta.id
             })
@@ -312,37 +317,37 @@ class FacturacionService:
         for s in consulta.servicios:
             if not s.facturado and not s.is_deleted:
                 items.append({
-                    "descripcion": s.nombre_servicio,
-                    "cantidad": s.cantidad,
-                    "precio_unitario": s.precio_unitario,
-                    "subtotal": s.subtotal(),
-                    "tipo": "SERVICIO",
-                    "id_interno": s.id,
-                    "producto_id": s.referencia_id if s.tipo_servicio in ['INSUMO', 'VACUNACION'] else None
+                "descripcion": s.nombre_servicio or s.tipo_servicio,
+                "cantidad": s.cantidad or 1.0,
+                "precio_unitario": s.precio_unitario or 0.0,
+                "subtotal": (s.cantidad or 1.0) * (s.precio_unitario or 0.0),
+                "tipo": "SERVICIO",
+                "id_interno": s.id,
+                "producto_id": s.referencia_id if (s.tipo_servicio or '') in ['INSUMO', 'VACUNACION'] else None
                 })
         
         # 3. Pruebas
         for p in consulta.pruebas:
             if not p.facturado:
                 items.append({
-                    "descripcion": f"Prueba: {p.tipo}",
-                    "cantidad": 1,
-                    "precio_unitario": p.precio_aplicado,
-                    "subtotal": p.precio_aplicado,
-                    "tipo": "PRUEBA",
-                    "id_interno": p.id
+                "descripcion": f"Prueba: {p.tipo or 'N/D'}",
+                "cantidad": 1,
+                "precio_unitario": p.precio_aplicado or 0.0,
+                "subtotal": p.precio_aplicado or 0.0,
+                "tipo": "PRUEBA",
+                "id_interno": p.id
                 })
         
         # 4. Vacunas
         for v in consulta.vacunaciones:
             if not v.facturado:
                 items.append({
-                    "descripcion": f"Vacunación: {v.vacuna.nombre if v.vacuna else 'Vacuna'}",
-                    "cantidad": 1,
-                    "precio_unitario": v.precio_aplicado,
-                    "subtotal": v.precio_aplicado,
-                    "tipo": "VACUNA",
-                    "id_interno": v.id
+                "descripcion": f"Vacunación: {v.vacuna.nombre if v.vacuna else 'Vacuna'}",
+                "cantidad": 1,
+                "precio_unitario": v.precio_aplicado or 0.0,
+                "subtotal": v.precio_aplicado or 0.0,
+                "tipo": "VACUNA",
+                "id_interno": v.id
                 })
                 
         # 5. Desparasitaciones
