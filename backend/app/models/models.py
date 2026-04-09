@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from typing import List, Optional
 import enum
 from app.core.database import Base
 
@@ -131,6 +132,9 @@ class Consulta(Base):
     # Clave foránea
     mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
     
+    estado_pago = Column(String(50), default="POR_COBRAR") # POR_COBRAR, COBRADO
+    precio_consulta = Column(Float, default=0.0)
+    
     # Relaciones
     mascota = relationship("Mascota", back_populates="consultas")
     pruebas = relationship("PruebaComplementaria", back_populates="consulta", cascade="all, delete-orphan")
@@ -140,7 +144,12 @@ class Consulta(Base):
     cirugias = relationship("Cirugia", back_populates="consulta")
     hospitalizaciones = relationship("Hospitalizacion", back_populates="consulta")
     servicios = relationship("ServicioConsulta", back_populates="consulta", cascade="all, delete-orphan")
+    factura = relationship("Factura", back_populates="consulta", uselist=False)
     
+    @property
+    def factura_id(self) -> Optional[int]:
+        return self.factura.id if self.factura else None
+
     def __repr__(self):
         return f"<Consulta {self.id} - {self.fecha_consulta}>"
 
@@ -157,6 +166,7 @@ class ServicioConsulta(Base):
     precio_unitario = Column(Float, nullable=False, default=0.0)
     estado = Column(String(50), default="Pendiente") # Pendiente, Aplicado
     detalles_clinicos = Column(Text, nullable=True) # Datos de aplicacion (lote, dosis, hallazgos, etc)
+    facturado = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False) # Soft delete for auditing
 
     consulta = relationship("Consulta", back_populates="servicios")
@@ -278,10 +288,12 @@ class Factura(Base):
     
     # Clave foránea
     propietario_id = Column(Integer, ForeignKey("propietarios.id"), nullable=False)
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=True)
     
     # Relaciones
     propietario = relationship("Propietario", back_populates="facturas")
     detalles = relationship("DetalleFactura", back_populates="factura", cascade="all, delete-orphan")
+    consulta = relationship("Consulta", back_populates="factura")
     
     def __repr__(self):
         return f"<Factura {self.numero_factura}>"
@@ -300,10 +312,12 @@ class DetalleFactura(Base):
     # Claves foráneas
     factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False)
     producto_id = Column(Integer, ForeignKey("inventario.id"), nullable=True)  # Puede ser null para servicios
+    servicio_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=True) # Para linkar a servicios clínicos
     
     # Relaciones
     factura = relationship("Factura", back_populates="detalles")
     producto = relationship("Inventario", back_populates="detalles_factura")
+    servicio = relationship("ServicioConsulta")
     
     def __repr__(self):
         return f"<DetalleFactura {self.id} - Factura {self.factura_id}>"

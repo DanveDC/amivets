@@ -4,7 +4,11 @@ from fastapi import HTTPException, status
 from typing import List, Optional
 from datetime import datetime
 
-from app.models.models import Factura, DetalleFactura, Inventario, MovimientoInventario
+from app.models.models import (
+    Factura, DetalleFactura, Inventario, MovimientoInventario, 
+    Consulta, PruebaComplementaria, Vacunacion, Desparasitacion, 
+    Cirugia, Hospitalizacion, ServicioConsulta
+)
 from app.schemas.schemas import FacturaCreate, FacturaUpdate
 
 
@@ -82,6 +86,7 @@ class FacturacionService:
                 
                 detalles_factura.append(DetalleFactura(
                     producto_id=detalle_data.producto_id,
+                    servicio_id=getattr(detalle_data, 'servicio_id', None),
                     cantidad=detalle_data.cantidad,
                     precio_unitario=precio,
                     subtotal=detalle_subtotal,
@@ -96,6 +101,7 @@ class FacturacionService:
             nueva_factura = Factura(
                 numero_factura=numero_factura,
                 propietario_id=factura_data.propietario_id,
+                consulta_id=factura_data.consulta_id,
                 es_presupuesto=factura_data.es_presupuesto,
                 subtotal=subtotal,
                 descuento=factura_data.descuento,
@@ -112,7 +118,24 @@ class FacturacionService:
             db.add(nueva_factura)
             for mov in movimientos:
                 db.add(mov)
-                
+            
+            # Si viene de una consulta, marcar todo como facturado
+            if factura_data.consulta_id:
+                consulta = db.query(Consulta).filter(Consulta.id == factura_data.consulta_id).first()
+                if consulta:
+                    consulta.estado_pago = "COBRADO"
+                    
+                    # Marcar servicios como facturados (sin borrar el estado médico)
+                    for s in consulta.servicios:
+                        s.facturado = True
+                    
+                    # Marcar otros items
+                    for p in consulta.pruebas: p.facturado = True
+                    for v in consulta.vacunaciones: v.facturado = True
+                    for d in consulta.desparasitaciones: d.facturado = True
+                    for c in consulta.cirugias: c.facturado = True
+                    for h in consulta.hospitalizaciones: h.facturado = True
+            
             db.commit()
             db.refresh(nueva_factura)
             return nueva_factura
@@ -151,18 +174,29 @@ class FacturacionService:
         skip: int = 0,
         limit: int = 100,
         propietario_id: Optional[int] = None,
-        estado: Optional[str] = None
+        estado: Optional[str] = None,
+        search: Optional[str] = None
     ) -> List[Factura]:
-        """Lista facturas con filtros opcionales"""
-        query = db.query(Factura)
+        """Lista facturas con filtros opcionales de estado, propietario y búsqueda textual"""
+        from app.models.models import Propietario
+        query = db.query(Factura).join(Propietario, Factura.propietario_id == Propietario.id)
         
+        if search:
+            # Búsqueda por número de factura o nombre/apellido del propietario
+            search_filter = f"%{search}%"
+            query = query.filter(
+                (Factura.numero_factura.ilike(search_filter)) |
+                (Propietario.nombre.ilike(search_filter)) |
+                (Propietario.apellido.ilike(search_filter))
+            )
+            
         if propietario_id:
             query = query.filter(Factura.propietario_id == propietario_id)
         
         if estado:
             query = query.filter(Factura.estado == estado)
         
-        return query.offset(skip).limit(limit).all()
+        return query.order_by(Factura.fecha_emision.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
     def actualizar_factura(
@@ -251,3 +285,105 @@ class FacturacionService:
                 
         db.commit()
         return factura
+
+    @staticmethod
+    def obtener_items_pendientes_consulta(db: Session, consulta_id: int):
+        """
+        Colecta todos los items que no han sido facturados asociados a una consulta
+        """
+        consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
+        if not consulta:
+            raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        
+        items = []
+        
+        # 1. El costo de la consulta misma
+        if consulta.estado_pago == "POR_COBRAR" and consulta.precio_consulta > 0:
+            items.append({
+                "descripcion": f"Consulta Veterinaria - {consulta.motivo}",
+                "cantidad": 1,
+                "precio_unitario": consulta.precio_consulta,
+                "subtotal": consulta.precio_consulta,
+                "tipo": "CONSULTA",
+                "id_interno": consulta.id
+            })
+            
+        # 2. Servicios
+        for s in consulta.servicios:
+            if not s.facturado and not s.is_deleted:
+                items.append({
+                    "descripcion": s.nombre_servicio,
+                    "cantidad": s.cantidad,
+                    "precio_unitario": s.precio_unitario,
+                    "subtotal": s.subtotal(),
+                    "tipo": "SERVICIO",
+                    "id_interno": s.id,
+                    "producto_id": s.referencia_id if s.tipo_servicio in ['INSUMO', 'VACUNACION'] else None
+                })
+        
+        # 3. Pruebas
+        for p in consulta.pruebas:
+            if not p.facturado:
+                items.append({
+                    "descripcion": f"Prueba: {p.tipo}",
+                    "cantidad": 1,
+                    "precio_unitario": p.precio_aplicado,
+                    "subtotal": p.precio_aplicado,
+                    "tipo": "PRUEBA",
+                    "id_interno": p.id
+                })
+        
+        # 4. Vacunas
+        for v in consulta.vacunaciones:
+            if not v.facturado:
+                items.append({
+                    "descripcion": f"Vacunación: {v.vacuna.nombre if v.vacuna else 'Vacuna'}",
+                    "cantidad": 1,
+                    "precio_unitario": v.precio_aplicado,
+                    "subtotal": v.precio_aplicado,
+                    "tipo": "VACUNA",
+                    "id_interno": v.id
+                })
+                
+        # 5. Desparasitaciones
+        for d in consulta.desparasitaciones:
+            if not d.facturado:
+                items.append({
+                    "descripcion": f"Desparasitación: {d.tipo}",
+                    "cantidad": 1,
+                    "precio_unitario": d.precio_aplicado,
+                    "subtotal": d.precio_aplicado,
+                    "tipo": "DESPARASITACION",
+                    "id_interno": d.id
+                })
+        
+        # 6. Cirugías
+        for c in consulta.cirugias:
+            if not c.facturado:
+                items.append({
+                    "descripcion": f"Cirugía: {c.tipo_procedimiento}",
+                    "cantidad": 1,
+                    "precio_unitario": c.precio_aplicado,
+                    "subtotal": c.precio_aplicado,
+                    "tipo": "CIRUGIA",
+                    "id_interno": c.id
+                })
+                
+        # 7. Hospitalizaciones
+        for h in consulta.hospitalizaciones:
+            if not h.facturado:
+                items.append({
+                    "descripcion": f"Hospitalización: {h.motivo}",
+                    "cantidad": h.dias_cama,
+                    "precio_unitario": h.precio_aplicado,
+                    "subtotal": h.precio_aplicado * h.dias_cama,
+                    "tipo": "HOSPITALIZACION",
+                    "id_interno": h.id
+                })
+        
+        return {
+            "propietario_id": consulta.mascota.propietario_id,
+            "propietario_nombre": f"{consulta.mascota.propietario.nombre} {consulta.mascota.propietario.apellido}",
+            "mascota_nombre": consulta.mascota.nombre,
+            "items": items
+        }

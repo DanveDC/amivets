@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.database import get_db
 from app.models.models import Cita, CitaEstado, Mascota, Propietario
-from app.schemas.schemas import CitaCreate, CitaUpdate, CitaResponse
+from app.schemas.schemas import CitaCreate, CitaUpdate, CitaResponse, CitaStatusUpdate
 
 router = APIRouter(prefix="/api/citas", tags=["Agenda y Citas"])
 
@@ -89,10 +89,11 @@ def obtener_cita(
 @router.put("/{cita_id}/checkin", response_model=CitaResponse)
 def checkin_paciente(
     cita_id: int,
-    estado: str,
+    status_update: CitaStatusUpdate,
     db: Session = Depends(get_db)
 ):
     """Sistema de Check-in: Actualiza el estado del flujo del paciente (En espera, En consulta, Finalizado)"""
+    estado = status_update.estado
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
     if not cita:
         raise HTTPException(status_code=404, detail="Cita no encontrada")

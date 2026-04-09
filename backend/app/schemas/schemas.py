@@ -112,6 +112,8 @@ class ConsultaBase(BaseModel):
     veterinario: Optional[str] = Field(None, max_length=100)
     fecha_consulta: Optional[datetime] = None
     proxima_cita: Optional[datetime] = None
+    estado_pago: Optional[str] = "POR_COBRAR"
+    precio_consulta: Optional[float] = 0.0
 
     @field_validator('temperatura')
     @classmethod
@@ -143,6 +145,8 @@ class ConsultaUpdate(BaseModel):
     observaciones: Optional[str] = None
     veterinario: Optional[str] = Field(None, max_length=100)
     proxima_cita: Optional[datetime] = None
+    estado_pago: Optional[str] = None
+    precio_consulta: Optional[float] = None
 
 
 class ServicioConsultaBase(BaseModel):
@@ -175,6 +179,7 @@ class ConsultaResponse(ConsultaBase):
     id: int
     mascota_id: int
     servicios: List[ServicioConsultaResponse] = []
+    factura_id: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -233,6 +238,10 @@ class CitaUpdate(BaseModel):
     tipo: Optional[str] = Field(None, min_length=1, max_length=50)
     estado: Optional[str] = Field(None, max_length=50)
     observaciones: Optional[str] = None
+
+
+class CitaStatusUpdate(BaseModel):
+    estado: str = Field(..., max_length=50)
 
 
 class CitaResponse(CitaBase):
@@ -340,13 +349,14 @@ class DetalleFacturaBase(BaseModel):
 
 
 class DetalleFacturaCreate(DetalleFacturaBase):
-    pass
+    servicio_id: Optional[int] = None
 
 
 class DetalleFacturaResponse(DetalleFacturaBase):
     id: int
     factura_id: int
     subtotal: float
+    servicio_id: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -359,6 +369,7 @@ class FacturaBase(BaseModel):
     metodo_pago: Optional[str] = Field(None, max_length=50)
     total_pagado: float = Field(default=0.0, ge=0)
     observaciones: Optional[str] = None
+    consulta_id: Optional[int] = None
 
     @model_validator(mode='after')
     def validar_pagos(self) -> 'FacturaBase':
@@ -387,6 +398,7 @@ class FacturaResponse(FacturaBase):
     total: float
     estado: str
     detalles: List[DetalleFacturaResponse] = []
+    consulta_id: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)
 

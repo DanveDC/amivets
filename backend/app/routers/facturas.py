@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
 from app.schemas.schemas import FacturaCreate, FacturaUpdate, FacturaResponse
 from app.services.facturacion_service import FacturacionService
+from app.services.pdf_service import PDFService
 
 router = APIRouter(prefix="/api/facturas", tags=["Facturación"])
 
@@ -46,10 +47,11 @@ def listar_facturas(
     limit: int = 100,
     propietario_id: Optional[int] = None,
     estado: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Lista todas las facturas con filtros opcionales"""
-    return FacturacionService.listar_facturas(db, skip, limit, propietario_id, estado)
+    """Lista todas las facturas con filtros opcionales (estado, propiedad, búsqueda)"""
+    return FacturacionService.listar_facturas(db, skip, limit, propietario_id, estado, search)
 
 
 @router.put("/{factura_id}", response_model=FacturaResponse)
@@ -86,3 +88,37 @@ def anular_factura(
             detail="Factura no encontrada"
         )
     return factura_anulada
+
+
+@router.get("/pendientes/{consulta_id}")
+def obtener_items_pendientes(
+    consulta_id: int,
+    db: Session = Depends(get_db)
+):
+    """Obtiene todos los items pendientes de cobro de una consulta"""
+    return FacturacionService.obtener_items_pendientes_consulta(db, consulta_id)
+
+
+@router.get("/{factura_id}/pdf")
+def descargar_factura_pdf(
+    factura_id: int,
+    db: Session = Depends(get_db)
+):
+    """Genera y descarga el PDF de una factura"""
+    factura = FacturacionService.obtener_factura(db, factura_id)
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+    
+    pdf_content = PDFService.generar_factura_pdf(factura)
+    if not pdf_content:
+        raise HTTPException(status_code=500, detail="Error al generar el PDF")
+    
+    filename = f"Factura_{factura.numero_factura}.pdf"
+    
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )

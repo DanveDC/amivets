@@ -28,6 +28,7 @@ async function login(username, password) {
             const userData = await userRes.json();
             localStorage.setItem('role', userData.role);
             localStorage.setItem('username', userData.username);
+            localStorage.setItem('user_id', userData.id);
         }
 
         // Redirigir al dashboard

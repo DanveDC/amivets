@@ -38,7 +38,7 @@ const fetchAPI = async (endpoint, options = {}) => {
         console.error('Error en fetchAPI:', error);
         throw error;
     }
-};const showNotification = (message, type = 'info') => {
+}; const showNotification = (message, type = 'info') => {
     const container = document.getElementById('notification-container') || document.body;
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
@@ -102,8 +102,8 @@ const createPrettySelect = (containerId, options = [], placeholder = 'Selecciona
     let selectedValue = null;
 
     const renderOptions = (filter = '') => {
-        const filtered = options.filter(opt => 
-            opt.label.toLowerCase().includes(filter.toLowerCase()) || 
+        const filtered = options.filter(opt =>
+            opt.label.toLowerCase().includes(filter.toLowerCase()) ||
             (opt.subtext && opt.subtext.toLowerCase().includes(filter.toLowerCase()))
         );
 
@@ -134,14 +134,14 @@ const createPrettySelect = (containerId, options = [], placeholder = 'Selecciona
         triggerText.textContent = label;
         trigger.classList.remove('active');
         dropdown.classList.remove('show');
-        
+
         if (onChange) onChange(value, label);
     };
 
     // Al hacer clic en el trigger
     trigger.addEventListener('click', (e) => {
         const isOpen = dropdown.classList.contains('show');
-        
+
         // Cerrar otros dropdowns primero if needed
         document.querySelectorAll('.custom-select-dropdown').forEach(d => {
             if (d.id !== dropdownId) d.classList.remove('show');
@@ -152,7 +152,7 @@ const createPrettySelect = (containerId, options = [], placeholder = 'Selecciona
 
         trigger.classList.toggle('active');
         dropdown.classList.toggle('show');
-        
+
         if (!isOpen) {
             search.value = '';
             renderOptions();
@@ -195,14 +195,22 @@ const setupNavigation = () => {
     const menuItems = document.querySelectorAll('.menu-item[data-target]');
     const sections = document.querySelectorAll('.spa-section');
 
+    const updateActiveLinks = (targetId) => {
+        menuItems.forEach(item => {
+            if (item.getAttribute('data-target') === targetId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    };
+
     menuItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
             const targetId = item.getAttribute('data-target');
 
-            // Actualizar menú activo
-            menuItems.forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
+            updateActiveLinks(targetId);
 
             // Mostrar sección correspondiente
             sections.forEach(section => {
@@ -217,6 +225,7 @@ const setupNavigation = () => {
             if (targetId === 'sec-propietarios') loadPropietarios();
             if (targetId === 'sec-usuarios') loadUsuarios();
             if (targetId === 'sec-perfil') loadPerfil();
+            if (targetId === 'sec-facturacion') cargarHistorialFacturas();
         });
     });
 };
@@ -248,9 +257,9 @@ const loadAgenda = async () => {
 
     try {
         const [citasRaw, consultasRaw, mascotas] = await Promise.all([
-            fetchAPI('/citas/?skip=0&limit=100').catch(()=>[]),
-            fetchAPI('/consultas/?skip=0&limit=100').catch(()=>[]),
-            fetchAPI('/mascotas/?skip=0&limit=300').catch(()=>[])
+            fetchAPI('/citas/?skip=0&limit=100').catch(() => []),
+            fetchAPI('/consultas/?skip=0&limit=100').catch(() => []),
+            fetchAPI('/mascotas/?skip=0&limit=300').catch(() => [])
         ]);
         const mascotasMap = {};
         if (Array.isArray(mascotas)) {
@@ -300,7 +309,7 @@ const loadAgenda = async () => {
                 extendedProps: { ...c, mascota_nombre: petName, esConsultaPasada: false }
             });
         });
-        
+
         const safeConsultas = Array.isArray(consultasRaw) ? consultasRaw : [];
         safeConsultas.forEach(c => {
             const petName = mascotasMap[c.mascota_id] || `Mascota #${c.mascota_id}`;
@@ -345,8 +354,8 @@ const loadAgenda = async () => {
         } else {
             calendarInstance.removeAllEvents();
             allEvents.forEach(evt => calendarInstance.addEvent(evt));
-            setTimeout(() => { 
-                calendarInstance.updateSize(); 
+            setTimeout(() => {
+                calendarInstance.updateSize();
                 calendarInstance.render();
             }, 300);
         }
@@ -408,7 +417,7 @@ const handleCitaSubmit = async (e) => {
         const mascotaId = parseInt(document.getElementById('citaMascotaId').value);
         // Fetch pet to get owner ID
         const mascota = await fetchAPI(`/mascotas/${mascotaId}`);
-        
+
         const data = {
             mascota_id: mascotaId,
             propietario_id: mascota.propietario_id,
@@ -437,12 +446,12 @@ const loadPropietarios = async (filter = '') => {
         let propietarios = await fetchAPI('/propietarios/');
         // Filtrar inactivos
         propietarios = propietarios.filter(p => p.activo !== false);
-        
+
         if (filter) {
             const f = filter.toLowerCase();
-            propietarios = propietarios.filter(p => 
-                p.nombre.toLowerCase().includes(f) || 
-                p.apellido.toLowerCase().includes(f) || 
+            propietarios = propietarios.filter(p =>
+                p.nombre.toLowerCase().includes(f) ||
+                p.apellido.toLowerCase().includes(f) ||
                 p.cedula.includes(f)
             );
         }
@@ -483,7 +492,7 @@ const abrirEditarPropietario = async (id) => {
         document.getElementById('editPropietarioTelefono').value = p.telefono;
         document.getElementById('editPropietarioEmail').value = p.email || '';
         document.getElementById('editPropietarioDireccion').value = p.direccion || '';
-        
+
         openModal('modalEditarPropietario');
     } catch (error) {
         alert("Error al cargar datos del propietario");
@@ -508,7 +517,7 @@ const verMascotasPropietario = async (propietarioId, nombre) => {
         // Redirect to Consultorio and filter
         const listContainer = document.getElementById('consultorioMascotasList');
         const searchInput = document.getElementById('consultorioSearchMascota');
-        
+
         // Switch section manually to avoid race conditions with DOM elements
         const menuItems = document.querySelectorAll('.menu-item[data-target]');
         const sections = document.querySelectorAll('.spa-section');
@@ -522,7 +531,7 @@ const verMascotasPropietario = async (propietarioId, nombre) => {
         }
 
         renderMascotasList(mascotas, listContainer);
-        
+
         if (mascotas.length === 1) {
             const m = mascotas[0];
             seleccionarMascota(m.id, m.nombre, m.especie, m.codigo_historia);
@@ -584,12 +593,12 @@ const loadWeightChart = async () => {
         }
 
         container.style.display = 'block';
-        
+
         // Ensure canvas exists if container was overwritten previously
         if (!document.getElementById('weightChart')) {
             container.innerHTML = '<canvas id="weightChart"></canvas>';
         }
-        
+
         const ctx = document.getElementById('weightChart').getContext('2d');
 
         if (weightChart) weightChart.destroy();
@@ -752,8 +761,8 @@ let editRazaSelectInstance = null;
 
 const initCustomSelects = async () => {
     // 1. Breed Select for Registration
-    razaSelectInstance = createPrettySelect('selectMascotaRazaContainer', 
-        RAZAS_PERROS.map(r => ({ value: r, label: r })), 
+    razaSelectInstance = createPrettySelect('selectMascotaRazaContainer',
+        RAZAS_PERROS.map(r => ({ value: r, label: r })),
         'Escriba para buscar raza...',
         (val) => { document.getElementById('mascotaRaza').value = val; }
     );
@@ -766,7 +775,7 @@ const initCustomSelects = async () => {
             label: `${p.nombre} ${p.apellido}`,
             subtext: `Cédula: ${p.cedula}`
         }));
-        
+
         ownerSelectInstance = createPrettySelect('selectMascotaPropietarioContainer',
             ownerOptions,
             'Buscar por cédula o nombre...',
@@ -890,7 +899,7 @@ const abrirEditarMascota = async (id) => {
         document.getElementById('editMascotaFechaNacimiento').value = m.fecha_nacimiento || '';
         document.getElementById('editMascotaSexo').value = m.sexo || '';
         document.getElementById('editMascotaColor').value = m.color || '';
-        
+
         // Update custom select UI
         if (m.raza) {
             editRazaSelectInstance?.setValue(m.raza, m.raza);
@@ -922,7 +931,7 @@ const confirmEliminarMascota = async (id, nombre) => {
 const abrirFormularioConsulta = () => {
     const role = localStorage.getItem('role');
     const isAdmin = (role === 'admin' || role === 'recepcionista');
-    
+
     // Si es administrador, forzamos la creación de una "Orden de Turno" (Cita en sala), no el registro médico
     if (isAdmin) {
         showNotification("Modo Administración: Usted generará una orden para atención médica.", "info");
@@ -930,14 +939,14 @@ const abrirFormularioConsulta = () => {
         const inputSearch = document.getElementById('citaMascotaSearch');
         const nom = document.getElementById('displayNombreMascota')?.textContent || 'Paciente Seleccionado';
         if (inputSearch) inputSearch.value = nom;
-        
+
         // Cargar fecha actual
         const now = new Date();
         const offset = now.getTimezoneOffset() * 60000;
         const localISOTime = (new Date(now.getTime() - offset)).toISOString().slice(0, 16);
         document.getElementById('citaFecha').value = localISOTime;
         document.getElementById('citaMotivo').value = "Turno para evaluación médica";
-        
+
         openModal('modalCita');
         return;
     }
@@ -959,7 +968,7 @@ const abrirFormularioConsulta = () => {
     if (clinFields) clinFields.style.display = 'block';
     if (adminMsg) adminMsg.style.display = 'none';
     if (examenTextarea) examenTextarea.required = true;
-    
+
     // Pre-seleccionar al doctor actual si está logueado
     const user = localStorage.getItem('username');
     const selectVet = document.getElementById('consultaVeterinario');
@@ -971,7 +980,7 @@ const abrirFormularioConsulta = () => {
             }
         }
     }
-    
+
     openModal('modalConsulta');
 };
 
@@ -1020,7 +1029,7 @@ const initConsultorio = async () => {
 const setupConsultorioSearch = () => {
     const listContainer = document.getElementById('consultorioMascotasList');
     const searchInput = document.getElementById('consultorioSearchMascota');
-    
+
     if (searchInput && listContainer) {
         searchInput.addEventListener('input', debounce(async (e) => {
             const query = e.target.value.trim();
@@ -1042,11 +1051,13 @@ const renderMascotasList = (mascotas, container) => {
     }
     container.innerHTML = mascotas.map(m => `
         <div class="search-item pet-list-item" onclick="seleccionarMascota(${m.id}, '${m.nombre}', '${m.especie}', '${m.codigo_historia || ''}')" 
-             style="cursor: pointer; padding: 12px; border-bottom: 1px solid #f3f4f6; transition: background 0.2s; display: flex; flex-direction: column; gap: 4px;">
-            <div style="font-weight: 600; color: #1f2937; font-size: 1rem;">${m.nombre}</div>
-            <div style="font-size: 0.85rem; color: #6b7280; display: flex; justify-content: space-between;">
-                <span>${m.especie}</span>
-                <span style="color: #6366f1; font-weight: 500;">#${m.codigo_historia || m.id}</span>
+             style="cursor: pointer; padding: 1rem; border-bottom: 1px solid #f1f5f9; transition: all 0.2s ease; display: flex; flex-direction: column; gap: 6px; border-radius: 8px; margin-bottom: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-weight: 700; color: #1e293b; font-size: 1.05rem; letter-spacing: -0.01em;">${m.nombre}</div>
+                <span style="color: #6366f1; font-weight: 800; font-size: 0.75rem; background: #eef2ff; padding: 2px 8px; border-radius: 6px;">#${m.codigo_historia || m.id}</span>
+            </div>
+            <div style="font-size: 0.85rem; color: #64748b; font-weight: 500;">
+                🐾 ${m.especie}
             </div>
         </div>
     `).join('');
@@ -1059,7 +1070,7 @@ window.verConsultaCompleta = async (consultaId, mascotaId) => {
         currentViewedConsultaId = consultaId;
         const c = await fetchAPI(`/consultas/${consultaId}`);
         document.getElementById('detalleConsultaTitle').textContent = `Expediente Clínico - C.${c.id}`;
-        
+
         let htmlMed = `
             <p><strong>Fecha:</strong> ${new Date(c.fecha_consulta).toLocaleString()}</p>
             <p><strong>Profesional:</strong> ${c.veterinario}</p>
@@ -1078,7 +1089,7 @@ window.verConsultaCompleta = async (consultaId, mascotaId) => {
         document.getElementById('detalleConsultaMedica').innerHTML = htmlMed;
 
         document.getElementById('addServicioConsultaId').value = c.id;
-        
+
         // Render Servicios Carrito
         renderDetalleServicios(c.servicios || []);
 
@@ -1099,14 +1110,14 @@ const renderDetalleServicios = (servicios) => {
 
     let total = 0;
     const activos = servicios.filter(s => !s.is_deleted);
-    
+
     let html = activos.map(s => {
         total += (s.cantidad * s.precio_unitario);
-        
+
         let statusIcon = s.estado === 'Aplicado' ? '✅' : '⏳';
         let badgeColor = s.estado === 'Aplicado' ? 'background: #f8fafc; border: 1px solid #e2e8f0;' : 'background: #fffbeb; border: 1px solid #fde68a;';
         let accentLine = s.estado === 'Aplicado' ? '#4F46E5' : '#d97706';
-        
+
         // Parse clinical details if they follow the "Key: Value | Key: Value" format
         let detailsHtml = '';
         if (s.detalles_clinicos) {
@@ -1116,10 +1127,10 @@ const renderDetalleServicios = (servicios) => {
                 detailsHtml = `
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed #e2e8f0;">
                         ${parts.map(p => {
-                            const [k, v] = p.trim().split(':');
-                            if (v) return `<div style="font-size: 0.75rem; color: #475569;"><span style="font-weight: 700; color: #1e293b; text-transform: uppercase; font-size: 0.65rem; opacity: 0.7;">${k}:</span> ${v}</div>`;
-                            return `<div style="grid-column: span 2; font-size: 0.75rem; color: #475569; font-style: italic;">${p.trim()}</div>`;
-                        }).join('')}
+                    const [k, v] = p.trim().split(':');
+                    if (v) return `<div style="font-size: 0.75rem; color: #475569;"><span style="font-weight: 700; color: #1e293b; text-transform: uppercase; font-size: 0.65rem; opacity: 0.7;">${k}:</span> ${v}</div>`;
+                    return `<div style="grid-column: span 2; font-size: 0.75rem; color: #475569; font-style: italic;">${p.trim()}</div>`;
+                }).join('')}
                     </div>
                 `;
             } else {
@@ -1208,13 +1219,13 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
     const label = document.getElementById('labelSeleccionDinamica');
     const datalist = document.getElementById('listadoInventario');
     const dynContainer = document.getElementById('containerCamposDinamicos');
-    
+
     // Reset basic fields
     searchInput.value = '';
     document.getElementById('addServicioReferenciaId').value = '';
     datalist.innerHTML = '';
     currentInventoryItems = [];
-    
+
     // Reset dynamic container
     if (dynContainer) {
         dynContainer.innerHTML = '';
@@ -1230,7 +1241,7 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
             const items = await fetchAPI(`/inventario/?limit=200${cat ? `&categoria=${cat}` : ''}`);
             currentInventoryItems = items;
             datalist.innerHTML = items.map(i => `<option value="${i.nombre} [Stock: ${i.stock_actual}]" data-id="${i.id}">`).join('');
-        } catch(err) { console.error("Error fetching inventory", err); }
+        } catch (err) { console.error("Error fetching inventory", err); }
     } else {
         label.textContent = 'REFERENCIA ADICIONAL';
         searchInput.placeholder = 'Ej: Nombre de la cirugía o examen...';
@@ -1297,7 +1308,7 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
 document.getElementById('addServicioItemSearch').addEventListener('input', (e) => {
     const val = e.target.value;
     const tipo = document.getElementById('addServicioTipo').value;
-    
+
     if (tipo === 'INSUMO' || tipo === 'VACUNACION') {
         // Find if the value matches one of our options
         const match = currentInventoryItems.find(i => `${i.nombre} [Stock: ${i.stock_actual}]` === val);
@@ -1305,7 +1316,7 @@ document.getElementById('addServicioItemSearch').addEventListener('input', (e) =
             document.getElementById('addServicioNombre').value = match.nombre;
             document.getElementById('addServicioPrecio').value = match.precio_unitario;
             document.getElementById('addServicioReferenciaId').value = match.id;
-            
+
             // Pre-fill clinical data with template for lot/expiry
             const detField = document.getElementById('addServicioDetalles');
             if (!detField.value) {
@@ -1331,18 +1342,18 @@ const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
 
     if (jump && complexModules[tipo]) {
         const config = complexModules[tipo];
-        
+
         // Cerramos el modal actual para permitir navegación en el fondo
         closeModal('modalDetalleConsulta');
-        
+
         // Cambiar a la pestaña correspondiente en el perfil de paciente (abajo)
         switchPetTab(config.tab);
-        
+
         // Scroll hacia abajo para que el usuario note que se abrió la sección
         setTimeout(() => {
             const el = document.getElementById('petTabContent');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            
+
             // Abrir el formulario correspondiente
             const form = document.getElementById(config.formId);
             if (form) {
@@ -1360,7 +1371,7 @@ const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
         selector.value = tipo;
         selector.dispatchEvent(new Event('change'));
     }
-    
+
     // Enfocar búsqueda de item para que el usuario pueda escribir (ej: nombre de vacuna o fármaco)
     const search = document.getElementById('addServicioItemSearch');
     if (search) {
@@ -1375,9 +1386,9 @@ document.getElementById('formAgregarServicio').addEventListener('submit', async 
     const refId = document.getElementById('addServicioReferenciaId').value;
     const tipo = document.getElementById('addServicioTipo').value;
     const nombre = document.getElementById('addServicioNombre').value;
-    
+
     let detallesExtra = "";
-    
+
     if (tipo === 'HOSPITALIZACION') {
         const ing = e.target.querySelector('.dinamico-hosp-ingreso')?.value;
         const egr = e.target.querySelector('.dinamico-hosp-egreso')?.value;
@@ -1407,20 +1418,20 @@ document.getElementById('formAgregarServicio').addEventListener('submit', async 
         detalles_clinicos: detallesExtra + document.getElementById('addServicioDetalles').value,
         estado: 'Aplicado'
     };
-    
+
     try {
         await fetchAPI(`/consultas/${cid}/servicios`, {
             method: 'POST',
             body: JSON.stringify(body)
         });
-        e.target.reset(); 
+        e.target.reset();
         document.getElementById('addServicioReferenciaId').value = '';
         const container = document.getElementById('containerCamposDinamicos');
         if (container) { container.innerHTML = ''; container.style.display = 'none'; }
-        
+
         verConsultaCompleta(cid, currentMascotaId);
         showNotification("🎨 Acto médico y registro clínico guardados.", "success");
-    } catch(err) {
+    } catch (err) {
         alert("Error agregando cargo: " + err.message);
     }
 });
@@ -1446,6 +1457,10 @@ const cargarConsultas = async (mascotaId) => {
                 <td style="text-align: right;">
                     <button class="btn-primary btn-sm" onclick="verConsultaCompleta(${c.id}, ${mascotaId})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px;">🔍 Completa</button><br>
                     <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #ecfdf5; color: #047857; border-color: #059669;">💊 Recetar</button>
+                    ${c.factura_id ? 
+                        `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #3b82f6; border-color: #2563eb; margin-top: 4px;">📄 Facturado</button>` :
+                        `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fef3c7; color: #92400e; border-color: #d97706;">💲 Facturar</button>`
+                    }
                     <button class="btn-secondary btn-sm" onclick="switchPetTab('hospitalizaciones'); setTimeout(()=>toggleForm('formHospitalizacion'), 200);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fee2e2; color: #b91c1c; border-color: #ef4444;">🏥 Internar</button>
                 </td>
             </tr>
@@ -1460,7 +1475,7 @@ const cargarConsultas = async (mascotaId) => {
 
 const seleccionarMascota = async (id, nombre, especie, codigo) => {
     currentMascotaId = id;
-    
+
     // UI placeholder while loading full data
     document.getElementById('displayNombreMascota').textContent = nombre || 'Cargando...';
     document.getElementById('displayInfoMascota').textContent = especie || '...';
@@ -1496,13 +1511,13 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
     const btnDel = document.getElementById('btnEliminarMascota');
     if (btnEdit) btnEdit.onclick = () => abrirEditarMascota(id);
     if (btnDel) btnDel.onclick = () => confirmEliminarMascota(id, nombre);
-    
+
     const btnAction = document.getElementById('btnActionAdd');
     if (btnAction) btnAction.onclick = () => {
         document.getElementById('consultaMascotaId').value = id;
         abrirFormularioConsulta();
     };
-    
+
     setTimeout(updatePetNavArrows, 500);
 };
 
@@ -1582,6 +1597,29 @@ const switchPetTab = (tabName) => {
             `;
             setTimeout(loadWeightChart, 100);
             break;
+        case 'facturacion':
+            contentArea.innerHTML = `
+                <div class="card" style="padding: 1rem; border: none; box-shadow: none;">
+                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: #374151;">Historial de Cobros del Paciente</h3>
+                    <div class="table-container">
+                        <table class="consultas-table" style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th># Factura</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th>Total</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="petFacturasTableBody">
+                                <tr><td colspan="5" style="text-align:center;">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+            cargarFacturasMascota(currentMascotaId);
+            break;
         default:
             contentArea.innerHTML = `<div class="empty-state">Módulo <b>${tabName}</b> en desarrollo.</div>`;
     }
@@ -1591,8 +1629,8 @@ const renderHistoriaTab = async () => {
     const res = document.getElementById('historiaResumen');
     try {
         const m = await fetchAPI(`/mascotas/${currentMascotaId}`);
-        const v = await fetchAPI(`/clinico/vacunaciones/${currentMascotaId}`).catch(()=>[]);
-        
+        const v = await fetchAPI(`/clinico/vacunaciones/${currentMascotaId}`).catch(() => []);
+
         let vacunasHTML = '';
         if (v.length > 0) {
             vacunasHTML = `<div style="margin-top:1rem;"><b>Vacunas aplicadas:</b><br><ul style="margin:0; padding-left:1.5rem; color:#4b5563;">` +
@@ -1614,7 +1652,7 @@ const renderHistoriaTab = async () => {
                 <div><b>Observaciones:</b><br>${m.observaciones || 'Sin observaciones.'}</div>
                 ${vacunasHTML}
             </div>`;
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const toggleForm = (formId) => {
@@ -1692,7 +1730,7 @@ const hydrateCombos = async () => {
         const consultas = await fetchAPI(`/consultas/?mascota_id=${currentMascotaId}`);
         const opts = consultas.map(c => `<option value="${c.id}">Cons #${c.id} - ${new Date(c.fecha_consulta).toLocaleDateString()}</option>`).join('');
         document.querySelectorAll('.combo-consultas').forEach(el => el.innerHTML = opts);
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const submitClinico = async (e, endpoint) => {
@@ -1703,13 +1741,13 @@ const submitClinico = async (e, endpoint) => {
     if (data.producto_id) data.producto_id = parseInt(data.producto_id);
     if (data.cirujano_id) data.cirujano_id = parseInt(data.cirujano_id);
     data.mascota_id = currentMascotaId;
-    
+
     try {
         await fetchAPI(`/clinico/${endpoint}`, { method: 'POST', body: JSON.stringify(data) });
         showNotification('📜 Registro clínico guardado y vinculado a la consulta.', 'success');
         e.target.reset();
         e.target.style.display = 'none';
-        
+
         // Refrescar counts y tab actual
         actualizarCountsPet(currentMascotaId);
         const activeTab = document.querySelector('.pet-nav-item.active')?.dataset.tab;
@@ -1732,7 +1770,7 @@ const cargarVacunasPet = async (mascotaId) => {
         const tbody = document.getElementById('tblVac');
         if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay vacunas registradas.</td></tr>`;
         else tbody.innerHTML = data.map(v => `<tr><td>${new Date(v.fecha_aplicacion).toLocaleDateString()}</td><td>${v.vacuna_nombre}</td><td>${v.lote || '-'}</td></tr>`).join('');
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const cargarDesparasitacionesPet = async (mascotaId) => {
@@ -1744,7 +1782,7 @@ const cargarDesparasitacionesPet = async (mascotaId) => {
         const tbody = document.getElementById('tblDesp');
         if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#9ca3af;">No hay registros.</td></tr>`;
         else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_aplicacion).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.producto_nombre}</td><td>${d.dosis}</td></tr>`).join('');
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const cargarHospitalizacionesPet = async (mascotaId) => {
@@ -1759,10 +1797,10 @@ const cargarHospitalizacionesPet = async (mascotaId) => {
             <td>${new Date(d.fecha_ingreso).toLocaleString()}</td>
             <td>${d.fecha_egreso ? new Date(d.fecha_egreso).toLocaleString() : '<span style="color:#d97706; font-style:italic;">En curso</span>'}</td>
             <td>${d.motivo}</td>
-            <td><span class="badge" style="background:#f3f4f6; color:#374151;">${d.estado_paciente||'-'}</span></td>
-            <td>${d.jaula_nro||'-'}</td>
+            <td><span class="badge" style="background:#f3f4f6; color:#374151;">${d.estado_paciente || '-'}</span></td>
+            <td>${d.jaula_nro || '-'}</td>
         </tr>`).join('');
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const cargarCirugiasPet = async (mascotaId) => {
@@ -1773,8 +1811,8 @@ const cargarCirugiasPet = async (mascotaId) => {
         const data = await fetchAPI(`/clinico/cirugias/${mascotaId}`);
         const tbody = document.getElementById('tblCir');
         if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay cirugías registradas.</td></tr>`;
-        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_cirugia).toLocaleDateString()}</td><td>${d.tipo_procedimiento}</td><td>${d.riesgo_asa||'-'}</td></tr>`).join('');
-    } catch (e) {}
+        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_cirugia).toLocaleDateString()}</td><td>${d.tipo_procedimiento}</td><td>${d.riesgo_asa || '-'}</td></tr>`).join('');
+    } catch (e) { }
 };
 
 const cargarPruebasPet = async (mascotaId, filterType) => {
@@ -1784,14 +1822,14 @@ const cargarPruebasPet = async (mascotaId, filterType) => {
     try {
         const data = await fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`);
         const tbody = document.getElementById('tblPrueba');
-        
+
         let filtered = data;
         if (filterType === 'laboratorio') filtered = data.filter(d => d.tipo === 'Laboratorio');
         if (filterType === 'imagenes') filtered = data.filter(d => d.tipo !== 'Laboratorio');
 
         if (!filtered.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay estudios registrados.</td></tr>`;
         else tbody.innerHTML = filtered.map(d => `<tr><td>${new Date(d.fecha).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.resultado} ${d.archivo_url ? `<a href="${d.archivo_url}" target="_blank">[Ver Link]</a>` : ''}</td></tr>`).join('');
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const cargarRecetasPet = async (mascotaId) => {
@@ -1801,8 +1839,8 @@ const cargarRecetasPet = async (mascotaId) => {
         const consultas = await fetchAPI(`/consultas/?mascota_id=${mascotaId}`);
         let allRecetas = [];
         for (const c of consultas) {
-             const r = await fetchAPI(`/consultas/${c.id}/recetas`);
-             allRecetas = allRecetas.concat(r.map(x => ({ ...x, consulta_fecha: c.fecha_consulta })));
+            const r = await fetchAPI(`/consultas/${c.id}/recetas`);
+            allRecetas = allRecetas.concat(r.map(x => ({ ...x, consulta_fecha: c.fecha_consulta })));
         }
 
         if (allRecetas.length === 0) {
@@ -1831,22 +1869,24 @@ const cargarRecetasPet = async (mascotaId) => {
 
 const actualizarCountsPet = async (mascotaId) => {
     try {
-        const setTxt = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
-        
+        const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
         Promise.all([
-            fetchAPI(`/consultas/?mascota_id=${mascotaId}`).catch(()=>[]),
-            fetchAPI(`/clinico/vacunaciones/${mascotaId}`).catch(()=>[]),
-            fetchAPI(`/clinico/desparasitaciones/${mascotaId}`).catch(()=>[]),
-            fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`).catch(()=>[]),
-            fetchAPI(`/clinico/cirugias/${mascotaId}`).catch(()=>[]),
-            fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`).catch(()=>[])
-        ]).then(([cons, vac, desp, hosp, cir, pru]) => {
+            fetchAPI(`/consultas/?mascota_id=${mascotaId}`).catch(() => []),
+            fetchAPI(`/clinico/vacunaciones/${mascotaId}`).catch(() => []),
+            fetchAPI(`/clinico/desparasitaciones/${mascotaId}`).catch(() => []),
+            fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`).catch(() => []),
+            fetchAPI(`/clinico/cirugias/${mascotaId}`).catch(() => []),
+            fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`).catch(() => []),
+            fetchAPI(`/facturas/mascota/${mascotaId}`).catch(() => [])
+        ]).then(([cons, vac, desp, hosp, cir, pru, fac]) => {
             setTxt('count-consultas', cons?.length || 0);
             setTxt('count-vacunas', vac?.length || 0);
             setTxt('count-desparasitaciones', desp?.length || 0);
             setTxt('count-hosp', hosp?.length || 0);
             setTxt('count-proc', cir?.length || 0);
-            
+            setTxt('count-facturas', fac?.length || 0);
+
             const p = pru || [];
             setTxt('count-lab', p.filter(x => x.tipo === 'Laboratorio').length);
             setTxt('count-img', p.filter(x => x.tipo !== 'Laboratorio').length);
@@ -1854,13 +1894,13 @@ const actualizarCountsPet = async (mascotaId) => {
 
         setTxt('count-recetas', '-');
         setTxt('count-ordenes', '-');
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const initSearchableSelect = (input, options, onSelect) => {
     const container = input.parentElement;
     container.classList.add('searchable-select');
-    
+
     let dropdown = container.querySelector('.searchable-dropdown');
     if (!dropdown) {
         dropdown = document.createElement('div');
@@ -1874,7 +1914,7 @@ const initSearchableSelect = (input, options, onSelect) => {
             <div class="searchable-option" data-value="${o.value}">${o.label}</div>
         `).join('');
         dropdown.style.display = filtered.length ? 'block' : 'none';
-        
+
         dropdown.querySelectorAll('.searchable-option').forEach(opt => {
             opt.onclick = () => {
                 input.value = opt.textContent;
@@ -1887,7 +1927,7 @@ const initSearchableSelect = (input, options, onSelect) => {
 
     input.onfocus = () => renderOptions(input.value);
     input.oninput = () => renderOptions(input.value);
-    
+
     document.addEventListener('click', (e) => {
         if (!container.contains(e.target)) dropdown.style.display = 'none';
     });
@@ -2140,7 +2180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 subtext: `Cédula: ${p.cedula}`
             }));
             ownerSelectInstance?.setOptions(ownerOptions);
-        } catch (e) {}
+        } catch (e) { }
         openModal('modalMascota');
     });
     document.getElementById('btnRegistrarConsulta')?.addEventListener('click', () => {
@@ -2198,7 +2238,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cargarVeterinarios();
     cargarBadgeOrdenes();
-    
+
     // Global modal close handlers
     document.addEventListener('click', (e) => {
         // Close via 'X' or 'Cancelar'
@@ -2217,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModal(e.target.id);
         }
     });
-    
+
     // Profile Form Handlers
     const formPerfil = document.getElementById('formPerfilPassword');
     if (formPerfil) {
@@ -2245,14 +2285,14 @@ document.addEventListener('DOMContentLoaded', () => {
 const cargarVeterinarios = async () => {
     try {
         const usuarios = await fetchAPI('/usuarios/veterinarios');
-        const opts1 = '<option value="">Seleccionar médico...</option>' + 
+        const opts1 = '<option value="">Seleccionar médico...</option>' +
             usuarios.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
-        const opts2 = '<option value="">Seleccionar médico...</option>' + 
+        const opts2 = '<option value="">Seleccionar médico...</option>' +
             usuarios.map(u => `<option value="${u.username}">${u.username} (${u.role})</option>`).join('');
-            
+
         const scita = document.getElementById('citaVeterinarioId');
         if (scita) scita.innerHTML = opts1;
-        
+
         const scons = document.getElementById('consultaVeterinario');
         if (scons) scons.innerHTML = opts2;
     } catch (e) {
@@ -2266,7 +2306,7 @@ const loadPerfil = async () => {
         const elInitial = document.getElementById('profileInitial');
         const elUser = document.getElementById('profileUsername');
         const elRole = document.getElementById('profileUserRole');
-        
+
         if (elInitial) elInitial.textContent = user.username ? user.username.charAt(0).toUpperCase() : 'U';
         if (elUser) elUser.textContent = user.username || 'Usuario';
         if (elRole) elRole.textContent = user.role === 'admin' ? 'Administrador' : user.role;
@@ -2287,7 +2327,7 @@ const cargarBadgeOrdenes = async () => {
         const misOrdenes = safeCitas.filter(c => c && c.estado === 'pendiente');
         badge.textContent = misOrdenes.length;
         document.getElementById('kpiOrdenesPendientes').textContent = misOrdenes.length;
-        
+
         const listContainer = document.getElementById('ordenesMedicoList');
         if (misOrdenes.length === 0) {
             listContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No tiene órdenes pendientes.</p>';
@@ -2305,16 +2345,16 @@ const cargarBadgeOrdenes = async () => {
                 </div>
             `).join('');
         }
-    } catch (e) {}
+    } catch (e) { }
 };
 
 const mostrarResumenDia = (dateStr, allEvents) => {
     const resumenFecha = document.getElementById('resumenDiaFecha');
     const resumenCuerpo = document.getElementById('resumenDiaCuerpo');
     if (!resumenFecha || !resumenCuerpo) return;
-    
+
     resumenFecha.textContent = new Date(dateStr + 'T00:00:00').toLocaleDateString();
-    
+
     const safeAllEvents = Array.isArray(allEvents) ? allEvents : [];
     const eventosDia = safeAllEvents.filter(ev => {
         if (!ev) return false;
@@ -2322,7 +2362,7 @@ const mostrarResumenDia = (dateStr, allEvents) => {
         const evStart = ev.startStr || (ev.start ? ev.start.toISOString() : '');
         return evStart.startsWith(dateStr);
     });
-    
+
     if (eventosDia.length === 0) {
         resumenCuerpo.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 2rem;">No hubo actividad este día.</p>';
     } else {
@@ -2384,3 +2424,281 @@ window.verDetallesDesdeAgenda = (mascotaId) => {
 
 /* --- PET PROFILE UI --- */
 // Logic for horizontal scroll has been removed in favor of a vertical sidebar as per user feedback
+
+// ============ FACTURACIÓN LOGIC ============
+window.facturarConsulta = async (consultaId) => {
+    // Si ya estamos cargando algo, evitamos duplicidad
+    if (window.loadingFactura) return;
+    window.loadingFactura = true;
+
+    document.getElementById('facturaConsultaId').value = consultaId;
+    document.getElementById('facturaConsultaIdTxt').textContent = `(Consulta #${consultaId})`;
+    
+    const itemsList = document.getElementById('facturaItemsList');
+    itemsList.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 1rem;">Calculando items y validando precios...</p>';
+    
+    try {
+        // Primero intentamos abrir el modal para que el usuario vea que algo ocurre
+        openModal('modalFactura');
+
+        const dataContext = await fetchAPI(`/facturas/pendientes/${consultaId}`);
+        window.loadingFactura = false;
+        
+        if (!dataContext || !dataContext.items || dataContext.items.length === 0) {
+            itemsList.innerHTML = `<div style="text-align:center; padding: 2.5rem; color: #6b7280;">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">📝</div>
+                No hay cargos pendientes para facturar en esta consulta.<br>
+                <small>Agregue servicios o medicamentos en el expediente clínico primero.</small>
+            </div>`;
+            document.getElementById('facturaTotalCalculado').textContent = '0.00';
+            return;
+        }
+
+        // Auto-populate context from backend response
+        document.getElementById('facturaPropietarioId').value = dataContext.propietario_id;
+        document.getElementById('facturaMascotaNombre').textContent = dataContext.mascota_nombre;
+        document.getElementById('facturaPropietarioNombre').textContent = dataContext.propietario_nombre;
+
+        let total = 0;
+        let html = '<table class="data-table" style="width:100%;"><thead><tr><th>Detalle</th><th>Cant.</th><th>P. Unitario</th><th>Subtotal</th></tr></thead><tbody>';
+        
+        dataContext.items.forEach(item => {
+            const rowTotal = item.cantidad * item.precio_unitario;
+            total += rowTotal;
+            html += `
+                <tr>
+                    <td>${item.descripcion}</td>
+                    <td>${item.cantidad}</td>
+                    <td>$${item.precio_unitario.toFixed(2)}</td>
+                    <td style="font-weight:bold;">$${rowTotal.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        itemsList.innerHTML = html;
+        document.getElementById('facturaTotalCalculado').textContent = total.toFixed(2);
+        
+        // Save items data globally so the submit handler can use it
+        window.currentFacturaItems = dataContext.items.map(p => ({
+            servicio_id: p.id_interno,
+            producto_id: p.producto_id || (p.tipo === 'SERVICIO' ? p.referencia_id : null),
+            descripcion: p.descripcion,
+            cantidad: p.cantidad,
+            precio_unitario: p.precio_unitario,
+            subtotal: p.subtotal
+        }));
+        window.currentFacturaTotal = total;
+
+        // openModal('modalFactura'); // Already opened above
+    } catch (e) {
+        window.loadingFactura = false;
+        alert("Error cargando detalles para facturar: " + e.message);
+    }
+};
+
+document.getElementById('formFactura')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!window.currentFacturaItems || window.currentFacturaItems.length === 0) {
+        alert("No hay items para facturar.");
+        return;
+    }
+    
+    // Total a pagar segun lo calculado
+    const totalPagar = window.currentFacturaTotal;
+
+    // Validar el body de acuerdo a FacturaCreate del router
+    const data = {
+        propietario_id: parseInt(document.getElementById('facturaPropietarioId').value),
+        consulta_id: parseInt(document.getElementById('facturaConsultaId').value),
+        metodo_pago: document.getElementById('facturaMetodoPago').value,
+        descuento: 0.0,
+        impuesto: 0.0,
+        total_pagado: totalPagar,
+        es_presupuesto: false,
+        detalles: window.currentFacturaItems.map(item => ({
+             descripcion: item.descripcion,
+             cantidad: item.cantidad,
+             precio_unitario: item.precio_unitario,
+             producto_id: item.producto_id,
+             servicio_id: item.servicio_id
+        }))
+    };
+
+    try {
+        const result = await fetchAPI('/facturas/', { method: 'POST', body: JSON.stringify(data) });
+        
+        showNotification('Factura generada con éxito.', 'success');
+        closeModal('modalFactura');
+        
+        // Refresh Consultation UI
+        if (currentMascotaId) {
+            actualizarCountsPet(currentMascotaId);
+            const activeTab = document.querySelector('.pet-nav-item.active')?.dataset.tab;
+            if (activeTab === 'consultas') {
+                cargarConsultas(currentMascotaId);
+            }
+        }
+        
+        setTimeout(() => {
+            if (confirm("¿Desea descargar el comprobante/PDF de la factura ahora?")) {
+                exportarFacturaPDF(result.id);
+            }
+        }, 500);
+        
+    } catch (err) {
+        alert('Error emitiendo factura: ' + err.message);
+    }
+});
+
+
+window.exportarFacturaPDF = async (facturaId) => {
+    try {
+        const token = localStorage.getItem('token');
+        showNotification('Generando PDF...', 'info');
+        const response = await fetch(`${API_BASE_URL}/facturas/${facturaId}/pdf`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) throw new Error("Error al comunicarse con el servidor");
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Factura_${facturaId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (e) {
+        alert('Hubo un problema descargando el PDF: ' + e.message);
+    }
+};
+
+window.abrirPreviewFactura = async (facturaId) => {
+    try {
+        const factura = await fetchAPI(`/facturas/${facturaId}`);
+        
+        document.getElementById('previewFacturaNumero').textContent = `(#${factura.numero_factura || factura.id})`;
+        document.getElementById('previewFacturaFecha').textContent = new Date(factura.fecha_emision).toLocaleDateString();
+        document.getElementById('previewFacturaEstado').textContent = factura.estado;
+        document.getElementById('previewFacturaMetodo').textContent = factura.metodo_pago;
+        document.getElementById('previewFacturaConsulta').textContent = factura.consulta_id ? `Consulta #${factura.consulta_id}` : 'General';
+        
+        const tbody = document.getElementById('previewFacturaItems');
+        let totalC = 0;
+        tbody.innerHTML = factura.detalles.map(d => {
+            totalC += d.subtotal;
+            return `
+            <tr>
+                <td>${d.descripcion || 'Ítem Médico'}</td>
+                <td>${d.cantidad}</td>
+                <td>$${d.precio_unitario.toFixed(2)}</td>
+                <td style="text-align: right; font-weight: 500;">$${d.subtotal.toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+        
+        document.getElementById('previewFacturaSubtotal').textContent = `$${factura.subtotal.toFixed(2)}`;
+        document.getElementById('previewFacturaTotal').textContent = `$${factura.total.toFixed(2)}`;
+        
+        const btnD = document.getElementById('btnDescargarPreviewFactura');
+        btnD.onclick = () => exportarFacturaPDF(factura.id);
+
+        openModal('modalPreviewFactura');
+    } catch (e) {
+        alert("Error cargando la vista previa: " + e.message);
+    }
+};
+
+const cargarHistorialFacturas = async () => {
+    const tableBody = document.getElementById('facturacionTableBody');
+    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Cargando...</td></tr>';
+    try {
+        const queryParams = new URLSearchParams();
+        const searchVal = document.getElementById('searchFactura')?.value;
+        const estadoFilter = document.getElementById('filterEstadoFactura')?.value;
+        
+        if (searchVal) queryParams.append('search', searchVal);
+        if (estadoFilter) queryParams.append('estado', estadoFilter);
+        
+        const result = await fetchAPI(`/facturas/?${queryParams.toString()}`);
+        if (!result || result.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No se encontraron facturas.</td></tr>';
+            return;
+        }
+
+        tableBody.innerHTML = result.map(f => {
+            const total = f.total !== undefined ? f.total : (f.total_pagado || 0);
+            const numero = f.numero_factura || f.id;
+            const fecha = f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString() : '-';
+            const estado = f.estado || 'PENDIENTE';
+            const metodo = f.metodo_pago || '-';
+            
+            return `
+            <tr>
+                <td><b>#${numero}</b></td>
+                <td>${fecha}</td>
+                <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background: ${estado==='PAGADA'?'#d1fae5':(estado==='ANULADA'?'#fee2e2':'#fef3c7')}; color: ${estado==='PAGADA'?'#065f46':(estado==='ANULADA'?'#991b1b':'#92400e')};">${estado}</span></td>
+                <td><b style="color: #1e293b;">$${parseFloat(total).toFixed(2)}</b></td>
+                <td><span style="font-size: 0.85rem; color: #64748b;">${metodo}</span></td>
+                <td style="text-align: right;">
+                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #6366f1; border: none; border-radius: 6px;">📄 Ver PDF</button>
+                        ${f.consulta_id ? `<button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${f.consulta_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Consulta</button>` : ''}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        console.error("Error cargando historial de facturacion:", e);
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error loading.</td></tr>';
+    }
+};
+
+const cargarFacturasMascota = async (mascotaId) => {
+    const tableBody = document.getElementById('petFacturasTableBody');
+    if (!tableBody) return;
+
+    try {
+        const facturas = await fetchAPI(`/facturas/mascota/${mascotaId}`);
+        if (!facturas || facturas.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: #9ca3af;">No hay facturas registradas para esta mascota.</td></tr>';
+            return;
+        }
+
+        tableBody.innerHTML = facturas.map(f => {
+            const total = f.total !== undefined ? f.total : (f.total_pagado || 0);
+            const numero = f.numero_factura || f.id;
+            const fecha = f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString() : '-';
+            const estado = f.estado || 'PENDIENTE';
+            
+            return `
+            <tr>
+                <td><b>#${numero}</b></td>
+                <td>${fecha}</td>
+                <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background: ${estado==='PAGADA'?'#d1fae5':(estado==='ANULADA'?'#fee2e2':'#fef3c7')}; color: ${estado==='PAGADA'?'#065f46':(estado==='ANULADA'?'#991b1b':'#92400e')};">${estado}</span></td>
+                <td><b>$${parseFloat(total).toFixed(2)}</b></td>
+                <td>
+                    <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #6366f1; border: none;">📄 PDF</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        console.error("Error cargando facturas de mascota:", e);
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Error cargando datos.</td></tr>';
+    }
+};
+
+document.getElementById('searchFactura')?.addEventListener('input', (e) => {
+    clearTimeout(window.searchFacturaTimeout);
+    window.searchFacturaTimeout = setTimeout(() => cargarHistorialFacturas(), 500);
+});
+
+document.getElementById('filterEstadoFactura')?.addEventListener('change', cargarHistorialFacturas);
+
+document.querySelector('.nav-link[data-target="sec-facturacion"]')?.addEventListener('click', () => {
+    cargarHistorialFacturas();
+});
