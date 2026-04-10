@@ -1525,7 +1525,7 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
         abrirFormularioConsulta();
     };
 
-    setTimeout(updatePetNavArrows, 500);
+    // Removed non-existent setTimeout(updatePetNavArrows, 500);
 };
 
 const switchPetTab = (tabName) => {

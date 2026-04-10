@@ -98,6 +98,16 @@ def obtener_items_pendientes(
     """Obtiene todos los items pendientes de cobro de una consulta"""
     return FacturacionService.obtener_items_pendientes_consulta(db, consulta_id)
 
+@router.get("/mascota/{mascota_id}", response_model=List[FacturaResponse])
+def obtener_facturas_mascota(
+    mascota_id: int,
+    db: Session = Depends(get_db)
+):
+    """Obtiene facturas asociadas a una mascota a través de sus consultas"""
+    from app.models.models import Consulta, Factura
+    facturas = db.query(Factura).join(Consulta, Factura.consulta_id == Consulta.id).filter(Consulta.mascota_id == mascota_id).all()
+    return facturas
+
 
 @router.get("/{factura_id}/pdf")
 def descargar_factura_pdf(
