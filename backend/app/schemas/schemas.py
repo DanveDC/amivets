@@ -101,7 +101,7 @@ class MascotaTransfer(BaseModel):
 
 # ========== CONSULTA SCHEMAS ==========
 class ConsultaBase(BaseModel):
-    motivo: str = Field(..., min_length=1, max_length=255)
+    motivo: Optional[str] = None
     sintomas: Optional[str] = None
     diagnostico: Optional[str] = None
     tratamiento: Optional[str] = None
@@ -149,14 +149,14 @@ class ConsultaUpdate(BaseModel):
 
 class ServicioConsultaBase(BaseModel):
     consulta_id: int
-    tipo_servicio: str = Field(..., max_length=50) # VACUNACION, CIRUGIA, HOSPITALIZACION, LABORATORIO, INSUMO, ESTETICA
+    tipo_servicio: Optional[str] = Field(None, max_length=50) 
     referencia_id: Optional[int] = None
     nombre_servicio: Optional[str] = Field(None, max_length=255)
-    cantidad: float = Field(default=1.0, ge=0)
-    precio_unitario: float = Field(default=0.0, ge=0)
-    estado: str = Field(default="Pendiente", max_length=50)
+    cantidad: Optional[float] = Field(default=1.0)
+    precio_unitario: Optional[float] = Field(default=0.0)
+    estado: Optional[str] = Field(default="Pendiente", max_length=50)
     detalles_clinicos: Optional[str] = None
-    is_deleted: bool = False
+    is_deleted: Optional[bool] = False
 
 class ServicioConsultaCreate(ServicioConsultaBase):
     pass
@@ -334,15 +334,15 @@ class InventarioResponse(InventarioBase):
 # ========== FACTURA SCHEMAS ==========
 class DetalleFacturaBase(BaseModel):
     producto_id: Optional[int] = None
-    cantidad: int = Field(..., ge=0)
-    precio_unitario: float = Field(..., ge=0)
+    cantidad: Optional[int] = Field(default=0)
+    precio_unitario: Optional[float] = Field(default=0.0)
     descripcion: Optional[str] = Field(None, max_length=255)
     
-    @field_validator('precio_unitario')
+    @field_validator('precio_unitario', mode='before')
     @classmethod
     def validar_precio_positivo(cls, v):
-        if v < 0:
-            raise ValueError('El precio no puede ser negativo')
+        if v is None:
+            return 0.0
         return v
 
 
@@ -361,12 +361,12 @@ class DetalleFacturaResponse(DetalleFacturaBase):
 
 class FacturaBase(BaseModel):
     propietario_id: int = Field(..., gt=0)
-    es_presupuesto: bool = False
-    descuento: float = Field(default=0.0, ge=0)
-    impuesto: float = Field(default=0.0, ge=0)
+    es_presupuesto: Optional[bool] = False
+    descuento: Optional[float] = Field(default=0.0)
+    impuesto: Optional[float] = Field(default=0.0)
     metodo_pago: Optional[str] = Field(None, max_length=50)
-    total_pagado: float = Field(default=0.0, ge=0)
-    saldo_pendiente: float = Field(default=0.0, ge=0)
+    total_pagado: Optional[float] = Field(default=0.0)
+    saldo_pendiente: Optional[float] = Field(default=0.0)
     observaciones: Optional[str] = None
     consulta_id: Optional[int] = None
 
@@ -390,12 +390,12 @@ class FacturaUpdate(BaseModel):
 
 class FacturaResponse(FacturaBase):
     id: int
-    numero_factura: str
-    fecha_emision: datetime
-    es_presupuesto: bool
-    subtotal: float
-    total: float
-    estado: str
+    numero_factura: Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    es_presupuesto: Optional[bool] = False
+    subtotal: Optional[float] = 0.0
+    total: Optional[float] = 0.0
+    estado: Optional[str] = "PENDIENTE"
     detalles: List[DetalleFacturaResponse] = []
     consulta_id: Optional[int] = None
     
