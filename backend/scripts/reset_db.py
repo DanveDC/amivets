@@ -12,10 +12,14 @@ def reset_database():
     print("Iniciando limpieza de base de datos...")
     db = SessionLocal()
     try:
-        # Desactivar temporalmente las restricciones de claves foráneas para truncar tablas
-        # Esto es específico para PostgreSQL
-        db.execute(text("TRUNCATE TABLE usuarios, propietarios, mascotas, citas, consultas, recetas, detalles_receta, pruebas_complementarias, inventario, facturas, detalles_factura, historia_propiedad, movimientos_inventario RESTART IDENTITY CASCADE;"))
-        
+        # Borrar tabla de migraciones alembic para evitar conflictos continuos
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE;"))
+            
+        print("Eliminando todas las tablas...")
+        Base.metadata.drop_all(bind=engine)
+        print("Recreando estructura de base de datos desde los modelos...")
+        Base.metadata.create_all(bind=engine)
         # Como TRUNCATE CASCADE borró todo, necesitamos recrear al menos el admin inicial
         from app.core.security import get_password_hash
         from app.models.models import Usuario
