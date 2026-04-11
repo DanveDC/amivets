@@ -45,5 +45,5 @@ USER vetuser
 
 EXPOSE 8000
 
-# Comando de ejecución
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Comando de ejecución con reseteo y seed
+CMD ["sh", "-c", "python scripts/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
