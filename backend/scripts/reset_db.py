@@ -14,7 +14,10 @@ def reset_database():
     try:
         # Borrar tabla de migraciones alembic para evitar conflictos continuos
         with engine.begin() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE;"))
+            if engine.dialect.name == "sqlite":
+                conn.execute(text("DROP TABLE IF EXISTS alembic_version;"))
+            else:
+                conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE;"))
             
         print("Eliminando todas las tablas...")
         Base.metadata.drop_all(bind=engine)

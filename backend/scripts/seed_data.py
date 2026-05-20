@@ -20,10 +20,10 @@ def seed_data():
         # Check if full historical data already exists
         consultas_count = db.query(Consulta).count()
         if consultas_count > 200:
-            print(f"ℹ️ La base de datos ya contiene {consultas_count} consultas. Omitiendo seeding automático.")
+            print(f"[i] La base de datos ya contiene {consultas_count} consultas. Omitiendo seeding automático.")
             return
         
-        print(f"🚀 Iniciando carga masiva de datos profesionales (actual: {consultas_count} consultas)...")
+        print(f"[+] Iniciando carga masiva de datos profesionales (actual: {consultas_count} consultas)...")
         # 1. Médicos (10 usuarios)
         medicos = []
         nombres_medicos = ["Pérez", "García", "Rodríguez", "Martínez", "López", "Sánchez", "González", "Díaz", "Fernández", "Moreno"]
@@ -46,7 +46,7 @@ def seed_data():
         db.commit()
         
         # 2. Inventario Extendido (40+ items)
-        print("📦 Poblando inventario...")
+        print("[+] Poblando inventario...")
         categorias = {
             "Antibiótico": [("Amoxicilina 500mg", 15.0), ("Enrofloxacina 100mg", 18.5), ("Cefalexina 250mg", 14.0), ("Doxiciclina 100mg", 22.0)],
             "Antiinflamatorio": [("Meloxicam 2.5mg", 12.5), ("Carprofeno 75mg", 25.0), ("Prednisolona 10mg", 10.0), ("Firocoxib 57mg", 45.0)],
@@ -90,7 +90,7 @@ def seed_data():
         db.commit()
 
         # 3. Propietarios (40)
-        print("👥 Creando propietarios...")
+        print("[+] Creando propietarios...")
         nombres = ["Juan", "María", "Carlos", "Ana", "Luis", "Elena", "Pedro", "Laura", "Jorge", "Sofía", "Miguel", "Isabel", "Diego", "Carmen", "Andrés", "Lucía", "Roberto", "Mónica", "Fernando", "Patricia"]
         apellidos = ["Pérez", "González", "Rodríguez", "Martínez", "Sánchez", "López", "Gómez", "Díaz", "Hernández", "Castro", "Ruiz", "Álvarez", "Jiménez", "Moreno", "Muñoz", "Romero", "Alonso", "Gutiérrez", "Navarro", "Torres"]
         
@@ -113,7 +113,7 @@ def seed_data():
         db.flush()
 
         # 4. Mascotas (60)
-        print("🐾 Creando pacientes (mascotas)...")
+        print("[+] Creando pacientes (mascotas)...")
         razas_perro = ["Golden Retriever", "Pastor Alemán", "Poodle", "Beagle", "Labrador", "Chihuahua", "Boxer", "Rottweiler", "Husky", "Cocker Spaniel", "Pug", "Dachshund"]
         razas_gato = ["Siamés", "Persa", "Mestizo", "Bengala", "Ragdoll", "Maine Coon"]
         nombres_mascotas = ["Firulais", "Luna", "Rocky", "Bella", "Simba", "Toby", "Mia", "Max", "Coco", "Daisy", "Bruno", "Nala", "Cooper", "Molly", "Baco", "Zeus", "Thor", "Kiwi", "Lola", "Rex", "Maya", "Pipo", "Tito", "Nina"]
@@ -147,7 +147,7 @@ def seed_data():
         db.commit()
 
         # 5. Carga Histórica de Consultas (250 consultas en el último año)
-        print("🩺 Generando historial clínico denso (último año)...")
+        print("[+] Generando historial clínico denso (último año)...")
         motivos = ["Chequeo General", "Vacunación", "Vómitos y diarrea", "Control post-op", "Problemas de piel", "Cojera", "Fiebre", "Limpieza dental", "Accidente doméstico", "Pérdida de apetito"]
         diagnosticos = ["Paciente Sano", "Dermatitis alérgica", "Gastroenteritis bacteriana", "Fractura por trauma", "Alergia alimentaria", "Otitis externa", "Parásitos intestinales", "Gingivitis leve", "Deshidratación", "Insuficiencia renal leve"]
         
@@ -275,11 +275,11 @@ def seed_data():
                 print(f"   ... {c_idx} consultas generadas")
 
         db.commit()
-        print("\n✅ SEEDING COMPLETADO CON ÉXITO")
+        print("\n[OK] SEEDING COMPLETADO CON ÉXITO")
         
     except Exception as e:
         db.rollback()
-        print(f"❌ Error durante el seeding: {e}")
+        print(f"[ERROR] Error durante el seeding: {e}")
         import traceback
         traceback.print_exc()
     finally:

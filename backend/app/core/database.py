@@ -9,13 +9,18 @@ if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
 # Crear el motor de base de datos
-engine = create_engine(
-    database_url,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-    echo=settings.DEBUG
-)
+engine_kwargs = {
+    "pool_pre_ping": True,
+    "echo": settings.DEBUG
+}
+
+if database_url and database_url.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
+
+engine = create_engine(database_url, **engine_kwargs)
 
 # Crear la sesión local
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

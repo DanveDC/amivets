@@ -91,15 +91,20 @@ class MascotaService:
             raise HTTPException(status_code=404, detail="Mascota no encontrada")
             
         propietario_anterior_id = mascota.propietario_id
-        mascota.propietario_id = nuevo_propietario_id
-        
-        # Actualizar código de historia con la nueva cédula?
-        # El usuario pidió: "que el identificador unico sea la cedula del propietario + id"
-        # Si cambia de dueño, el ID único cambia.
+        propietario_anterior = db.query(Propietario).filter(Propietario.id == propietario_anterior_id).first()
         nuevo_propietario = db.query(Propietario).filter(Propietario.id == nuevo_propietario_id).first()
         if not nuevo_propietario:
             raise HTTPException(status_code=404, detail="Nuevo propietario no encontrado")
             
+        # Actualizar el nombre de la mascota con el apellido del nuevo propietario
+        nombre_base = mascota.nombre.split(' ')[0]
+        if propietario_anterior:
+            apellido_ant = propietario_anterior.apellido
+            if mascota.nombre.endswith(apellido_ant):
+                nombre_base = mascota.nombre[:-len(apellido_ant)].strip()
+        
+        mascota.nombre = f"{nombre_base} {nuevo_propietario.apellido}"
+        mascota.propietario_id = nuevo_propietario_id
         mascota.codigo_historia = f"{nuevo_propietario.cedula}-{mascota.id}"
         
         historia = HistoriaPropiedad(

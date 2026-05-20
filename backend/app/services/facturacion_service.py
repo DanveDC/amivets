@@ -57,25 +57,34 @@ class FacturacionService:
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto {detalle_data.producto_id} no encontrado")
                     
-                    if producto.stock_actual < detalle_data.cantidad:
-                        raise HTTPException(
-                            status_code=400, 
-                            detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock_actual}"
+                    # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
+                    ya_descontado = False
+                    servicio_id = getattr(detalle_data, 'servicio_id', None)
+                    if servicio_id:
+                        serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
+                        if serv and serv.estado == "Aplicado":
+                            ya_descontado = True
+                    
+                    if not ya_descontado:
+                        if producto.stock_actual < detalle_data.cantidad:
+                            raise HTTPException(
+                                status_code=400, 
+                                detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock_actual}"
+                            )
+                        
+                        # 1. Descontar del inventario
+                        producto.stock_actual -= detalle_data.cantidad
+                        
+                        # 2. Preparar Movimiento de Trazabilidad
+                        movimiento = MovimientoInventario(
+                            producto_id=producto.id,
+                            tipo_movimiento="SALIDA",
+                            cantidad=-detalle_data.cantidad,
+                            costo_unitario=producto.precio_unitario, # Kardex usa costo
+                            origen_destino=f"VENTA_{numero_factura}",
+                            usuario_responsable_id=usuario_id
                         )
-                    
-                    # 1. Descontar del inventario
-                    producto.stock_actual -= detalle_data.cantidad
-                    
-                    # 2. Preparar Movimiento de Trazabilidad
-                    movimiento = MovimientoInventario(
-                        producto_id=producto.id,
-                        tipo_movimiento="SALIDA",
-                        cantidad=-detalle_data.cantidad,
-                        costo_unitario=producto.precio_unitario, # Kardex usa costo
-                        origen_destino=f"VENTA_{numero_factura}",
-                        usuario_responsable_id=usuario_id
-                    )
-                    movimientos.append(movimiento)
+                        movimientos.append(movimiento)
                     
                     # Si no se pasó precio, usar el del maestro
                     if precio is None or precio == 0:
@@ -270,22 +279,30 @@ class FacturacionService:
             if detalle.producto_id:
                 producto = db.query(Inventario).filter(Inventario.id == detalle.producto_id).with_for_update().first() # ROW-LOCKING PARA CONCURRENCIA
                 
-                if producto.stock_actual < detalle.cantidad:
-                    db.rollback()
-                    raise HTTPException(status_code=400, detail=f"Stock insuficiente para el producto {producto.nombre}")
+                # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
+                ya_descontado = False
+                if detalle.servicio_id:
+                    serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == detalle.servicio_id).first()
+                    if serv and serv.estado == "Aplicado":
+                        ya_descontado = True
                 
-                # 1. Reducir stock base
-                producto.stock_actual -= detalle.cantidad
-                
-                # 2. Rastrear Movimiento
-                nuevo_movimiento = MovimientoInventario(
-                    producto_id=producto.id,
-                    tipo_movimiento="SALIDA",
-                    cantidad=-detalle.cantidad,
-                    costo_unitario=producto.precio_unitario,
-                    origen_destino=f"VENTA_FACTURA_{factura.numero_factura}",
-                    usuario_responsable_id=usuario_id
-                )
+                if not ya_descontado:
+                    if producto.stock_actual < detalle.cantidad:
+                        db.rollback()
+                        raise HTTPException(status_code=400, detail=f"Stock insuficiente para el producto {producto.nombre}")
+                    
+                    # 1. Reducir stock base
+                    producto.stock_actual -= detalle.cantidad
+                    
+                    # 2. Rastrear Movimiento
+                    nuevo_movimiento = MovimientoInventario(
+                        producto_id=producto.id,
+                        tipo_movimiento="SALIDA",
+                        cantidad=-detalle.cantidad,
+                        costo_unitario=producto.precio_unitario,
+                        origen_destino=f"VENTA_FACTURA_{factura.numero_factura}",
+                        usuario_responsable_id=usuario_id
+                    )
                 db.add(nuevo_movimiento)
                 
         db.commit()
@@ -316,14 +333,30 @@ class FacturacionService:
         # 2. Servicios
         for s in consulta.servicios:
             if not s.facturado and not s.is_deleted:
+                prod_id = None
+                if s.tipo_servicio == 'INSUMO':
+                    prod_id = s.referencia_id
+                elif s.tipo_servicio == 'VACUNACION':
+                    vac = db.query(Vacunacion).filter(Vacunacion.id == s.referencia_id).first()
+                    if vac:
+                        prod_id = vac.vacuna_id
+                    else:
+                        prod_id = s.referencia_id
+                elif s.tipo_servicio == 'DESPARASITACION':
+                    desp = db.query(Desparasitacion).filter(Desparasitacion.id == s.referencia_id).first()
+                    if desp:
+                        prod_id = desp.producto_id
+                    else:
+                        prod_id = s.referencia_id
+                        
                 items.append({
-                "descripcion": s.nombre_servicio or s.tipo_servicio,
-                "cantidad": s.cantidad or 1.0,
-                "precio_unitario": s.precio_unitario or 0.0,
-                "subtotal": (s.cantidad or 1.0) * (s.precio_unitario or 0.0),
-                "tipo": "SERVICIO",
-                "id_interno": s.id,
-                "producto_id": s.referencia_id if (s.tipo_servicio or '') in ['INSUMO', 'VACUNACION'] else None
+                    "descripcion": s.nombre_servicio or s.tipo_servicio,
+                    "cantidad": s.cantidad or 1.0,
+                    "precio_unitario": s.precio_unitario or 0.0,
+                    "subtotal": (s.cantidad or 1.0) * (s.precio_unitario or 0.0),
+                    "tipo": "SERVICIO",
+                    "id_interno": s.id,
+                    "producto_id": prod_id
                 })
         
         # 3. Pruebas

@@ -8,7 +8,7 @@ from app.schemas.schemas import (
     RecetaCreate, RecetaResponse,
     ServicioConsultaCreate, ServicioConsultaUpdate, ServicioConsultaResponse
 )
-from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario
+from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion
 from app.services.consulta_service import ConsultaService
 
 router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
@@ -184,7 +184,16 @@ def actualizar_servicio_consulta(
     
     # Manejo de Inventario Progresivo
     if servicio.tipo_servicio in ["INSUMO", "VACUNACION"] and servicio.referencia_id:
-        inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
+        inv = None
+        if servicio.tipo_servicio == "VACUNACION":
+            vac = db.query(Vacunacion).filter(Vacunacion.id == servicio.referencia_id).first()
+            if vac:
+                inv = db.query(Inventario).filter(Inventario.id == vac.vacuna_id).first()
+            else:
+                inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
+        else:
+            inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
+            
         if inv:
             # Si cambia de PENDIENTE a APLICADO
             if old_estado != "Aplicado" and new_estado == "Aplicado":
@@ -225,7 +234,16 @@ def eliminar_servicio_consulta(
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
     if servicio.estado == "Aplicado" and servicio.tipo_servicio in ["INSUMO", "VACUNACION"] and servicio.referencia_id:
-        inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
+        inv = None
+        if servicio.tipo_servicio == "VACUNACION":
+            vac = db.query(Vacunacion).filter(Vacunacion.id == servicio.referencia_id).first()
+            if vac:
+                inv = db.query(Inventario).filter(Inventario.id == vac.vacuna_id).first()
+            else:
+                inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
+        else:
+            inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
+            
         if inv:
             inv.stock_actual += servicio.cantidad
             db.add(MovimientoInventario(

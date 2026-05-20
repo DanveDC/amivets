@@ -631,6 +631,39 @@ const loadWeightChart = async () => {
         alert('Error al cargar gráfica: ' + error.message);
     }
 };
+let transferSelectInstance = null;
+const abrirTransferirMascota = async (id, nombre) => {
+    try {
+        const displayNombre = document.getElementById('transferNombreMascota');
+        if (displayNombre) displayNombre.textContent = nombre;
+
+        document.getElementById('transferNuevoPropietarioId').value = '';
+        document.getElementById('transferMotivo').value = '';
+
+        const propietarios = await fetchAPI('/propietarios/');
+        const activePropietarios = propietarios.filter(p => p.activo !== false);
+        const ownerOptions = activePropietarios.map(p => ({
+            value: p.id,
+            label: `${p.nombre} ${p.apellido}`,
+            subtext: `Cédula: ${p.cedula}`
+        }));
+
+        if (!transferSelectInstance) {
+            transferSelectInstance = createPrettySelect('transferPropietarioContainer',
+                ownerOptions,
+                'Buscar por cédula o nombre...',
+                (val) => { document.getElementById('transferNuevoPropietarioId').value = val; }
+            );
+        } else {
+            transferSelectInstance.setOptions(ownerOptions);
+            transferSelectInstance.setValue('', 'Buscar por cédula o nombre...');
+        }
+
+        openModal('modalTransferir');
+    } catch (error) {
+        alert("Error al cargar propietarios para la transferencia: " + error.message);
+    }
+};
 const handleTransferirSubmit = async (e) => {
     e.preventDefault();
     if (!currentMascotaId) return;
@@ -1513,11 +1546,13 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
 
     actualizarCountsPet(id);
 
-    // Bind Edit/Delete buttons
+    // Bind Edit/Delete/Transfer buttons
     const btnEdit = document.getElementById('btnEditarMascota');
     const btnDel = document.getElementById('btnEliminarMascota');
+    const btnTrans = document.getElementById('btnTransferirMascota');
     if (btnEdit) btnEdit.onclick = () => abrirEditarMascota(id);
     if (btnDel) btnDel.onclick = () => confirmEliminarMascota(id, nombre);
+    if (btnTrans) btnTrans.onclick = () => abrirTransferirMascota(id, nombre);
 
     const btnAction = document.getElementById('btnActionAdd');
     if (btnAction) btnAction.onclick = () => {
