@@ -32,3 +32,6 @@ httpx==0.26.0
 
 # Generación de PDF
 xhtml2pdf==0.2.11
+
+# Supabase — Sync Worker
+supabase>=2.3.0

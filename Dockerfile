@@ -34,16 +34,21 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY backend/ /app/
 COPY static/ /app/static/
 
+# Copiar el sync worker y el script de arranque
+COPY sync_worker.py /app/sync_worker.py
+COPY start.sh /app/start.sh
+
 # Variables de entorno para optimización
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000
 
 # Usuario no-root por seguridad
-RUN adduser --disabled-password --gecos "" vetuser
+RUN adduser --disabled-password --gecos "" vetuser \
+    && chmod +x /app/start.sh
 USER vetuser
 
 EXPOSE 8000
 
-# Comando de ejecución con reseteo y seed
-CMD ["sh", "-c", "python scripts/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Arranca uvicorn + sync_worker en paralelo via start.sh
+CMD ["/app/start.sh"]

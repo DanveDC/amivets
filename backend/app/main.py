@@ -7,7 +7,7 @@ import os
 import sys
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico
+from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin
 from app.models.models import Usuario
 from app.core import security
 from sqlalchemy.orm import Session
@@ -155,6 +155,7 @@ app.include_router(usuarios.router)
 app.include_router(hospitalizaciones.router)
 app.include_router(cirugias.router)
 app.include_router(clinico.router)
+app.include_router(supabase_admin.router)
 
 
 @app.get("/", response_class=HTMLResponse)

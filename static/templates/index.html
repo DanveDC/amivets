@@ -734,6 +734,13 @@
                         <span>Órdenes (Médico)</span>
                         <span class="badge" id="badgeOrdenesMedico">0</span>
                     </a>
+                    <a href="#" class="menu-item" data-target="sec-citas-web">
+                        <span class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
+                        </span>
+                        <span>Citas Web / QR</span>
+                        <span class="badge" id="badgeCitasQR">0</span>
+                    </a>
                     <a href="#" class="menu-item admin-only" data-target="sec-usuarios" style="display: none;">
                         <span class="icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -1305,6 +1312,182 @@
             </form>
         </div>
     </div>
+
+            <!-- Content Area: Citas Web / QR -->
+            <section id="sec-citas-web" class="content-area spa-section" style="display: none;">
+                <div class="content-header" style="margin-bottom: 1.5rem;">
+                    <h2>Citas Web / QR</h2>
+                </div>
+
+                <!-- Sub-tabs -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); padding-bottom: 0;">
+                    <button class="qr-tab-btn active" data-tab="tab-citas-qr"
+                        style="padding: 0.6rem 1.2rem; border: none; background: none; font-weight: 600; color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -2px; cursor: pointer;">
+                        Citas Recibidas
+                    </button>
+                    <button class="qr-tab-btn" data-tab="tab-horarios"
+                        style="padding: 0.6rem 1.2rem; border: none; background: none; font-weight: 500; color: var(--text-secondary); cursor: pointer;">
+                        Horarios
+                    </button>
+                    <button class="qr-tab-btn" data-tab="tab-vets-qr"
+                        style="padding: 0.6rem 1.2rem; border: none; background: none; font-weight: 500; color: var(--text-secondary); cursor: pointer;">
+                        Veterinarios
+                    </button>
+                </div>
+
+                <!-- Tab: Citas Recibidas -->
+                <div id="tab-citas-qr" class="qr-tab-content">
+                    <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
+                        <label style="font-weight: 500; font-size: 0.875rem;">Filtrar:</label>
+                        <select id="filtroCitasQR" style="padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.875rem;">
+                            <option value="">Todas</option>
+                            <option value="pendiente" selected>Pendientes</option>
+                            <option value="sincronizada">Sincronizadas</option>
+                            <option value="rechazada">Rechazadas</option>
+                            <option value="cancelada">Canceladas</option>
+                        </select>
+                        <button onclick="cargarCitasQR()" class="btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.875rem;">Actualizar</button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="consultas-table" id="tablaCitasQR">
+                            <thead>
+                                <tr>
+                                    <th>Fecha / Hora</th>
+                                    <th>Cliente</th>
+                                    <th>Mascota</th>
+                                    <th>Veterinario</th>
+                                    <th>Estado</th>
+                                    <th>Recibida</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="citasQRBody">
+                                <tr><td colspan="7" style="text-align:center; color: var(--text-secondary);">Cargando…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: Horarios -->
+                <div id="tab-horarios" class="qr-tab-content" style="display:none;">
+                    <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                        <div>
+                            <label style="font-weight: 500; font-size: 0.875rem; display:block; margin-bottom: 4px;">Veterinario</label>
+                            <select id="selectVetHorario" style="padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; min-width: 220px;">
+                                <option value="">Cargando…</option>
+                            </select>
+                        </div>
+                        <button onclick="cargarHorariosVet()" class="btn-secondary">Ver Horarios</button>
+                        <button onclick="abrirModalNuevoHorario()" class="btn-primary">+ Agregar Bloque</button>
+                    </div>
+
+                    <div id="horariosGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.75rem;">
+                        <!-- Llenado por JS -->
+                        <p style="grid-column: 1/-1; text-align:center; color: var(--text-secondary);">Seleccioná un veterinario para ver sus horarios.</p>
+                    </div>
+                </div>
+
+                <!-- Tab: Veterinarios -->
+                <div id="tab-vets-qr" class="qr-tab-content" style="display:none;">
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                        <button onclick="abrirModalNuevoVetQR()" class="btn-primary">+ Nuevo Veterinario</button>
+                    </div>
+                    <table class="consultas-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Nombre</th><th>Especialidad</th><th>ID Amivets</th><th>Activo</th><th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vetsQRBody">
+                            <tr><td colspan="6" style="text-align:center; color: var(--text-secondary);">Cargando…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Modal: Nuevo Horario -->
+            <div id="modalNuevoHorario" class="modal">
+                <div class="modal-content" style="max-width: 420px;">
+                    <div class="modal-header">
+                        <h2 id="modalHorarioTitulo">Agregar Bloque de Horario</h2>
+                        <span class="close" data-modal="modalNuevoHorario">&times;</span>
+                    </div>
+                    <form id="formNuevoHorario" onsubmit="guardarHorario(event)">
+                        <input type="hidden" id="horarioEditId">
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Veterinario</label>
+                            <select id="horarioVetId" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                                <option value="">Seleccionar…</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Día de la Semana</label>
+                            <select id="horarioDia" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                                <option value="0">Lunes</option>
+                                <option value="1">Martes</option>
+                                <option value="2">Miércoles</option>
+                                <option value="3">Jueves</option>
+                                <option value="4">Viernes</option>
+                                <option value="5">Sábado</option>
+                                <option value="6">Domingo</option>
+                            </select>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+                            <div>
+                                <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Hora inicio</label>
+                                <input type="time" id="horarioInicio" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            </div>
+                            <div>
+                                <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Hora fin</label>
+                                <input type="time" id="horarioFin" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:1.5rem;">
+                            <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Duración del bloque (minutos)</label>
+                            <select id="horarioDuracion" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                                <option value="30">30 min</option>
+                                <option value="60" selected>60 min (1 hora)</option>
+                                <option value="90">90 min</option>
+                                <option value="120">120 min (2 horas)</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; gap:.75rem; justify-content:flex-end;">
+                            <button type="button" class="btn-secondary" data-close="modalNuevoHorario">Cancelar</button>
+                            <button type="submit" class="btn-primary">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Modal: Nuevo Veterinario QR -->
+            <div id="modalNuevoVetQR" class="modal">
+                <div class="modal-content" style="max-width: 420px;">
+                    <div class="modal-header">
+                        <h2>Veterinario (Supabase)</h2>
+                        <span class="close" data-modal="modalNuevoVetQR">&times;</span>
+                    </div>
+                    <form id="formNuevoVetQR" onsubmit="guardarVetQR(event)">
+                        <input type="hidden" id="vetQRId">
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Nombre</label>
+                            <input type="text" id="vetQRNombre" required placeholder="Dr. López" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Especialidad</label>
+                            <input type="text" id="vetQREspecialidad" placeholder="Medicina General" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                        </div>
+                        <div class="form-group" style="margin-bottom:1.5rem;">
+                            <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">ID Usuario Amivets (amivets_usuario_id)</label>
+                            <input type="number" id="vetQRAmivetId" placeholder="Ej: 1" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <small style="color:var(--text-secondary);">ID del veterinario en la tabla Usuarios de Amivets.</small>
+                        </div>
+                        <div style="display:flex; gap:.75rem; justify-content:flex-end;">
+                            <button type="button" class="btn-secondary" data-close="modalNuevoVetQR">Cancelar</button>
+                            <button type="submit" class="btn-primary">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
     <script src="/static/js/auth.js?v=3"></script>
     <script src="/static/js/app.js?v=28"></script>

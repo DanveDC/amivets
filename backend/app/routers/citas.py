@@ -60,20 +60,25 @@ def agendar_cita(
 
 @router.get("/", response_model=List[CitaResponse])
 def listar_citas(
-    fecha: Optional[datetime] = None,
+    fecha: Optional[str] = None,
     estado: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Lista las citas, opcionalmente filtrando por fecha o estado"""
+    """Lista las citas, opcionalmente filtrando por fecha (YYYY-MM-DD) o estado"""
     query = db.query(Cita)
     if fecha:
-        # Filtrar por dia (ignorando hora) - simplificado
-        # En produccion seria mejor rango de fechas
-        pass 
+        try:
+            fecha_dt = datetime.fromisoformat(fecha)
+            dia_inicio = fecha_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            dia_fin = dia_inicio + timedelta(hours=24)
+            query = query.filter(Cita.fecha_cita >= dia_inicio, Cita.fecha_cita < dia_fin)
+        except ValueError:
+            pass
     if estado:
         query = query.filter(Cita.estado == estado)
-    
-    return query.all()
+    return query.order_by(Cita.fecha_cita).offset(skip).limit(limit).all()
 
 @router.get("/{cita_id}", response_model=CitaResponse)
 def obtener_cita(
