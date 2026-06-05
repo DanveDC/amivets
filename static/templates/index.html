@@ -1252,66 +1252,6 @@
                     </div>
                 </div>
             </section>
-        </main>
-    </div>
-
-    <!-- Modal Facturación -->
-    <div id="modalFactura" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
-            <span class="close" data-modal="modalFactura">&times;</span>
-            <div class="modal-header">
-                <h2>Generar Factura <span id="facturaConsultaIdTxt" style="color: #6b7280; font-size:1rem;"></span></h2>
-                <p style="color: #4b5563; font-size: 0.9rem;">Revise los ítems consumidos y genere el comprobante de pago.</p>
-            </div>
-            
-            <div style="padding: 0 2.5rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div style="background: #f8fafc; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:#6366F1; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">CLIENTE</label>
-                        <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:#1e293b; font-weight:700; letter-spacing: -0.02em;"></div>
-                    </div>
-                    <div style="background: #f8fafc; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:#6366F1; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">PACIENTE</label>
-                        <div id="facturaMascotaNombre" style="font-size: 1.25rem; color:#1e293b; font-weight:700; letter-spacing: -0.02em;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <form id="formFactura">
-                <input type="hidden" id="facturaConsultaId">
-                <input type="hidden" id="facturaPropietarioId">
-                
-                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Metodo de Pago</label>
-                        <select id="facturaMetodoPago" required>
-                            <option value="EFECTIVO">Efectivo ($)</option>
-                            <option value="TARJETA">Punto de Venta / Tarjeta</option>
-                            <option value="TRANSFERENCIA">Transferencia / Zelle</option>
-                            <option value="MULTIPLE">Múltiple / Otros</option>
-                        </select>
-                    </div>
-                </div>
-
-                <h3 style="margin-bottom: 1rem; color:#374151; font-size: 1rem; font-weight: 700;">Detalle de Cargos a Facturar</h3>
-                <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; background: #ffffff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);" id="facturaItemsList">
-                    <p style="text-align: center; color: #9ca3af; padding: 1rem;">Buscando cargos aplicados...</p>
-                </div>
-                
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
-                    <div style="text-align: right; background: #fffbeb; padding: 1.5rem 2.5rem; border-radius: 12px; border: 1px solid #fde68a; box-shadow: var(--shadow-sm);">
-                        <span style="font-size: 0.85rem; color: #b45309; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: #d97706; letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
-                    </div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" data-close="modalFactura">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background:#10b981; border-color:#059669;">✔️ Emitir y Guardar</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
             <!-- Content Area: Citas Web / QR -->
             <section id="sec-citas-web" class="content-area spa-section" style="display: none;">
@@ -1380,9 +1320,7 @@
                         <button onclick="cargarHorariosVet()" class="btn-secondary">Ver Horarios</button>
                         <button onclick="abrirModalNuevoHorario()" class="btn-primary">+ Agregar Bloque</button>
                     </div>
-
                     <div id="horariosGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.75rem;">
-                        <!-- Llenado por JS -->
                         <p style="grid-column: 1/-1; text-align:center; color: var(--text-secondary);">Seleccioná un veterinario para ver sus horarios.</p>
                     </div>
                 </div>
@@ -1404,6 +1342,67 @@
                     </table>
                 </div>
             </section>
+
+        </main>
+    </div>
+
+    <!-- Modal Facturación -->
+    <div id="modalFactura" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" data-modal="modalFactura">&times;</span>
+            <div class="modal-header">
+                <h2>Generar Factura <span id="facturaConsultaIdTxt" style="color: #6b7280; font-size:1rem;"></span></h2>
+                <p style="color: #4b5563; font-size: 0.9rem;">Revise los ítems consumidos y genere el comprobante de pago.</p>
+            </div>
+            
+            <div style="padding: 0 2.5rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+                    <div style="background: #f8fafc; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm);">
+                        <label style="font-weight: bold; font-size:0.75rem; color:#6366F1; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">CLIENTE</label>
+                        <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:#1e293b; font-weight:700; letter-spacing: -0.02em;"></div>
+                    </div>
+                    <div style="background: #f8fafc; padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm);">
+                        <label style="font-weight: bold; font-size:0.75rem; color:#6366F1; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">PACIENTE</label>
+                        <div id="facturaMascotaNombre" style="font-size: 1.25rem; color:#1e293b; font-weight:700; letter-spacing: -0.02em;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <form id="formFactura">
+                <input type="hidden" id="facturaConsultaId">
+                <input type="hidden" id="facturaPropietarioId">
+                
+                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                    <div class="form-group" style="flex: 1;">
+                        <label>Metodo de Pago</label>
+                        <select id="facturaMetodoPago" required>
+                            <option value="EFECTIVO">Efectivo ($)</option>
+                            <option value="TARJETA">Punto de Venta / Tarjeta</option>
+                            <option value="TRANSFERENCIA">Transferencia / Zelle</option>
+                            <option value="MULTIPLE">Múltiple / Otros</option>
+                        </select>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom: 1rem; color:#374151; font-size: 1rem; font-weight: 700;">Detalle de Cargos a Facturar</h3>
+                <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; background: #ffffff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);" id="facturaItemsList">
+                    <p style="text-align: center; color: #9ca3af; padding: 1rem;">Buscando cargos aplicados...</p>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
+                    <div style="text-align: right; background: #fffbeb; padding: 1.5rem 2.5rem; border-radius: 12px; border: 1px solid #fde68a; box-shadow: var(--shadow-sm);">
+                        <span style="font-size: 0.85rem; color: #b45309; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #d97706; letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalFactura">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="background:#10b981; border-color:#059669;">✔️ Emitir y Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
             <!-- Modal: Nuevo Horario -->
             <div id="modalNuevoHorario" class="modal">

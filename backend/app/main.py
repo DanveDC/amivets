@@ -208,6 +208,16 @@ async def login_page(request: Request):
     }, status_code=404)
 
 
+@app.get("/agendar", response_class=HTMLResponse)
+async def agendar_page(request: Request):
+    """Formulario público de agendamiento de citas (acceso vía QR)"""
+    agendar_path = os.path.join(static_dir, "agendar.html") if static_dir else None
+    if agendar_path and os.path.exists(agendar_path):
+        with open(agendar_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return JSONResponse({"detail": "Formulario de agendamiento no encontrado"}, status_code=404)
+
+
 @app.get("/health")
 async def health_check():
     """Endpoint de verificación de salud"""
