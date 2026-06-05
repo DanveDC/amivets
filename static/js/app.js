@@ -226,6 +226,7 @@ const setupNavigation = () => {
             if (targetId === 'sec-usuarios') loadUsuarios();
             if (targetId === 'sec-perfil') loadPerfil();
             if (targetId === 'sec-facturacion') cargarHistorialFacturas();
+            if (targetId === 'sec-catalogo') { cargarCategoriasSelect(); cargarCatalogo(); }
         });
     });
 };
@@ -1338,12 +1339,15 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
 });
 
 // SMART FORM LOGIC: Item Selection
+// Catalog suggestion dropdown (async, for all types)
+let _catalogSuggestTimeout = null;
+
 document.getElementById('addServicioItemSearch').addEventListener('input', (e) => {
     const val = e.target.value;
     const tipo = document.getElementById('addServicioTipo').value;
 
     if (tipo === 'INSUMO' || tipo === 'VACUNACION') {
-        // Find if the value matches one of our options
+        // Find if the value matches one of our inventory options
         const match = currentInventoryItems.find(i => `${i.nombre} [Stock: ${i.stock_actual}]` === val);
         if (match) {
             document.getElementById('addServicioNombre').value = match.nombre;
@@ -1357,12 +1361,96 @@ document.getElementById('addServicioItemSearch').addEventListener('input', (e) =
             }
             // Focus quantity
             document.getElementById('addServicioCantidad').focus();
+            _hideCatalogSuggestions();
+            return;
         }
     } else {
         // For other types, just copy search to name
         document.getElementById('addServicioNombre').value = val;
     }
+
+    // Async catalog search for all types
+    clearTimeout(_catalogSuggestTimeout);
+    if (val.trim().length < 2) { _hideCatalogSuggestions(); return; }
+    _catalogSuggestTimeout = setTimeout(() => _searchCatalogSuggestions(val, tipo), 250);
 });
+
+document.getElementById('addServicioItemSearch').addEventListener('blur', () => {
+    // Delay so click on suggestion fires first
+    setTimeout(_hideCatalogSuggestions, 200);
+});
+
+async function _searchCatalogSuggestions(query, tipo) {
+    const categoryMap = {
+        'INSUMO': 'FARMACIA',
+        'VACUNACION': 'FARMACIA',
+        'LABORATORIO': 'LABORATORIO',
+        'CIRUGIA': 'QUIROFANO',
+        'HOSPITALIZACION': 'HOSPITALIZACION',
+        'ESTETICA': 'PELUQUERIA',
+        'CONSULTA': 'CONSULTA',
+    };
+    const cat = categoryMap[tipo] || '';
+    let url = `/catalogo?q=${encodeURIComponent(query)}&limit=10`;
+    if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
+    try {
+        const items = await fetchAPI(url);
+        _renderCatalogSuggestions(items || []);
+    } catch (err) {
+        // Silently fail — catalog search is optional
+    }
+}
+
+function _renderCatalogSuggestions(items) {
+    let dropdown = document.getElementById('catalogSuggestDropdown');
+    if (!dropdown) {
+        dropdown = document.createElement('div');
+        dropdown.id = 'catalogSuggestDropdown';
+        dropdown.style.cssText = `
+            position:absolute; z-index:9999; background:#fff; border:1px solid #d1d5db;
+            border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.12);
+            max-height:220px; overflow-y:auto; width:100%;
+        `;
+        const searchInput = document.getElementById('addServicioItemSearch');
+        const wrapper = searchInput.parentElement;
+        if (getComputedStyle(wrapper).position === 'static') wrapper.style.position = 'relative';
+        wrapper.appendChild(dropdown);
+    }
+
+    if (!items.length) { _hideCatalogSuggestions(); return; }
+
+    dropdown.innerHTML = items.map(item => `
+        <div class="catalog-suggest-item"
+             data-nombre="${item.nombre.replace(/"/g, '&quot;')}"
+             data-precio="${item.precio_ref}"
+             style="padding:0.6rem 0.9rem; cursor:pointer; border-bottom:1px solid #f3f4f6; font-size:0.875rem;">
+            <span style="font-weight:600;">${item.nombre}</span>
+            <span style="color:#6b7280; font-size:0.8rem; margin-left:0.5rem;">${item.categoria}</span>
+            <span style="float:right; color:#059669; font-weight:700;">$${item.precio_ref}</span>
+        </div>
+    `).join('');
+
+    dropdown.querySelectorAll('.catalog-suggest-item').forEach(el => {
+        el.addEventListener('mouseenter', () => el.style.background = '#f0fdf4');
+        el.addEventListener('mouseleave', () => el.style.background = '');
+        el.addEventListener('mousedown', () => {
+            const nombre = el.dataset.nombre;
+            const precio = parseFloat(el.dataset.precio) || 0;
+            document.getElementById('addServicioItemSearch').value = nombre;
+            document.getElementById('addServicioNombre').value = nombre;
+            document.getElementById('addServicioPrecio').value = precio;
+            _hideCatalogSuggestions();
+            document.getElementById('addServicioCantidad').focus();
+        });
+    });
+
+    dropdown.style.display = 'block';
+}
+
+function _hideCatalogSuggestions() {
+    const dropdown = document.getElementById('catalogSuggestDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+}
 
 const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
     // Complex modules configuration
@@ -3023,3 +3111,121 @@ async function desactivarVetQR(id) {
 
 // Actualizar badge al cargar la app
 setTimeout(actualizarBadgeCitasQR, 2000);
+
+// ============================================================
+// CATALOGO DE SERVICIOS MODULE
+// ============================================================
+
+async function cargarCategoriasSelect() {
+    try {
+        const cats = await fetchAPI('/catalogo/categorias');
+        const filter = document.getElementById('catalogoCategoriaFilter');
+        if (!filter) return;
+        // Keep first placeholder option, rebuild the rest
+        filter.innerHTML = '<option value="">Todas las categorías</option>';
+        (cats || []).forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.textContent = cat;
+            filter.appendChild(opt);
+        });
+    } catch (err) {
+        console.error('Error loading catalog categories:', err);
+    }
+}
+
+async function cargarCatalogo() {
+    const q = (document.getElementById('catalogoSearch')?.value || '').trim();
+    const cat = document.getElementById('catalogoCategoriaFilter')?.value || '';
+    let url = '/catalogo?solo_activos=false&limit=500';
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
+
+    const tbody = document.getElementById('catalogoBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Cargando…</td></tr>';
+
+    try {
+        const items = await fetchAPI(url);
+        if (!items || !items.length) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Sin resultados.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = items.map(s => `
+            <tr style="${s.activo ? '' : 'opacity:0.5;'}">
+                <td>${s.id}</td>
+                <td style="font-weight:600;">${s.nombre}</td>
+                <td><span style="background:#ede9fe; color:#5b21b6; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${s.categoria}</span></td>
+                <td style="font-weight:700; color:#059669;">$${s.precio_ref.toFixed(2)}</td>
+                <td style="text-align:center;">${s.precio_variable ? '✓' : ''}</td>
+                <td style="font-size:0.8rem; color:#6b7280;">${s.unidad || ''}</td>
+                <td style="text-align:center;">${s.activo ? '<span style="color:#059669;">✓</span>' : '<span style="color:#ef4444;">✗</span>'}</td>
+                <td>
+                    <button onclick="abrirModalServicio(${s.id})" style="padding:3px 10px; font-size:0.8rem; border:1px solid #6366f1; background:#ede9fe; color:#4f46e5; border-radius:6px; cursor:pointer; margin-right:4px;">Editar</button>
+                    ${s.activo ? `<button onclick="desactivarServicio(${s.id})" style="padding:3px 10px; font-size:0.8rem; border:1px solid #fca5a5; background:#fef2f2; color:#dc2626; border-radius:6px; cursor:pointer;">Desact.</button>` : ''}
+                </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626;">Error: ${err.message}</td></tr>`;
+    }
+}
+
+async function abrirModalServicio(id = null) {
+    document.getElementById('catalogoServicioId').value = '';
+    document.getElementById('formCatalogoServicio').reset();
+    document.getElementById('modalCatalogoTitle').textContent = id ? 'Editar Servicio' : 'Nuevo Servicio';
+
+    if (id) {
+        try {
+            const s = await fetchAPI(`/catalogo/${id}`);
+            document.getElementById('catalogoServicioId').value = s.id;
+            document.getElementById('catalogoNombre').value = s.nombre;
+            document.getElementById('catalogoCategoria').value = s.categoria;
+            document.getElementById('catalogoPrecioRef').value = s.precio_ref;
+            document.getElementById('catalogoUnidad').value = s.unidad || '';
+            document.getElementById('catalogoPrecioVariable').checked = s.precio_variable;
+        } catch (err) {
+            showNotification('Error cargando servicio: ' + err.message, 'error');
+            return;
+        }
+    }
+    openModal('modalCatalogoServicio');
+}
+
+async function guardarServicio(e) {
+    e.preventDefault();
+    const id = document.getElementById('catalogoServicioId').value;
+    const payload = {
+        nombre: document.getElementById('catalogoNombre').value.trim(),
+        categoria: document.getElementById('catalogoCategoria').value,
+        precio_ref: parseFloat(document.getElementById('catalogoPrecioRef').value) || 0,
+        unidad: document.getElementById('catalogoUnidad').value.trim() || null,
+        precio_variable: document.getElementById('catalogoPrecioVariable').checked,
+        activo: true,
+    };
+    try {
+        if (id) {
+            await fetchAPI(`/catalogo/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+            showNotification('Servicio actualizado', 'success');
+        } else {
+            await fetchAPI('/catalogo', { method: 'POST', body: JSON.stringify(payload) });
+            showNotification('Servicio creado', 'success');
+        }
+        closeModal('modalCatalogoServicio');
+        cargarCatalogo();
+    } catch (err) {
+        showNotification('Error: ' + err.message, 'error');
+    }
+}
+
+async function desactivarServicio(id) {
+    if (!confirm('¿Desactivar este servicio del catálogo?')) return;
+    try {
+        await fetchAPI(`/catalogo/${id}`, { method: 'DELETE' });
+        showNotification('Servicio desactivado', 'success');
+        cargarCatalogo();
+    } catch (err) {
+        showNotification('Error: ' + err.message, 'error');
+    }
+}

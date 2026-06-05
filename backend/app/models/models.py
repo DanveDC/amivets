@@ -485,3 +485,17 @@ class Desparasitacion(Base):
     consulta = relationship("Consulta", back_populates="desparasitaciones")
     producto = relationship("Inventario")
 
+
+class CatalogoServicio(Base):
+    """Catalogo maestro de servicios y procedimientos de la clinica"""
+    __tablename__ = "catalogo_servicios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(255), nullable=False, index=True)
+    categoria = Column(String(100), nullable=False, index=True)
+    precio_ref = Column(Float, default=0.0)
+    precio_variable = Column(Boolean, default=False)
+    unidad = Column(String(100))
+    activo = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+

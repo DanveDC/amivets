@@ -7,7 +7,7 @@ import os
 import sys
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin
+from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo
 from app.models.models import Usuario
 from app.core import security
 from sqlalchemy.orm import Session
@@ -70,6 +70,17 @@ def create_default_admin():
             os.path.join(ROOT_DIR, "backend", "scripts", "seed_data.py"),
             "backend/scripts/seed_data.py"
         ]
+
+        # Seed catalogo de servicios (idempotente — solo corre si la tabla está vacía)
+        catalogo_scripts_to_try = [
+            "/app/scripts/seed_catalogo.py",
+            os.path.join(ROOT_DIR, "backend", "scripts", "seed_catalogo.py"),
+            "backend/scripts/seed_catalogo.py"
+        ]
+        for s in catalogo_scripts_to_try:
+            if os.path.exists(s):
+                subprocess.run([sys.executable, s], check=False)
+                break
         
         seed_script = None
         for s in scripts_to_try:
@@ -156,6 +167,7 @@ app.include_router(hospitalizaciones.router)
 app.include_router(cirugias.router)
 app.include_router(clinico.router)
 app.include_router(supabase_admin.router)
+app.include_router(catalogo.router)
 
 
 @app.get("/", response_class=HTMLResponse)

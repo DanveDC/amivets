@@ -527,3 +527,33 @@ class PlanSaludCreate(PlanSaludBase):
 class PlanSaludResponse(PlanSaludBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
+
+
+# ========== CATALOGO SERVICIO SCHEMAS ==========
+class CatalogoServicioBase(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=255)
+    categoria: str = Field(..., min_length=1, max_length=100)
+    precio_ref: float = Field(0.0, ge=0)
+    precio_variable: bool = False
+    unidad: Optional[str] = Field(None, max_length=100)
+    activo: bool = True
+
+
+class CatalogoServicioCreate(CatalogoServicioBase):
+    pass
+
+
+class CatalogoServicioUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=255)
+    categoria: Optional[str] = Field(None, min_length=1, max_length=100)
+    precio_ref: Optional[float] = Field(None, ge=0)
+    precio_variable: Optional[bool] = None
+    unidad: Optional[str] = Field(None, max_length=100)
+    activo: Optional[bool] = None
+
+
+class CatalogoServicioResponse(CatalogoServicioBase):
+    id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
