@@ -15,6 +15,10 @@ import time
 import logging
 import subprocess
 
+# Rutas base — definidas globalmente para uso en startup
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -121,10 +125,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configuración de rutas
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = os.path.dirname(BASE_DIR)
 
 # Montar archivos estáticos
 # Intentar primero la ruta de Docker, luego la ruta local relativa al root

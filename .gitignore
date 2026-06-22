@@ -1,3 +1,6 @@
+# Agent tooling
+.atl/
+
 # Python
 __pycache__/
 *.py[cod]

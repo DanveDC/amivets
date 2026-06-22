@@ -1,0 +1,10 @@
+# Development overrides — applied automatically by docker-compose when present.
+# Adds hot-reload and source mounts. NOT used in production / Render.
+version: '3.8'
+
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - ./static:/app/static
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

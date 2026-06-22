@@ -376,9 +376,12 @@ const getStatusColor = (status) => {
     }
 };
 
-const checkInCita = async (id) => {
+const checkInCita = async (id, nuevoEstado = 'EN_ESPERA') => {
     try {
-        await fetchAPI(`/citas/${id}/checkin`, { method: 'PUT' });
+        await fetchAPI(`/citas/${id}/checkin`, {
+            method: 'PUT',
+            body: JSON.stringify({ estado: nuevoEstado })
+        });
         loadAgenda();
     } catch (error) {
         alert('Error: ' + error.message);
@@ -683,52 +686,161 @@ const handleTransferirSubmit = async (e) => {
     }
 };
 
-const loadInventario = async () => {
+const loadInventario = async (filtro = '') => {
     const tbody = document.getElementById('inventarioTableBody');
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Cargando...</td></tr>';
 
     try {
-        const productos = await fetchAPI('/inventario/');
+        const categoriaFiltro = document.getElementById('filtroInventarioCategoria')?.value || '';
+        const url = `/inventario/?limit=200${categoriaFiltro ? `&categoria=${encodeURIComponent(categoriaFiltro)}` : ''}`;
+        let productos = await fetchAPI(url);
+
+        // Filtro de texto local
+        if (filtro) {
+            const q = filtro.toLowerCase();
+            productos = productos.filter(p =>
+                p.nombre.toLowerCase().includes(q) ||
+                p.codigo.toLowerCase().includes(q) ||
+                (p.categoria && p.categoria.toLowerCase().includes(q))
+            );
+        }
 
         if (productos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Inventario vacío.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #9ca3af;">No se encontraron productos.</td></tr>';
             return;
         }
 
-        tbody.innerHTML = productos.map(p => `
+        tbody.innerHTML = productos.map(p => {
+            const bajStock = p.stock_actual <= p.stock_minimo;
+            const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : '—';
+            const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:#ef4444; font-weight:700;' : '';
+            return `
             <tr>
-                <td>${p.nombre}</td>
-                <td>${p.tipo}</td>
-                <td style="font-weight: bold; color: ${p.stock <= p.stock_minimo ? 'red' : 'inherit'}">
-                    ${p.stock} units
+                <td>
+                    <div style="font-weight:600; color:#1e293b;">${p.nombre}</div>
+                    <div style="font-size:0.75rem; color:#64748b;">${p.codigo}</div>
                 </td>
-                <td>$${p.precio_unitario || '-'}</td>
-                <td>${p.stock <= p.stock_minimo ? '⚠️ Bajo Stock' : '✅ OK'}</td>
-            </tr>
-        `).join('');
+                <td><span class="badge" style="background:#eef2ff; color:#4F46E5; font-size:0.75rem;">${p.categoria || '—'}</span></td>
+                <td style="font-weight:700; color:${bajStock ? '#ef4444' : '#059669'}">
+                    ${p.stock_actual}
+                    <span style="font-size:0.75rem; font-weight:400; color:#94a3b8;">/ min ${p.stock_minimo}</span>
+                </td>
+                <td>$${(p.precio_unitario || 0).toFixed(2)}</td>
+                <td style="${vencimientoStyle}">${vencimiento}</td>
+                <td>${bajStock ? '<span style="color:#ef4444; font-weight:700;">⚠️ Bajo</span>' : '<span style="color:#059669;">✅ OK</span>'}</td>
+                <td style="text-align:right;">
+                    <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" title="Ajustar stock" style="font-size:0.75rem; padding:4px 8px;">📦 Stock</button>
+                        <button class="btn-secondary btn-sm" onclick="abrirEditarProducto(${p.id})" title="Editar" style="font-size:0.75rem; padding:4px 8px;">✏️</button>
+                        <button class="btn-secondary btn-sm" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" style="font-size:0.75rem; padding:4px 8px; color:#ef4444; border-color:#fca5a5;">🗑️</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
 
         // Actualizar badge
-        const lowStock = productos.filter(p => p.stock <= p.stock_minimo).length;
+        const lowStock = productos.filter(p => p.stock_actual <= p.stock_minimo).length;
         document.getElementById('badgeStock').textContent = lowStock > 0 ? lowStock : '';
 
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color:#ef4444;">Error: ${error.message}</td></tr>`;
     }
 };
 
 const handleProductoSubmit = async (e) => {
     e.preventDefault();
     try {
+        const codigoInput = document.getElementById('prodCodigo').value.trim();
         const data = {
+            codigo: codigoInput || `PROD-${Date.now()}`,
             nombre: document.getElementById('prodNombre').value,
-            tipo: document.getElementById('prodTipo').value,
-            stock: parseInt(document.getElementById('prodStock').value),
+            descripcion: document.getElementById('prodDescripcion').value || null,
+            categoria: document.getElementById('prodTipo').value,
+            stock_actual: parseInt(document.getElementById('prodStock').value),
             stock_minimo: parseInt(document.getElementById('prodMinimo').value),
-            precio_unitario: parseFloat(document.getElementById('prodPrecio').value) || 0
+            precio_unitario: parseFloat(document.getElementById('prodPrecio').value) || 0,
+            fecha_vencimiento: document.getElementById('prodVencimiento').value || null,
+            proveedor: document.getElementById('prodProveedor').value || null
         };
         await fetchAPI('/inventario/', { method: 'POST', body: JSON.stringify(data) });
-        alert('Producto creado.');
+        showNotification('Producto registrado en inventario.', 'success');
         closeModal('modalProducto');
+        loadInventario();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+const abrirEditarProducto = async (id) => {
+    try {
+        const p = await fetchAPI(`/inventario/${id}`);
+        document.getElementById('editProdId').value = p.id;
+        document.getElementById('editProdCodigo').value = p.codigo;
+        document.getElementById('editProdNombre').value = p.nombre;
+        document.getElementById('editProdDescripcion').value = p.descripcion || '';
+        document.getElementById('editProdTipo').value = p.categoria || '';
+        document.getElementById('editProdStock').value = p.stock_actual;
+        document.getElementById('editProdMinimo').value = p.stock_minimo;
+        document.getElementById('editProdPrecio').value = p.precio_unitario;
+        document.getElementById('editProdVencimiento').value = p.fecha_vencimiento || '';
+        document.getElementById('editProdProveedor').value = p.proveedor || '';
+        openModal('modalEditarProducto');
+    } catch (error) {
+        alert('Error al cargar producto: ' + error.message);
+    }
+};
+
+const handleEditarProductoSubmit = async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editProdId').value;
+    try {
+        const data = {
+            nombre: document.getElementById('editProdNombre').value,
+            descripcion: document.getElementById('editProdDescripcion').value || null,
+            categoria: document.getElementById('editProdTipo').value,
+            stock_minimo: parseInt(document.getElementById('editProdMinimo').value),
+            precio_unitario: parseFloat(document.getElementById('editProdPrecio').value) || 0,
+            fecha_vencimiento: document.getElementById('editProdVencimiento').value || null,
+            proveedor: document.getElementById('editProdProveedor').value || null
+        };
+        await fetchAPI(`/inventario/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+        showNotification('Producto actualizado.', 'success');
+        closeModal('modalEditarProducto');
+        loadInventario();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+const abrirMovimientoStock = (id, nombre, stockActual) => {
+    document.getElementById('movStockProdId').value = id;
+    document.getElementById('movStockNombre').textContent = nombre;
+    document.getElementById('movStockActual').textContent = stockActual;
+    document.getElementById('movStockCantidad').value = '';
+    document.getElementById('movStockTipo').value = 'ENTRADA';
+    openModal('modalMovimientoStock');
+};
+
+const handleMovimientoStockSubmit = async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('movStockProdId').value;
+    const cantidad = parseInt(document.getElementById('movStockCantidad').value);
+    const tipo = document.getElementById('movStockTipo').value;
+    try {
+        await fetchAPI(`/inventario/${id}/movimiento?cantidad=${cantidad}&tipo=${tipo}`, { method: 'POST' });
+        showNotification(`${tipo === 'ENTRADA' ? 'Entrada' : 'Salida'} de stock registrada.`, 'success');
+        closeModal('modalMovimientoStock');
+        loadInventario();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+const confirmarEliminarProducto = async (id, nombre) => {
+    if (!confirm(`¿Desactivar el producto "${nombre}" del inventario?`)) return;
+    try {
+        await fetchAPI(`/inventario/${id}`, { method: 'DELETE' });
+        showNotification('Producto desactivado.', 'success');
         loadInventario();
     } catch (error) {
         alert('Error: ' + error.message);
@@ -1271,8 +1383,8 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
         label.textContent = tipo === 'VACUNACION' ? 'BUSCAR VACUNA EN STOCK' : 'BUSCAR PRODUCTO / MEDICAMENTO';
         searchInput.placeholder = 'Escriba nombre o código...';
         try {
-            const cat = tipo === 'VACUNACION' ? 'Vacunas' : null;
-            const items = await fetchAPI(`/inventario/?limit=200${cat ? `&categoria=${cat}` : ''}`);
+            const cat = tipo === 'VACUNACION' ? 'Vacuna' : null;
+            const items = await fetchAPI(`/inventario/?limit=200${cat ? `&categoria=${encodeURIComponent(cat)}` : ''}`);
             currentInventoryItems = items;
             datalist.innerHTML = items.map(i => `<option value="${i.nombre} [Stock: ${i.stock_actual}]" data-id="${i.id}">`).join('');
         } catch (err) { console.error("Error fetching inventory", err); }
@@ -2358,6 +2470,44 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('formConsulta')?.addEventListener('submit', handleConsultaSubmit);
     document.getElementById('formCita')?.addEventListener('submit', handleCitaSubmit);
     document.getElementById('formProducto')?.addEventListener('submit', handleProductoSubmit);
+    document.getElementById('formEditarProducto')?.addEventListener('submit', handleEditarProductoSubmit);
+    document.getElementById('formMovimientoStock')?.addEventListener('submit', handleMovimientoStockSubmit);
+    document.getElementById('btnNuevoProducto')?.addEventListener('click', () => openModal('modalProducto'));
+    document.getElementById('searchInventario')?.addEventListener('input', debounce((e) => loadInventario(e.target.value), 300));
+    document.getElementById('filtroInventarioCategoria')?.addEventListener('change', () => loadInventario(document.getElementById('searchInventario')?.value || ''));
+    document.getElementById('btnAlertasStock')?.addEventListener('click', async () => {
+        const tbody = document.getElementById('inventarioTableBody');
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Cargando alertas de stock...</td></tr>';
+        try {
+            const productos = await fetchAPI('/inventario/?bajo_stock=true&limit=200');
+            if (productos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#059669; padding:2rem;">✅ Todo el inventario está por encima del stock mínimo.</td></tr>';
+                return;
+            }
+            // Reusar el renderizado de loadInventario temporalmente
+            const bajStock = true;
+            tbody.innerHTML = productos.map(p => {
+                const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : '—';
+                const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:#ef4444; font-weight:700;' : '';
+                return `
+                <tr style="background:#fef2f2;">
+                    <td>
+                        <div style="font-weight:600; color:#1e293b;">${p.nombre}</div>
+                        <div style="font-size:0.75rem; color:#64748b;">${p.codigo}</div>
+                    </td>
+                    <td><span class="badge" style="background:#eef2ff; color:#4F46E5; font-size:0.75rem;">${p.categoria || '—'}</span></td>
+                    <td style="font-weight:700; color:#ef4444;">${p.stock_actual} <span style="font-size:0.75rem; font-weight:400; color:#94a3b8;">/ min ${p.stock_minimo}</span></td>
+                    <td>$${(p.precio_unitario || 0).toFixed(2)}</td>
+                    <td style="${vencimientoStyle}">${vencimiento}</td>
+                    <td><span style="color:#ef4444; font-weight:700;">⚠️ BAJO</span></td>
+                    <td style="text-align:right;">
+                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" style="font-size:0.75rem; padding:4px 8px;">📦 Reponer</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (err) { alert('Error: ' + err.message); }
+    });
+    document.getElementById('btnShowModalUser')?.addEventListener('click', () => openModal('modalNuevoUsuario'));
     document.getElementById('formNuevoUsuario')?.addEventListener('submit', handleNuevoUsuarioSubmit);
     document.getElementById('formTransferir')?.addEventListener('submit', handleTransferirSubmit);
     document.getElementById('formReceta')?.addEventListener('submit', handleRecetaSubmit);

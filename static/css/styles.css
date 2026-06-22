@@ -35,6 +35,10 @@
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     --shadow-premium: 0 10px 15px -3px rgba(79, 70, 229, 0.15);
+
+    --primary-subtle: rgba(99, 102, 241, 0.08);
+    --accent-subtle: #FFEDD5;
+    --focus-ring: 0 0 0 3px rgba(99, 102, 241, 0.35);
 }
 
 body {
@@ -307,7 +311,7 @@ button {
 
 .sidebar .menu-item.active {
     color: var(--primary) !important;
-    background: #f0f4ff !important;
+    background: var(--primary-subtle) !important;
 }
 
 .sidebar .menu-item.active::before {
@@ -456,7 +460,7 @@ button {
 }
 
 .consultas-table tr:hover td {
-    background: #F8FAFC;
+    background: var(--surface-hover);
 }
 
 .consultas-table tr:last-child td {
@@ -600,7 +604,7 @@ button {
 }
 
 .close:hover {
-    background: #FFEDD5;
+    background: var(--accent-subtle);
     color: var(--accent);
     transform: rotate(90deg);
 }
@@ -698,27 +702,269 @@ form {
     box-shadow: var(--shadow-lg);
 }
 
-/* FullCalendar Customization */
-.fc {
+/* --- AGENDA LAYOUT --- */
+
+.agenda-layout {
+    display: flex;
+    gap: 2rem;
+    height: calc(100% - 80px);
+}
+
+.agenda-waiting {
+    flex: 0 0 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.agenda-waiting-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1.5px solid var(--border-light);
+}
+
+.agenda-waiting-list {
+    overflow-y: auto;
+    flex: 1;
+    padding-right: 0.25rem;
+}
+
+.calendar-wrapper {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
     background: var(--surface);
-    padding: 2.5rem;
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
+    padding: 1.5rem;
     border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
 }
 
-.fc-toolbar-title {
-    font-weight: 800 !important;
-    font-size: 1.75rem !important;
-    letter-spacing: -0.04em !important;
-}
+/* --- FULLCALENDAR CUSTOMIZATION --- */
 
-.fc-button-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
+/* Strip FC's own card styling — wrapper provides it */
+.fc {
+    background: transparent !important;
     border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    height: 100% !important;
+}
+
+/* Toolbar */
+.fc .fc-toolbar.fc-header-toolbar {
+    margin-bottom: 1.25rem !important;
+    padding-bottom: 1rem !important;
+    border-bottom: 1.5px solid var(--border-light) !important;
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+    align-items: center !important;
+}
+
+.fc .fc-toolbar-title {
+    font-size: 1.25rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.03em !important;
+    color: var(--text-primary) !important;
+}
+
+/* Base for all buttons */
+.fc .fc-button,
+.fc .fc-button-primary {
+    background: var(--surface) !important;
+    color: var(--text-secondary) !important;
+    border: 1.5px solid var(--border) !important;
     border-radius: var(--radius-md) !important;
-    padding: 0.6rem 1.25rem !important;
+    padding: 0.45rem 0.9rem !important;
+    font-size: 0.82rem !important;
     font-weight: 600 !important;
+    font-family: inherit !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: all 0.18s !important;
+    text-transform: capitalize !important;
+    line-height: 1.4 !important;
+    letter-spacing: 0 !important;
+}
+
+.fc .fc-button:hover:not(:disabled),
+.fc .fc-button-primary:hover:not(:disabled) {
+    background: var(--primary-subtle) !important;
+    color: var(--primary-dark) !important;
+    border-color: var(--primary-light) !important;
+    box-shadow: none !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Today — outlined primary */
+.fc .fc-today-button {
+    background: var(--primary-subtle) !important;
+    color: var(--primary-dark) !important;
+    border-color: var(--primary-light) !important;
+    font-weight: 700 !important;
+}
+
+.fc .fc-today-button:disabled {
+    opacity: 0.45 !important;
+    transform: none !important;
+    cursor: default !important;
+}
+
+/* Prev / Next — compact */
+.fc .fc-prev-button,
+.fc .fc-next-button {
+    padding: 0.45rem 0.65rem !important;
+}
+
+/* Toolbar nav chunk: prev + title + next close together */
+.fc .fc-toolbar-chunk {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+}
+
+/* Active view button */
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
+    color: white !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3) !important;
+    transform: none !important;
+}
+
+.fc .fc-button-primary:not(:disabled):active {
+    transform: scale(0.97) !important;
+}
+
+/* View selector group — segmented control */
+.fc .fc-button-group {
+    display: flex !important;
+    gap: 3px !important;
+    background: var(--bg) !important;
+    padding: 3px !important;
+    border-radius: calc(var(--radius-md) + 3px) !important;
+    border: 1.5px solid var(--border) !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+.fc .fc-button-group .fc-button,
+.fc .fc-button-group .fc-button-primary {
+    border-radius: var(--radius-sm) !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0.35rem 0.8rem !important;
+}
+
+.fc .fc-button-group .fc-button-primary:not(:disabled).fc-button-active {
+    box-shadow: var(--shadow-sm) !important;
+}
+
+/* Column headers (Mon, Tue…) */
+.fc .fc-col-header-cell {
+    background: var(--bg) !important;
+    border-color: var(--border-light) !important;
+}
+
+.fc .fc-col-header-cell-cushion {
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.07em !important;
+    color: var(--text-muted) !important;
+    text-decoration: none !important;
+    padding: 0.6rem 0 !important;
+    display: block !important;
+}
+
+/* Day cells */
+.fc .fc-daygrid-day {
+    border-color: var(--border-light) !important;
+    transition: background 0.15s !important;
+}
+
+.fc .fc-daygrid-day:hover {
+    background: var(--primary-subtle) !important;
+}
+
+.fc .fc-daygrid-day-number {
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    color: var(--text-secondary) !important;
+    text-decoration: none !important;
+    padding: 0.4rem 0.5rem !important;
+    line-height: 1 !important;
+    border-radius: 50% !important;
+    margin: 3px !important;
+    transition: all 0.15s !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+}
+
+/* Today */
+.fc .fc-day-today {
+    background: rgba(99, 102, 241, 0.05) !important;
+}
+
+.fc .fc-day-today .fc-daygrid-day-number {
+    background: var(--primary) !important;
+    color: white !important;
+    font-weight: 700 !important;
+}
+
+/* Weekend subtle tint */
+.fc .fc-day-sat .fc-daygrid-day-frame,
+.fc .fc-day-sun .fc-daygrid-day-frame {
+    background: rgba(0, 0, 0, 0.012) !important;
+}
+
+/* Events */
+.fc .fc-event {
+    border-radius: var(--radius-sm) !important;
+    border: none !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: filter 0.15s, transform 0.15s !important;
+}
+
+.fc .fc-event:hover {
+    filter: brightness(0.9) !important;
+    transform: scale(1.015) !important;
+}
+
+.fc .fc-h-event {
+    background: linear-gradient(90deg, var(--primary), var(--primary-dark)) !important;
+    border: none !important;
+    padding: 1px 5px !important;
+    box-shadow: 0 1px 4px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Grid borders */
+.fc .fc-scrollgrid {
+    border-color: var(--border-light) !important;
+    border-radius: var(--radius-md) !important;
+    overflow: hidden !important;
+}
+
+.fc .fc-scrollgrid td,
+.fc .fc-scrollgrid th {
+    border-color: var(--border-light) !important;
+}
+
+/* "+N more" link */
+.fc .fc-daygrid-more-link {
+    color: var(--primary) !important;
+    font-weight: 700 !important;
+    font-size: 0.72rem !important;
 }
 
 /* Custom Search Dropsdown */
@@ -794,7 +1040,7 @@ form {
 }
 
 .pet-nav-item {
-    background: white !important;
+    background: var(--surface) !important;
     border: 1px solid var(--border-light) !important;
     border-radius: var(--radius-md) !important;
     margin-bottom: 0.75rem;
@@ -808,7 +1054,7 @@ form {
 }
 
 .pet-nav-item:hover {
-    background: #f8fafc !important;
+    background: var(--surface-hover) !important;
     border-color: var(--primary-light) !important;
     transform: translateY(-2px);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
@@ -921,4 +1167,292 @@ form {
 
 .sidebar:hover .badge {
     opacity: 1;
+}
+
+/* --- ACCESSIBILITY (fixing-accessibility) --- */
+
+/* Global focus ring — never invisible for keyboard users */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+select:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: var(--radius-sm);
+}
+
+/* Inputs already have their own focus ring via :focus — align them to use :focus-visible too */
+input:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+}
+
+/* Readonly input state */
+.input-readonly {
+    background-color: var(--bg) !important;
+    color: var(--text-muted) !important;
+    cursor: not-allowed;
+}
+
+/* Alert role container for screen readers */
+[role="alert"] {
+    min-height: 1em;
+}
+
+/* --- MICROINTERACTIONS (make-interfaces-feel-better) --- */
+
+/* Tactile press on all buttons */
+button:active:not(:disabled) {
+    transform: translateY(1px) scale(0.985);
+}
+
+/* Override btn-primary active to snap back cleanly */
+.btn-primary:active {
+    transform: translateY(0);
+    filter: brightness(0.96);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Loading state — CSS-only spinner via ::after */
+.btn-loading {
+    pointer-events: none;
+    opacity: 0.8;
+    position: relative;
+    padding-right: 3rem !important;
+}
+
+.btn-loading::after {
+    content: "";
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.65s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Shake animation for form errors */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-8px); }
+    40%       { transform: translateX(8px); }
+    60%       { transform: translateX(-5px); }
+    80%       { transform: translateX(5px); }
+}
+
+.shake {
+    animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* --- LOGIN PAGE --- */
+
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #EEF2FF 0%, var(--bg) 60%);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.login-card {
+    background: var(--surface);
+    width: 100%;
+    max-width: 420px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-light);
+    overflow: hidden;
+    animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.login-card-header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    padding: 2.5rem 2.5rem 2rem;
+    text-align: center;
+}
+
+.login-brand {
+    font-size: 2rem;
+    font-weight: 800;
+    color: white;
+    letter-spacing: -0.04em;
+    margin: 0 0 0.4rem;
+}
+
+.login-subtitle {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.75);
+    margin: 0;
+    font-weight: 400;
+}
+
+.login-form {
+    padding: 2rem 2.5rem 2.5rem;
+}
+
+.login-error {
+    display: none;
+    background: rgba(244, 63, 94, 0.06);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    color: var(--accent);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    text-align: center;
+    margin-bottom: 1.25rem;
+}
+
+/* legacy alias used by auth.js */
+.error-message {
+    display: none;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+}
+
+.login-field {
+    margin-bottom: 1.25rem;
+}
+
+.login-field label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.login-field input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg);
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.login-field input:focus {
+    outline: none;
+    background: var(--surface);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+
+.login-field input::placeholder {
+    color: var(--text-muted);
+}
+
+.btn-login {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.875rem;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.01em;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.45);
+    filter: brightness(1.06);
+}
+
+.btn-login:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+.btn-login:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+/* --- APP-WIDE VISUAL IMPROVEMENTS --- */
+
+/* Content section headers — accent line + gradient text */
+.content-header {
+    border-left: 4px solid var(--primary);
+    padding-left: 1.25rem;
+}
+
+.content-header h2 {
+    background: linear-gradient(135deg, var(--text-primary) 40%, var(--primary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* KPI cards — colored top accent bar */
+.kpi-card {
+    border-top: 3px solid transparent;
+    background-image: linear-gradient(var(--surface), var(--surface)),
+                      linear-gradient(90deg, var(--primary), var(--secondary));
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    border-top: 3px solid var(--primary);
+}
+
+.kpi-card:hover {
+    border-top-color: var(--primary-dark);
+}
+
+/* Table — stronger header with primary tint */
+.consultas-table th {
+    background: var(--primary-subtle);
+    color: var(--primary-dark);
+    border-bottom: 2px solid var(--primary-light);
+}
+
+/* Card items — hover border accent */
+.card-item {
+    border-left: 3px solid transparent;
+    transition: all 0.3s, border-left-color 0.2s;
+}
+
+.card-item:hover {
+    border-left-color: var(--primary);
+}
+
+/* Sidebar active item — stronger left indicator */
+.sidebar .menu-item.active::before {
+    width: 4px;
+    background: linear-gradient(180deg, var(--primary), var(--primary-dark));
+}
+
+/* Badge pulse for non-empty counts */
+.badge:not(:empty) {
+    animation: badgePulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+    50%       { box-shadow: 0 0 0 5px rgba(99, 102, 241, 0); }
 }

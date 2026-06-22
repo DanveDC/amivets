@@ -46,6 +46,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 # Usuario no-root por seguridad
 RUN adduser --disabled-password --gecos "" vetuser \
+    && chown -R vetuser:vetuser /app \
     && chmod +x /app/start.sh
 USER vetuser
 

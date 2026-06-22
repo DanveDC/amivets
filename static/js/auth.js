@@ -41,6 +41,12 @@ async function login(username, password) {
             errorDiv.style.display = 'block';
             errorDiv.textContent = 'Usuario o contraseña incorrectos';
         }
+        const card = document.querySelector('.login-card');
+        if (card) {
+            card.classList.remove('shake');
+            void card.offsetWidth;
+            card.classList.add('shake');
+        }
         return false;
     }
 }
@@ -72,9 +78,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = document.getElementById('btnLogin');
             const username = loginForm.username.value;
             const password = loginForm.password.value;
+            if (btn) { btn.classList.add('btn-loading'); btn.disabled = true; }
             await login(username, password);
+            if (btn) { btn.classList.remove('btn-loading'); btn.disabled = false; }
+        });
+
+        ['username', 'password'].forEach(name => {
+            loginForm[name]?.addEventListener('input', () => {
+                const errorDiv = document.getElementById('loginError');
+                if (errorDiv) errorDiv.style.display = 'none';
+            });
         });
     } else {
         // Si no hay formulario de login, verificar auth
