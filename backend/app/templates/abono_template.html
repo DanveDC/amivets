@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 2.5cm;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #2D3748;
+            line-height: 1.6;
+            font-size: 10pt;
+        }
+        .header {
+            border-bottom: 2pt solid #276749;
+            padding-bottom: 10pt;
+            margin-bottom: 20pt;
+        }
+        .clinic-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #276749;
+        }
+        .clinic-sub {
+            font-size: 9pt;
+            color: #718096;
+        }
+        .doc-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #1C4532;
+            text-align: right;
+        }
+        .doc-date {
+            font-size: 9pt;
+            color: #718096;
+            text-align: right;
+        }
+        .receipt-box {
+            border: 1pt solid #C6F6D5;
+            background-color: #F0FFF4;
+            padding: 14pt;
+            margin-bottom: 16pt;
+        }
+        .receipt-box .numero {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #276749;
+            margin-bottom: 8pt;
+        }
+        .section {
+            margin-bottom: 14pt;
+        }
+        .section-title {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #276749;
+            border-bottom: 1pt solid #C6F6D5;
+            padding-bottom: 2pt;
+            margin-bottom: 8pt;
+        }
+        .field-row {
+            margin-bottom: 4pt;
+        }
+        .label {
+            font-weight: bold;
+            color: #4A5568;
+        }
+        .value {
+            color: #2D3748;
+        }
+        table.totals {
+            width: 60%;
+            margin-left: auto;
+            border-collapse: collapse;
+            font-size: 10pt;
+        }
+        table.totals td {
+            padding: 4pt 8pt;
+            border-bottom: 0.5pt solid #E2E8F0;
+        }
+        table.totals td.right {
+            text-align: right;
+        }
+        table.totals tr.highlight td {
+            background-color: #C6F6D5;
+            font-weight: bold;
+            font-size: 11pt;
+        }
+        .estado-badge {
+            display: inline-block;
+            padding: 3pt 10pt;
+            border-radius: 4pt;
+            font-weight: bold;
+            font-size: 10pt;
+        }
+        .estado-PAGADA { background-color: #C6F6D5; color: #276749; }
+        .estado-PARCIAL { background-color: #FEFCBF; color: #744210; }
+        .estado-PENDIENTE { background-color: #FED7D7; color: #9B2C2C; }
+        .footer {
+            border-top: 1pt solid #CBD5E0;
+            margin-top: 24pt;
+            padding-top: 6pt;
+            font-size: 8pt;
+            color: #718096;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <table style="width:100%;">
+            <tr>
+                <td>
+                    <div class="clinic-name">Amivets</div>
+                    <div class="clinic-sub">Clínica Veterinaria</div>
+                </td>
+                <td style="text-align:right;">
+                    <div class="doc-title">COMPROBANTE DE ABONO</div>
+                    <div class="doc-date">Impreso: {{ fecha_impresion }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="receipt-box">
+        <div class="numero">{{ abono.numero_abono }}</div>
+        <table style="width:100%;">
+            <tr>
+                <td>
+                    <div class="field-row"><span class="label">Fecha de pago:</span> <span class="value">{{ abono.fecha.strftime('%d/%m/%Y %H:%M') if abono.fecha else '—' }}</span></div>
+                    <div class="field-row"><span class="label">Método de pago:</span> <span class="value">{{ abono.metodo_pago }}</span></div>
+                </td>
+                <td style="text-align:right;">
+                    <div style="font-size:22pt; font-weight:bold; color:#276749;">${{ "%.2f"|format(abono.monto|float) }}</div>
+                    <div style="font-size:9pt; color:#718096;">MONTO ABONADO</div>
+                </td>
+            </tr>
+        </table>
+        {% if abono.notas %}
+        <div class="field-row" style="margin-top:8pt;"><span class="label">Notas:</span> <span class="value">{{ abono.notas }}</span></div>
+        {% endif %}
+    </div>
+
+    {% if factura %}
+    <div class="section">
+        <div class="section-title">Referencia de Factura</div>
+        <div class="field-row"><span class="label">Número de factura:</span> <span class="value">{{ factura.numero_factura }}</span></div>
+        <div class="field-row"><span class="label">Fecha de emisión:</span> <span class="value">{{ factura.fecha_emision.strftime('%d/%m/%Y') if factura.fecha_emision else '—' }}</span></div>
+        <div class="field-row">
+            <span class="label">Estado actual:</span>
+            <span class="estado-badge estado-{{ factura.estado }}">{{ factura.estado }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if propietario %}
+    <div class="section">
+        <div class="section-title">Propietario</div>
+        <div class="field-row"><span class="label">Nombre:</span> <span class="value">{{ propietario.nombre }} {{ propietario.apellido }}</span></div>
+        <div class="field-row"><span class="label">Cédula:</span> <span class="value">{{ propietario.cedula }}</span></div>
+        {% if propietario.telefono %}
+        <div class="field-row"><span class="label">Teléfono:</span> <span class="value">{{ propietario.telefono }}</span></div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if factura %}
+    <div class="section">
+        <div class="section-title">Resumen de Cuenta</div>
+        <table class="totals">
+            <tr>
+                <td class="label">Total factura</td>
+                <td class="right">${{ "%.2f"|format(factura.total|float) }}</td>
+            </tr>
+            <tr>
+                <td class="label">Total pagado acumulado</td>
+                <td class="right">${{ "%.2f"|format(factura.total_pagado|float) }}</td>
+            </tr>
+            <tr class="highlight">
+                <td>Saldo pendiente</td>
+                <td class="right">${{ "%.2f"|format(factura.saldo_pendiente|float) }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        Este comprobante es válido como registro de pago parcial. Conserve este documento para sus registros.
+    </div>
+
+</body>
+</html>

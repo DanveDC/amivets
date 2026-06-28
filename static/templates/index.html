@@ -761,6 +761,7 @@
                         <label for="userRole">Rol *</label>
                         <select id="userRole" required>
                             <option value="user">Usuario Estándar</option>
+                            <option value="veterinario">Veterinario</option>
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
@@ -1132,6 +1133,9 @@
                     <h2>Gestión de Usuarios</h2>
                     <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
                 </div>
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.875rem; color: #1d4ed8;">
+                    <strong>Tip QR:</strong> Los usuarios con rol <strong>Veterinario</strong> aparecen en el formulario de reserva de turnos (QR/link público). Asigná el rol al crearlos.
+                </div>
                 <table class="consultas-table">
                     <thead>
                         <tr>
@@ -1139,6 +1143,7 @@
                             <th>Email</th>
                             <th>Rol</th>
                             <th>Estado</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="usuariosTableBody">
@@ -1745,8 +1750,46 @@
                 </div>
             </div>
 
+    <!-- Modal: Registrar Abono -->
+    <div id="modal-abono" class="modal">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2>Registrar Abono</h2>
+                <span class="close" data-modal="modal-abono" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <form id="form-abono" style="padding: 1.5rem;">
+                <input type="hidden" id="abonoFacturaId">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Saldo Pendiente</label>
+                    <div id="abonoSaldoPendiente" style="font-size: 1.4rem; font-weight: 800; color: #d97706; padding: 0.5rem 0;">$0.00</div>
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="abonoMonto">Monto a Abonar *</label>
+                    <input type="number" id="abonoMonto" min="0.01" step="0.01" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 1rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="abonoMetodoPago">Método de Pago *</label>
+                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.95rem; background: white;">
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="TARJETA">Tarjeta</option>
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="abonoNotas">Notas (opcional)</label>
+                    <textarea id="abonoNotas" rows="2" style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.9rem; resize: vertical;" placeholder="Ej: Pago parcial, referencia 123..."></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modal-abono">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="background: #10b981; border-color: #059669;">✔ Registrar Abono</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="/static/js/auth.js?v=3"></script>
-    <script src="/static/js/app.js?v=29"></script>
+    <script src="/static/js/app.js?v=30"></script>
 </body>
 
 </html>

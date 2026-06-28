@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agendar Consulta — AmiVets</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 1.5rem 1rem 3rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.10);
+      max-width: 480px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      padding: 2rem 1.5rem 1.5rem;
+      text-align: center;
+      color: #fff;
+    }
+
+    .card-header .logo {
+      font-size: 2rem;
+      margin-bottom: .5rem;
+    }
+
+    .card-header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: .25rem;
+    }
+
+    .card-header p {
+      font-size: .9rem;
+      opacity: .85;
+    }
+
+    .card-body {
+      padding: 1.75rem 1.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.1rem;
+    }
+
+    label {
+      display: block;
+      font-size: .82rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: .4rem;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: .7rem 1rem;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      font-size: .95rem;
+      color: #111827;
+      background: #f9fafb;
+      transition: border-color .15s, box-shadow .15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 3px rgba(79,70,229,.12);
+      background: #fff;
+    }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right .75rem center;
+      padding-right: 2.5rem;
+    }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .5rem;
+      margin-top: .4rem;
+    }
+
+    .slot-btn {
+      padding: .55rem .25rem;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+      font-size: .85rem;
+      font-weight: 500;
+      color: #374151;
+      cursor: pointer;
+      text-align: center;
+      transition: all .15s;
+    }
+
+    .slot-btn:hover { border-color: #4f46e5; color: #4f46e5; background: #eef2ff; }
+    .slot-btn.selected { border-color: #4f46e5; background: #4f46e5; color: #fff; }
+
+    .section-divider {
+      border: none;
+      border-top: 1.5px solid #f3f4f6;
+      margin: 1.5rem 0;
+    }
+
+    .section-title {
+      font-size: .78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: #9ca3af;
+      margin-bottom: 1rem;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: .9rem;
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      margin-top: .5rem;
+    }
+
+    .btn-submit:hover { opacity: .92; }
+    .btn-submit:active { transform: scale(.98); }
+    .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+    .alert {
+      padding: .9rem 1rem;
+      border-radius: 10px;
+      font-size: .9rem;
+      font-weight: 500;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .alert-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .alert-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+    .empty-state {
+      text-align: center;
+      color: #9ca3af;
+      font-size: .88rem;
+      padding: 1rem 0;
+    }
+
+    .success-view {
+      display: none;
+      text-align: center;
+      padding: 2rem 1.5rem;
+    }
+
+    .success-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .success-view h2 { font-size: 1.4rem; color: #111827; margin-bottom: .5rem; }
+    .success-view p { color: #6b7280; font-size: .95rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-header">
+      <div class="logo">🐾</div>
+      <h1>Agendar Consulta</h1>
+      <p>Completá el formulario para reservar tu turno</p>
+    </div>
+
+    <div id="formView" class="card-body">
+      <div id="alertBox" class="alert"></div>
+
+      <p class="section-title">Turno</p>
+
+      <div class="form-group">
+        <label for="selectVet">Veterinario</label>
+        <select id="selectVet" required>
+          <option value="">Cargando...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="selectFecha">Fecha</label>
+        <input type="date" id="selectFecha" required />
+      </div>
+
+      <div class="form-group" id="slotsGroup" style="display:none;">
+        <label>Horario disponible</label>
+        <div id="slotsGrid" class="slots-grid"></div>
+        <input type="hidden" id="horaSeleccionada" />
+      </div>
+
+      <hr class="section-divider" />
+      <p class="section-title">Tus datos</p>
+
+      <div class="form-group">
+        <label for="nombreCliente">Nombre completo</label>
+        <input type="text" id="nombreCliente" placeholder="Ej: María García" required />
+      </div>
+
+      <div class="form-group">
+        <label for="telefono">Teléfono / WhatsApp</label>
+        <input type="tel" id="telefono" placeholder="Ej: 09912345678" required />
+      </div>
+
+      <hr class="section-divider" />
+      <p class="section-title">Tu mascota</p>
+
+      <div class="form-group">
+        <label for="nombreMascota">Nombre de la mascota</label>
+        <input type="text" id="nombreMascota" placeholder="Ej: Rex" required />
+      </div>
+
+      <div class="form-group">
+        <label for="tipoMascota">Tipo de mascota</label>
+        <select id="tipoMascota">
+          <option value="">Seleccionar...</option>
+          <option value="Perro">Perro</option>
+          <option value="Gato">Gato</option>
+          <option value="Ave">Ave</option>
+          <option value="Conejo">Conejo</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="motivo">Motivo de consulta (opcional)</label>
+        <textarea id="motivo" placeholder="Ej: Vacunación anual, revisión general..."></textarea>
+      </div>
+
+      <button class="btn-submit" id="btnSubmit" onclick="enviarCita()">Confirmar turno</button>
+    </div>
+
+    <div id="successView" class="success-view">
+      <div class="success-icon">✅</div>
+      <h2>¡Turno solicitado!</h2>
+      <p id="successDetail"></p>
+      <p style="margin-top:1rem; color:#9ca3af; font-size:.85rem;">
+        Te contactaremos para confirmar tu turno.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const API = '';  // same origin
+
+    let horariosVet = [];
+    let selectedSlot = null;
+
+    async function init() {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('selectFecha').min = today;
+      document.getElementById('selectFecha').value = today;
+
+      try {
+        const vets = await fetch(`${API}/api/admin/supabase/veterinarios`).then(r => r.json());
+        const sel = document.getElementById('selectVet');
+        if (!Array.isArray(vets) || vets.length === 0) {
+          sel.innerHTML = '<option value="">Sin veterinarios disponibles</option>';
+          showAlert('No hay veterinarios disponibles por el momento.', 'info');
+          return;
+        }
+        sel.innerHTML = '<option value="">Seleccioná un veterinario...</option>' +
+          vets.filter(v => v.activo).map(v =>
+            `<option value="${v.id}">${v.nombre}</option>`
+          ).join('');
+      } catch (e) {
+        showAlert('Error al cargar veterinarios. Verificá tu conexión.', 'error');
+      }
+    }
+
+    document.getElementById('selectVet').addEventListener('change', cargarHorarios);
+    document.getElementById('selectFecha').addEventListener('change', renderSlots);
+
+    async function cargarHorarios() {
+      const vetId = document.getElementById('selectVet').value;
+      horariosVet = [];
+      selectedSlot = null;
+      document.getElementById('horaSeleccionada').value = '';
+      document.getElementById('slotsGroup').style.display = 'none';
+
+      if (!vetId) return;
+
+      try {
+        const horarios = await fetch(
+          `${API}/api/admin/supabase/horarios?amivets_usuario_id=${vetId}`
+        ).then(r => r.json());
+        horariosVet = Array.isArray(horarios) ? horarios.filter(h => h.activo) : [];
+        renderSlots();
+      } catch (e) {
+        showAlert('Error al cargar los horarios del veterinario.', 'error');
+      }
+    }
+
+    function renderSlots() {
+      const fechaVal = document.getElementById('selectFecha').value;
+      const vetId = document.getElementById('selectVet').value;
+      const grid = document.getElementById('slotsGrid');
+      const group = document.getElementById('slotsGroup');
+
+      selectedSlot = null;
+      document.getElementById('horaSeleccionada').value = '';
+
+      if (!vetId || !fechaVal || horariosVet.length === 0) {
+        group.style.display = 'none';
+        return;
+      }
+
+      // JS Date from "YYYY-MM-DD" is UTC — add T00:00 to keep local day
+      const date = new Date(fechaVal + 'T00:00:00');
+      const jsDow = date.getDay(); // 0=Sun..6=Sat
+      // Convert to 0=Mon..6=Sun
+      const dayIndex = jsDow === 0 ? 6 : jsDow - 1;
+
+      const dayHorarios = horariosVet.filter(h => h.dia_semana === dayIndex);
+
+      if (dayHorarios.length === 0) {
+        grid.innerHTML = '<p class="empty-state">Sin horarios disponibles para ese día.</p>';
+        group.style.display = 'block';
+        return;
+      }
+
+      const slots = [];
+      dayHorarios.forEach(h => {
+        const [sh, sm] = h.hora_inicio.split(':').map(Number);
+        const [eh, em] = h.hora_fin.split(':').map(Number);
+        const dur = h.duracion_consulta_minutos || 60;
+        let cur = sh * 60 + sm;
+        const end = eh * 60 + em;
+        while (cur + dur <= end) {
+          const hh = String(Math.floor(cur / 60)).padStart(2, '0');
+          const mm = String(cur % 60).padStart(2, '0');
+          slots.push(`${hh}:${mm}`);
+          cur += dur;
+        }
+      });
+
+      if (slots.length === 0) {
+        grid.innerHTML = '<p class="empty-state">Sin horarios disponibles para ese día.</p>';
+      } else {
+        grid.innerHTML = slots.map(s =>
+          `<button type="button" class="slot-btn" onclick="selectSlot('${s}', this)">${s}</button>`
+        ).join('');
+      }
+      group.style.display = 'block';
+    }
+
+    function selectSlot(hora, btn) {
+      document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedSlot = hora;
+      document.getElementById('horaSeleccionada').value = hora;
+      hideAlert();
+    }
+
+    async function enviarCita() {
+      const vetId = document.getElementById('selectVet').value;
+      const fecha = document.getElementById('selectFecha').value;
+      const hora = document.getElementById('horaSeleccionada').value;
+      const nombre = document.getElementById('nombreCliente').value.trim();
+      const telefono = document.getElementById('telefono').value.trim();
+      const mascota = document.getElementById('nombreMascota').value.trim();
+      const tipo = document.getElementById('tipoMascota').value;
+      const motivo = document.getElementById('motivo').value.trim();
+
+      if (!vetId) { showAlert('Seleccioná un veterinario.', 'error'); return; }
+      if (!fecha) { showAlert('Seleccioná una fecha.', 'error'); return; }
+      if (!hora) { showAlert('Seleccioná un horario disponible.', 'error'); return; }
+      if (!nombre) { showAlert('Ingresá tu nombre completo.', 'error'); return; }
+      if (!telefono) { showAlert('Ingresá tu teléfono.', 'error'); return; }
+      if (!mascota) { showAlert('Ingresá el nombre de tu mascota.', 'error'); return; }
+
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      try {
+        const res = await fetch(`${API}/api/admin/supabase/citas-qr`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amivets_usuario_id: parseInt(vetId),
+            fecha_cita: fecha,
+            hora_cita: hora,
+            nombre_cliente: nombre,
+            telefono,
+            nombre_mascota: mascota,
+            tipo_mascota: tipo || null,
+            motivo: motivo || null,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Error ${res.status}`);
+        }
+
+        const vetNombre = document.getElementById('selectVet').selectedOptions[0]?.text || '';
+        document.getElementById('successDetail').textContent =
+          `Tu turno con ${vetNombre} el ${formatFecha(fecha)} a las ${hora} h fue registrado con éxito.`;
+        document.getElementById('formView').style.display = 'none';
+        document.getElementById('successView').style.display = 'block';
+
+      } catch (e) {
+        showAlert('No se pudo registrar el turno: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Confirmar turno';
+      }
+    }
+
+    function showAlert(msg, type) {
+      const box = document.getElementById('alertBox');
+      box.className = `alert alert-${type}`;
+      box.textContent = msg;
+      box.style.display = 'block';
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideAlert() {
+      document.getElementById('alertBox').style.display = 'none';
+    }
+
+    function formatFecha(str) {
+      const [y, m, d] = str.split('-');
+      return `${d}/${m}/${y}`;
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from io import BytesIO
 
 from app.core.database import get_db
 from app.schemas.schemas import (
@@ -10,6 +12,7 @@ from app.schemas.schemas import (
 )
 from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion
 from app.services.consulta_service import ConsultaService
+from app.services.pdf_service import PDFService
 
 router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
 
@@ -43,10 +46,16 @@ def listar_consultas(
     skip: int = 0,
     limit: int = 100,
     mascota_id: Optional[int] = None,
+    veterinario: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    estado_pago: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Lista todas las consultas con filtros opcionales"""
-    return ConsultaService.listar_consultas(db, skip, limit, mascota_id)
+    return ConsultaService.listar_consultas(
+        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin, estado_pago
+    )
 
 
 @router.put("/{consulta_id}", response_model=ConsultaResponse)
@@ -222,6 +231,23 @@ def actualizar_servicio_consulta(
     db.commit()
     db.refresh(servicio)
     return servicio
+
+@router.get("/{consulta_id}/pdf")
+def descargar_consulta_pdf(
+    consulta_id: int,
+    db: Session = Depends(get_db)
+):
+    """Genera y descarga el PDF del resumen de una consulta"""
+    pdf_content = PDFService.generar_consulta_pdf(db, consulta_id)
+    if not pdf_content:
+        raise HTTPException(status_code=500, detail="Error al generar el PDF de la consulta")
+
+    return StreamingResponse(
+        BytesIO(pdf_content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Consulta_{consulta_id}.pdf"}
+    )
+
 
 @router.delete("/servicios/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_servicio_consulta(

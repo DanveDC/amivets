@@ -62,11 +62,16 @@ def agendar_cita(
 def listar_citas(
     fecha: Optional[str] = None,
     estado: Optional[str] = None,
+    veterinario_id: Optional[int] = None,
+    mascota_id: Optional[int] = None,
+    tipo: Optional[str] = None,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Lista las citas, opcionalmente filtrando por fecha (YYYY-MM-DD) o estado"""
+    """Lista las citas, opcionalmente filtrando por fecha (YYYY-MM-DD), estado, veterinario, mascota, tipo o rango de fechas"""
     query = db.query(Cita)
     if fecha:
         try:
@@ -78,6 +83,16 @@ def listar_citas(
             pass
     if estado:
         query = query.filter(Cita.estado == estado)
+    if veterinario_id is not None:
+        query = query.filter(Cita.veterinario_id == veterinario_id)
+    if mascota_id is not None:
+        query = query.filter(Cita.mascota_id == mascota_id)
+    if tipo:
+        query = query.filter(Cita.tipo == tipo)
+    if fecha_inicio:
+        query = query.filter(Cita.fecha_cita >= fecha_inicio)
+    if fecha_fin:
+        query = query.filter(Cita.fecha_cita <= fecha_fin)
     return query.order_by(Cita.fecha_cita).offset(skip).limit(limit).all()
 
 @router.get("/{cita_id}", response_model=CitaResponse)

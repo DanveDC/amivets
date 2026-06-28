@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from io import BytesIO
 
 from app.core.database import get_db
-from app.schemas.schemas import FacturaCreate, FacturaUpdate, FacturaResponse
+from app.schemas.schemas import FacturaCreate, FacturaUpdate, FacturaResponse, AbonoCreate, AbonoResponse
+from app.models.models import Factura, Abono
 from app.services.facturacion_service import FacturacionService
 from app.services.pdf_service import PDFService
 
@@ -107,6 +110,95 @@ def obtener_facturas_mascota(
     from app.models.models import Consulta, Factura
     facturas = db.query(Factura).join(Consulta, Factura.consulta_id == Consulta.id).filter(Consulta.mascota_id == mascota_id).all()
     return facturas
+
+
+@router.post("/{factura_id}/abonar", response_model=AbonoResponse, status_code=status.HTTP_201_CREATED)
+def registrar_abono(
+    factura_id: int,
+    abono_data: AbonoCreate,
+    db: Session = Depends(get_db)
+):
+    """Registra un pago parcial (abono) sobre una factura"""
+    factura = db.query(Factura).filter(Factura.id == factura_id).first()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    if factura.estado in ("PAGADA", "ANULADA"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede abonar a una factura en estado {factura.estado}"
+        )
+
+    monto = float(abono_data.monto)
+    if monto <= 0:
+        raise HTTPException(status_code=400, detail="El monto del abono debe ser mayor a 0")
+
+    saldo = float(factura.saldo_pendiente) if factura.saldo_pendiente is not None else float(factura.total)
+    if monto > saldo:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El monto ({monto}) supera el saldo pendiente ({saldo})"
+        )
+
+    count_abonos = db.query(Abono).filter(Abono.factura_id == factura_id).count()
+    numero_abono = f"AB-{factura.numero_factura}-{count_abonos + 1:03d}"
+
+    nuevo_abono = Abono(
+        numero_abono=numero_abono,
+        factura_id=factura_id,
+        monto=abono_data.monto,
+        metodo_pago=abono_data.metodo_pago,
+        notas=abono_data.notas
+    )
+    db.add(nuevo_abono)
+
+    total_pagado = float(factura.total_pagado or 0) + monto
+    nuevo_saldo = saldo - monto
+
+    factura.total_pagado = total_pagado
+    factura.saldo_pendiente = nuevo_saldo
+    factura.estado = "PAGADA" if nuevo_saldo <= 0 else "PARCIAL"
+
+    db.commit()
+    db.refresh(nuevo_abono)
+    return nuevo_abono
+
+
+@router.get("/{factura_id}/abonos", response_model=List[AbonoResponse])
+def listar_abonos(
+    factura_id: int,
+    db: Session = Depends(get_db)
+):
+    """Lista todos los abonos registrados para una factura"""
+    factura = db.query(Factura).filter(Factura.id == factura_id).first()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura no encontrada")
+
+    return db.query(Abono).filter(Abono.factura_id == factura_id).all()
+
+
+@router.get("/{factura_id}/abonos/{abono_id}/pdf")
+def descargar_abono_pdf(
+    factura_id: int,
+    abono_id: int,
+    db: Session = Depends(get_db)
+):
+    """Genera y descarga el PDF del comprobante de abono"""
+    abono = db.query(Abono).filter(Abono.id == abono_id, Abono.factura_id == factura_id).first()
+    if not abono:
+        raise HTTPException(status_code=404, detail="Abono no encontrado")
+
+    factura = db.query(Factura).filter(Factura.id == factura_id).first()
+
+    pdf_content = PDFService.generar_abono_pdf(abono, factura)
+    if not pdf_content:
+        raise HTTPException(status_code=500, detail="Error al generar el PDF del abono")
+
+    return StreamingResponse(
+        BytesIO(pdf_content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Abono_{abono.numero_abono}.pdf"}
+    )
 
 
 @router.get("/{factura_id}/pdf")

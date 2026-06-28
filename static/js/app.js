@@ -256,9 +256,42 @@ const loadAgenda = async () => {
     const container = document.getElementById('agenda-list');
     container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Cargando agenda...</p>';
 
+    // Inject filter bar above the waiting list if not yet present
+    const agendaWaiting = container.closest('.agenda-waiting');
+    if (agendaWaiting && !document.getElementById('agendaFilterBar')) {
+        const filterBar = document.createElement('div');
+        filterBar.id = 'agendaFilterBar';
+        filterBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;';
+        filterBar.innerHTML = `
+            <input type="date" id="filtroAgendaFecha" value="${new Date().toLocaleDateString('en-CA')}" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; flex:1; min-width:120px;">
+            <select id="filtroAgendaEstado" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; background:white; flex:1; min-width:120px;">
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="EN_ESPERA">En Espera</option>
+                <option value="EN_CONSULTA">En Consulta</option>
+                <option value="FINALIZADO">Finalizado</option>
+                <option value="CANCELADA">Cancelada</option>
+            </select>
+            <input type="text" id="filtroAgendaMascota" placeholder="Buscar mascota..." style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; flex:1; min-width:100px;">
+            <button id="btnFiltrarAgenda" class="btn-primary" style="padding:0.4rem 0.75rem; font-size:0.82rem; white-space:nowrap;">Filtrar</button>
+        `;
+        agendaWaiting.insertBefore(filterBar, container);
+
+        document.getElementById('btnFiltrarAgenda')?.addEventListener('click', loadAgenda);
+    }
+
+    // Read filter values
+    const filtroFecha = document.getElementById('filtroAgendaFecha')?.value || '';
+    const filtroEstado = document.getElementById('filtroAgendaEstado')?.value || '';
+    const filtroMascota = (document.getElementById('filtroAgendaMascota')?.value || '').toLowerCase().trim();
+
     try {
+        const citasParams = new URLSearchParams({ skip: 0, limit: 200 });
+        if (filtroEstado) citasParams.set('estado', filtroEstado);
+        if (filtroFecha) citasParams.set('fecha_inicio', filtroFecha);
+
         const [citasRaw, consultasRaw, mascotas] = await Promise.all([
-            fetchAPI('/citas/?skip=0&limit=100').catch(() => []),
+            fetchAPI(`/citas/?${citasParams.toString()}`).catch(() => []),
             fetchAPI('/consultas/?skip=0&limit=100').catch(() => []),
             fetchAPI('/mascotas/?skip=0&limit=300').catch(() => [])
         ]);
@@ -267,14 +300,23 @@ const loadAgenda = async () => {
             mascotas.forEach(m => mascotasMap[m.id] = m.nombre);
         }
 
-        // 1. Render List (Órdenes / Espera) (Solo Citas de Hoy)
-        const hoy = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+        // 1. Render List (Órdenes / Espera)
+        // If a date filter is set use it; otherwise default to today
+        const hoy = filtroFecha || new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
         const safeCitas = Array.isArray(citasRaw) ? citasRaw : [];
-        const hoyCitas = safeCitas.filter(c => {
+        let hoyCitas = safeCitas.filter(c => {
             if (!c) return false;
             const fecha = (c.fecha_cita || c.fecha || '').toString();
             return fecha && typeof fecha.startsWith === 'function' && fecha.startsWith(hoy);
         });
+
+        // Client-side filter by mascota name
+        if (filtroMascota) {
+            hoyCitas = hoyCitas.filter(c => {
+                const nombre = (mascotasMap[c.mascota_id] || '').toLowerCase();
+                return nombre.includes(filtroMascota);
+            });
+        }
 
         if (hoyCitas.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">No hay pacientes en espera.</p>';
@@ -548,19 +590,39 @@ const verMascotasPropietario = async (propietarioId, nombre) => {
 // ============ USUARIOS MODULE ============
 const loadUsuarios = async () => {
     const tbody = document.getElementById('usuariosTableBody');
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>';
     try {
         const usuarios = await fetchAPI('/usuarios/');
+        const meResp = await fetchAPI('/usuarios/me');
+        const meId = meResp?.id;
+        const roleBadge = (role) => {
+            const colors = {
+                admin: '#4F46E5',
+                veterinario: '#059669',
+                user: '#9ca3af'
+            };
+            return `<span class="badge" style="background:${colors[role] || '#9ca3af'}">${role}</span>`;
+        };
         tbody.innerHTML = usuarios.map(u => `
             <tr>
                 <td>${u.username}</td>
                 <td>${u.email}</td>
-                <td><span class="badge" style="background: ${u.role === 'admin' ? '#4F46E5' : '#9ca3af'}">${u.role}</span></td>
+                <td>${roleBadge(u.role)}</td>
                 <td>${u.is_active ? '✅ Activo' : '❌ Inactivo'}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn-secondary btn-sm" onclick="toggleUsuarioActivo(${u.id}, ${u.is_active})"
+                        style="font-size:0.75rem; padding:0.25rem 0.6rem;">
+                        ${u.is_active ? 'Desactivar' : 'Activar'}
+                    </button>
+                    ${u.id !== meId ? `<button class="btn-secondary btn-sm" onclick="deleteUsuario(${u.id}, '${u.username}')"
+                        style="font-size:0.75rem; padding:0.25rem 0.6rem; color:var(--accent); border-color:rgba(244,63,94,0.3); margin-left:0.35rem;">
+                        Eliminar
+                    </button>` : ''}
+                </td>
             </tr>
         `).join('');
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">Error: ${error.message}</td></tr>`;
     }
 };
 
@@ -576,6 +638,28 @@ const handleNuevoUsuarioSubmit = async (e) => {
         await fetchAPI('/usuarios/', { method: 'POST', body: JSON.stringify(data) });
         alert('Usuario creado correctamente.');
         closeModal('modalNuevoUsuario');
+        loadUsuarios();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+const toggleUsuarioActivo = async (id, currentActive) => {
+    try {
+        await fetchAPI(`/usuarios/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_active: !currentActive })
+        });
+        loadUsuarios();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+};
+
+const deleteUsuario = async (id, username) => {
+    if (!confirm(`¿Eliminar el usuario "${username}"? Esta acción no se puede deshacer.`)) return;
+    try {
+        await fetchAPI(`/usuarios/${id}`, { method: 'DELETE' });
         loadUsuarios();
     } catch (error) {
         alert('Error: ' + error.message);
@@ -1176,18 +1260,64 @@ const setupConsultorioSearch = () => {
     const listContainer = document.getElementById('consultorioMascotasList');
     const searchInput = document.getElementById('consultorioSearchMascota');
 
-    if (searchInput && listContainer) {
-        searchInput.addEventListener('input', debounce(async (e) => {
-            const query = e.target.value.trim();
-            const endpoint = query.length >= 2 ? `/mascotas/?search=${encodeURIComponent(query)}` : '/mascotas/?skip=0&limit=50';
-            try {
-                const result = await fetchAPI(endpoint);
-                renderMascotasList(result, listContainer);
-            } catch (err) {
-                console.error("Search error:", err);
-            }
-        }, 400));
+    // Inject mascota filter bar above the list
+    const filterBarId = 'mascotaFilterBar';
+    if (searchInput && !document.getElementById(filterBarId)) {
+        const filterBar = document.createElement('div');
+        filterBar.id = filterBarId;
+        filterBar.style.cssText = 'display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;';
+        filterBar.innerHTML = `
+            <select id="filtroMascotaEspecie" style="flex: 1; min-width: 100px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; background: white;">
+                <option value="">Todas las especies</option>
+                <option value="Perro">Perro</option>
+                <option value="Gato">Gato</option>
+                <option value="Ave">Ave</option>
+                <option value="Conejo">Conejo</option>
+                <option value="Otro">Otro</option>
+            </select>
+            <select id="filtroMascotaSexo" style="flex: 1; min-width: 90px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; background: white;">
+                <option value="">Todos los sexos</option>
+                <option value="Macho">Macho</option>
+                <option value="Hembra">Hembra</option>
+            </select>
+            <select id="filtroMascotaEstadoReproductivo" style="flex: 1; min-width: 130px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; background: white;">
+                <option value="">Estado reproductivo</option>
+                <option value="Entero">Entero</option>
+                <option value="Castrado">Castrado/Esterilizado</option>
+            </select>
+            <input type="text" id="filtroMascotaRaza" placeholder="Raza..." style="flex: 1; min-width: 80px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem;">
+            <button id="btnFiltrarMascotas" class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; white-space: nowrap;">Filtrar</button>
+        `;
+        searchInput.parentNode.insertBefore(filterBar, listContainer);
     }
+
+    const buscarMascotasConFiltros = async () => {
+        const query = searchInput ? searchInput.value.trim() : '';
+        const especie = document.getElementById('filtroMascotaEspecie')?.value || '';
+        const sexo = document.getElementById('filtroMascotaSexo')?.value || '';
+        const estadoReproductivo = document.getElementById('filtroMascotaEstadoReproductivo')?.value || '';
+        const raza = document.getElementById('filtroMascotaRaza')?.value.trim() || '';
+
+        const params = new URLSearchParams({ skip: 0, limit: 100 });
+        if (query.length >= 2) params.set('search', query);
+        if (especie) params.set('especie', especie);
+        if (sexo) params.set('sexo', sexo);
+        if (estadoReproductivo) params.set('estado_reproductivo', estadoReproductivo);
+        if (raza) params.set('raza', raza);
+
+        try {
+            const result = await fetchAPI(`/mascotas/?${params.toString()}`);
+            renderMascotasList(result, listContainer);
+        } catch (err) {
+            console.error("Search error:", err);
+        }
+    };
+
+    if (searchInput && listContainer) {
+        searchInput.addEventListener('input', debounce(buscarMascotasConFiltros, 400));
+    }
+
+    document.getElementById('btnFiltrarMascotas')?.addEventListener('click', buscarMascotasConFiltros);
 };
 
 const renderMascotasList = (mascotas, container) => {
@@ -1669,13 +1799,42 @@ document.getElementById('formAgregarServicio').addEventListener('submit', async 
     }
 });
 
-const cargarConsultas = async (mascotaId) => {
-    const tableBody = document.getElementById('consultasTableBody');
-    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>';
+window.exportarConsultaPDF = async (consultaId) => {
     try {
-        const consultas = await fetchAPI(`/consultas/?mascota_id=${mascotaId}`);
+        const token = localStorage.getItem('token');
+        showNotification('Generando PDF de consulta...', 'info');
+        const response = await fetch(`${API_BASE_URL}/consultas/${consultaId}/pdf`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Error al generar el PDF');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `consulta-${consultaId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (e) {
+        alert('Error descargando PDF de consulta: ' + e.message);
+    }
+};
+
+const cargarConsultas = async (mascotaId, extraParams = {}) => {
+    const tableBody = document.getElementById('consultasTableBody');
+    if (!tableBody) return;
+    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Cargando...</td></tr>';
+    try {
+        const params = new URLSearchParams({ mascota_id: mascotaId });
+        if (extraParams.veterinario) params.set('veterinario', extraParams.veterinario);
+        if (extraParams.fecha_inicio) params.set('fecha_inicio', extraParams.fecha_inicio);
+        if (extraParams.fecha_fin) params.set('fecha_fin', extraParams.fecha_fin);
+        if (extraParams.estado_pago) params.set('estado_pago', extraParams.estado_pago);
+
+        const consultas = await fetchAPI(`/consultas/?${params.toString()}`);
         if (!consultas || consultas.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay historial clínico.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No hay historial clínico.</td></tr>';
             return;
         }
         tableBody.innerHTML = consultas.map(c => {
@@ -1684,7 +1843,7 @@ const cargarConsultas = async (mascotaId) => {
             const diagn = c.diagnostico || '-';
             const peso = c.peso ? parseFloat(c.peso).toFixed(2) : '-';
             const temp = c.temperatura ? parseFloat(c.temperatura).toFixed(2) : '-';
-            
+
             return `
             <tr>
                 <td>${fecha}</td>
@@ -1694,10 +1853,12 @@ const cargarConsultas = async (mascotaId) => {
                     ${c.peso ? `<b>Peso:</b> ${peso}kg<br>` : ''}
                     ${c.temperatura ? `<b>Temp:</b> ${temp}C` : ''}
                 </td>
+                <td><span style="font-size:0.8rem; padding:2px 6px; border-radius:4px; background:${c.estado_pago==='COBRADO'?'#d1fae5':'#fef3c7'}; color:${c.estado_pago==='COBRADO'?'#065f46':'#92400e'};">${c.estado_pago||'POR_COBRAR'}</span></td>
                 <td style="text-align: right;">
                     <button class="btn-primary btn-sm" onclick="verConsultaCompleta(${c.id}, ${mascotaId})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px;">🔍 Completa</button><br>
+                    <button class="btn-secondary btn-sm" onclick="exportarConsultaPDF(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px; background:#f0f4ff; color:#4338ca; border-color:#c7d2fe;">🖨 PDF</button><br>
                     <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #ecfdf5; color: #047857; border-color: #059669;">💊 Recetar</button>
-                    ${c.factura_id ? 
+                    ${c.factura_id ?
                         `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #3b82f6; border-color: #2563eb; margin-top: 4px;">📄 Facturado</button>` :
                         `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fef3c7; color: #92400e; border-color: #d97706;">💲 Facturar</button>`
                     }
@@ -1709,7 +1870,7 @@ const cargarConsultas = async (mascotaId) => {
         if (btnVerPeso) btnVerPeso.style.display = 'inline-block';
     } catch (error) {
         console.error("Error cargando consultas:", error);
-        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Error loading.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error loading.</td></tr>';
     }
 };
 
@@ -1792,13 +1953,33 @@ const switchPetTab = (tabName) => {
                 abrirFormularioConsulta();
             };
             contentArea.innerHTML = `
+                <div id="consultasFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                    <input type="text" id="filtroConsultaVet" placeholder="Veterinario..." style="flex:1; min-width:120px; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                    <input type="date" id="filtroConsultaFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                    <input type="date" id="filtroConsultaFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                    <select id="filtroConsultaEstadoPago" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; background:white;">
+                        <option value="">Todos los pagos</option>
+                        <option value="POR_COBRAR">Por Cobrar</option>
+                        <option value="COBRADO">Cobrado</option>
+                    </select>
+                    <button id="btnFiltrarConsultas" class="btn-primary" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Filtrar</button>
+                </div>
                 <table class="consultas-table">
                     <thead>
-                        <tr><th>Fecha</th><th>Motivo</th><th>Diagnóstico</th><th>Signos</th><th style="text-align:right;">Acciones</th></tr>
+                        <tr><th>Fecha</th><th>Motivo</th><th>Diagnóstico</th><th>Signos</th><th>Pago</th><th style="text-align:right;">Acciones</th></tr>
                     </thead>
                     <tbody id="consultasTableBody"></tbody>
                 </table>`;
             cargarConsultas(currentMascotaId);
+            document.getElementById('btnFiltrarConsultas')?.addEventListener('click', () => {
+                const extraParams = {
+                    veterinario: document.getElementById('filtroConsultaVet')?.value.trim(),
+                    fecha_inicio: document.getElementById('filtroConsultaFechaInicio')?.value,
+                    fecha_fin: document.getElementById('filtroConsultaFechaFin')?.value,
+                    estado_pago: document.getElementById('filtroConsultaEstadoPago')?.value,
+                };
+                cargarConsultas(currentMascotaId, extraParams);
+            });
             break;
         case 'vacunas':
             actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formVacuna')">+ Registrar Vacuna</button>`;
@@ -2858,16 +3039,82 @@ window.exportarFacturaPDF = async (facturaId) => {
     }
 };
 
+// ── ABONOS ───────────────────────────────────────────────────────────────────
+
+window.exportarAbonoPDF = async (facturaId, abonoId) => {
+    try {
+        const token = localStorage.getItem('token');
+        showNotification('Generando comprobante...', 'info');
+        const response = await fetch(`${API_BASE_URL}/facturas/${facturaId}/abonos/${abonoId}/pdf`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Error al generar el PDF');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `abono-${abonoId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (e) {
+        alert('Error descargando comprobante: ' + e.message);
+    }
+};
+
+window.abrirModalAbono = (facturaId, saldoPendiente) => {
+    document.getElementById('abonoFacturaId').value = facturaId;
+    document.getElementById('abonoSaldoPendiente').textContent = `$${parseFloat(saldoPendiente).toFixed(2)}`;
+    document.getElementById('abonoMonto').max = parseFloat(saldoPendiente).toFixed(2);
+    document.getElementById('abonoMonto').value = '';
+    document.getElementById('abonoMetodoPago').value = 'EFECTIVO';
+    document.getElementById('abonoNotas').value = '';
+    openModal('modal-abono');
+};
+
+document.getElementById('form-abono')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const facturaId = document.getElementById('abonoFacturaId').value;
+    const monto = parseFloat(document.getElementById('abonoMonto').value);
+    const metodoPago = document.getElementById('abonoMetodoPago').value;
+    const notas = document.getElementById('abonoNotas').value.trim() || null;
+
+    if (!monto || monto <= 0) { alert('El monto debe ser mayor a 0.'); return; }
+
+    try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/facturas/${facturaId}/abonar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ monto, metodo_pago: metodoPago, notas })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || 'Error registrando abono');
+        }
+        showNotification('Abono registrado con éxito.', 'success');
+        closeModal('modal-abono');
+        // Refresh the preview modal with updated data
+        abrirPreviewFactura(parseInt(facturaId));
+    } catch (err) {
+        alert('Error: ' + err.message);
+    }
+});
+
 window.abrirPreviewFactura = async (facturaId) => {
     try {
-        const factura = await fetchAPI(`/facturas/${facturaId}`);
-        
+        const [factura, abonos] = await Promise.all([
+            fetchAPI(`/facturas/${facturaId}`),
+            fetchAPI(`/facturas/${facturaId}/abonos`).catch(() => [])
+        ]);
+
         document.getElementById('previewFacturaNumero').textContent = `(#${factura.numero_factura || factura.id})`;
         document.getElementById('previewFacturaFecha').textContent = new Date(factura.fecha_emision).toLocaleDateString();
         document.getElementById('previewFacturaEstado').textContent = factura.estado;
         document.getElementById('previewFacturaMetodo').textContent = factura.metodo_pago;
         document.getElementById('previewFacturaConsulta').textContent = factura.consulta_id ? `Consulta #${factura.consulta_id}` : 'General';
-        
+
         const tbody = document.getElementById('previewFacturaItems');
         let totalC = 0;
         tbody.innerHTML = factura.detalles.map(d => {
@@ -2880,12 +3127,74 @@ window.abrirPreviewFactura = async (facturaId) => {
                 <td style="text-align: right; font-weight: 500;">$${d.subtotal.toFixed(2)}</td>
             </tr>`;
         }).join('');
-        
+
         document.getElementById('previewFacturaSubtotal').textContent = `$${factura.subtotal.toFixed(2)}`;
         document.getElementById('previewFacturaTotal').textContent = `$${factura.total.toFixed(2)}`;
-        
+
         const btnD = document.getElementById('btnDescargarPreviewFactura');
         btnD.onclick = () => exportarFacturaPDF(factura.id);
+
+        // ── Abonos section ────────────────────────────────────────────────────
+        const totalFactura = parseFloat(factura.total || 0);
+        const totalAbonado = Array.isArray(abonos)
+            ? abonos.reduce((sum, a) => sum + parseFloat(a.monto || 0), 0)
+            : parseFloat(factura.total_pagado || 0);
+        const saldo = Math.max(0, totalFactura - totalAbonado);
+
+        // Remove previous abono section if exists
+        const prevSection = document.getElementById('previewAbonosSection');
+        if (prevSection) prevSection.remove();
+
+        const modalContent = document.querySelector('#modalPreviewFactura .modal-content');
+        const modalFooter = document.querySelector('#modalPreviewFactura .modal-footer');
+
+        const abonosSection = document.createElement('div');
+        abonosSection.id = 'previewAbonosSection';
+        abonosSection.style.cssText = 'padding: 0 2.5rem 1.5rem;';
+
+        const abonosHTML = Array.isArray(abonos) && abonos.length > 0
+            ? `<div style="overflow-x:auto; border-radius:8px; border:1px solid #e5e7eb;">
+                <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
+                    <thead style="background:#f8fafc;">
+                        <tr>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">#</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">Fecha</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right; color:#64748b; font-weight:600;">Monto</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">Método</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">Notas</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center; color:#64748b; font-weight:600;">Comprobante</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${abonos.map((a, i) => `
+                        <tr style="border-top:1px solid #f1f5f9;">
+                            <td style="padding:0.6rem 0.75rem;">${i + 1}</td>
+                            <td style="padding:0.6rem 0.75rem;">${a.fecha ? new Date(a.fecha).toLocaleDateString() : '-'}</td>
+                            <td style="padding:0.6rem 0.75rem; text-align:right; font-weight:600; color:#059669;">$${parseFloat(a.monto).toFixed(2)}</td>
+                            <td style="padding:0.6rem 0.75rem;">${a.metodo_pago || '-'}</td>
+                            <td style="padding:0.6rem 0.75rem; color:#6b7280; font-size:0.8rem;">${a.notas || '-'}</td>
+                            <td style="padding:0.6rem 0.75rem; text-align:center;">
+                                <button onclick="exportarAbonoPDF(${facturaId}, ${a.id})" class="btn-secondary btn-sm" style="padding:0.2rem 0.5rem; font-size:0.78rem;">PDF</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+               </div>`
+            : '<p style="color:#9ca3af; font-size:0.875rem; margin:0.5rem 0;">No hay abonos registrados.</p>';
+
+        abonosSection.innerHTML = `
+            <h3 style="font-size:0.95rem; font-weight:700; color:#374151; margin-bottom:0.75rem;">Pagos registrados</h3>
+            ${abonosHTML}
+            <div style="display:flex; gap:2rem; margin-top:1rem; padding:1rem; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; font-size:0.9rem;">
+                <div><span style="color:#64748b;">Total:</span> <strong>$${totalFactura.toFixed(2)}</strong></div>
+                <div><span style="color:#64748b;">Pagado:</span> <strong style="color:#059669;">$${totalAbonado.toFixed(2)}</strong></div>
+                <div><span style="color:#64748b;">Saldo:</span> <strong style="color:${saldo > 0 ? '#d97706' : '#059669'};">$${saldo.toFixed(2)}</strong></div>
+            </div>
+            ${saldo > 0 ? `<div style="margin-top:0.75rem; text-align:right;"><button onclick="abrirModalAbono(${facturaId}, ${saldo})" class="btn-primary" style="background:#10b981; border-color:#059669;">+ Registrar Abono</button></div>` : ''}
+        `;
+
+        modalContent.insertBefore(abonosSection, modalFooter);
+        // ─────────────────────────────────────────────────────────────────────
 
         openModal('modalPreviewFactura');
     } catch (e) {
@@ -3103,7 +3412,7 @@ async function cargarHorariosVet() {
     }
     grid.innerHTML = '<p style="grid-column:1/-1; text-align:center;">Cargando…</p>';
     try {
-        const horarios = await fetchAPI(`/admin/supabase/horarios?veterinario_id=${vetId}`);
+        const horarios = await fetchAPI(`/admin/supabase/horarios?amivets_usuario_id=${vetId}`);
 
         // Agrupar por día
         const porDia = Array.from({ length: 7 }, () => []);
@@ -3154,8 +3463,8 @@ function abrirModalNuevoHorario() {
 async function guardarHorario(e) {
     e.preventDefault();
     const payload = {
-        veterinario_id: parseInt(document.getElementById('horarioVetId').value),
-        dia_semana:      parseInt(document.getElementById('horarioDia').value),
+        amivets_usuario_id: parseInt(document.getElementById('horarioVetId').value),
+        dia_semana:         parseInt(document.getElementById('horarioDia').value),
         hora_inicio:     document.getElementById('horarioInicio').value,
         hora_fin:        document.getElementById('horarioFin').value,
         duracion_consulta_minutos: parseInt(document.getElementById('horarioDuracion').value),
@@ -3176,86 +3485,24 @@ async function guardarHorario(e) {
     }
 }
 
-// ── TAB: Veterinarios QR ──────────────────────────────────────────────────────
+// ── TAB: Veterinarios QR (solo lectura — fuente: DB principal) ────────────────
 async function cargarVetsQR() {
     const tbody = document.getElementById('vetsQRBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Cargando…</td></tr>';
     try {
         const vets = await fetchAPI('/admin/supabase/veterinarios');
         if (!Array.isArray(vets) || vets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-secondary);">No hay veterinarios.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-secondary);">No hay veterinarios activos. Agregalos en la sección Usuarios.</td></tr>';
             return;
         }
         tbody.innerHTML = vets.map(v => `<tr>
             <td>${v.id}</td>
             <td>${v.nombre}</td>
-            <td>${v.especialidad || '—'}</td>
-            <td>${v.amivets_usuario_id ?? '⚠️ Sin vincular'}</td>
-            <td>${v.activo ? '✅ Sí' : '❌ No'}</td>
-            <td style="display:flex; gap:.5rem;">
-                <button onclick="editarVetQR(${v.id})" class="btn-secondary" style="font-size:.8rem; padding:4px 10px;">Editar</button>
-                ${v.activo
-                    ? `<button onclick="desactivarVetQR(${v.id})" class="btn-secondary" style="font-size:.8rem; padding:4px 10px; color:#ef4444;">Desactivar</button>`
-                    : ''}
-            </td>
+            <td>${v.activo ? '✅ Activo' : '❌ Inactivo'}</td>
         </tr>`).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
-    }
-}
-
-function abrirModalNuevoVetQR() {
-    document.getElementById('vetQRId').value = '';
-    document.getElementById('formNuevoVetQR').reset();
-    document.getElementById('modalNuevoVetQR').classList.add('show');
-}
-
-async function editarVetQR(id) {
-    try {
-        const vets = await fetchAPI('/admin/supabase/veterinarios');
-        const vet = (vets || []).find(v => v.id === id);
-        if (!vet) return;
-        document.getElementById('vetQRId').value = vet.id;
-        document.getElementById('vetQRNombre').value = vet.nombre;
-        document.getElementById('vetQREspecialidad').value = vet.especialidad || '';
-        document.getElementById('vetQRAmivetId').value = vet.amivets_usuario_id || '';
-        document.getElementById('modalNuevoVetQR').classList.add('show');
-    } catch (_) {}
-}
-
-async function guardarVetQR(e) {
-    e.preventDefault();
-    const id = document.getElementById('vetQRId').value;
-    const payload = {
-        nombre:              document.getElementById('vetQRNombre').value.trim(),
-        especialidad:        document.getElementById('vetQREspecialidad').value.trim() || null,
-        amivets_usuario_id:  parseInt(document.getElementById('vetQRAmivetId').value) || null,
-        activo:              true,
-    };
-    try {
-        if (id) {
-            await fetchAPI(`/admin/supabase/veterinarios/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        } else {
-            await fetchAPI('/admin/supabase/veterinarios', { method: 'POST', body: JSON.stringify(payload) });
-        }
-        showNotification('Veterinario guardado', 'success');
-        document.getElementById('modalNuevoVetQR').classList.remove('show');
-        cargarVetsQR();
-        cargarSelectVetsHorario();
-    } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
-    }
-}
-
-async function desactivarVetQR(id) {
-    if (!confirm('¿Desactivar este veterinario? Ya no aparecerá en el formulario público.')) return;
-    try {
-        await fetchAPI(`/admin/supabase/veterinarios/${id}`, { method: 'DELETE' });
-        showNotification('Veterinario desactivado', 'success');
-        cargarVetsQR();
-    } catch (err) {
-        showNotification('Error: ' + err.message, 'error');
+        tbody.innerHTML = `<tr><td colspan="3" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
     }
 }
 

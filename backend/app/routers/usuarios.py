@@ -5,7 +5,7 @@ from typing import List
 from app.core.database import get_db
 from app.core import security
 from app.models.models import Usuario
-from app.schemas.schemas import UsuarioCreate, UsuarioResponse, PasswordUpdate
+from app.schemas.schemas import UsuarioCreate, UsuarioResponse, PasswordUpdate, UsuarioUpdate
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from app.core.config import settings
@@ -94,6 +94,48 @@ def listar_veterinarios(
 async def read_users_me(current_user: Usuario = Depends(get_current_user)):
     """Obtiene la informacion del usuario actual autenticado"""
     return current_user
+
+@router.put("/{usuario_id}", response_model=UsuarioResponse)
+def actualizar_usuario(
+    usuario_id: int,
+    data: UsuarioUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_admin)
+):
+    """Actualiza rol y/o estado activo de un usuario (Solo Admin)"""
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if data.role is not None:
+        usuario.role = data.role
+    if data.is_active is not None:
+        usuario.is_active = data.is_active
+    db.commit()
+    db.refresh(usuario)
+    return usuario
+
+
+@router.delete("/{usuario_id}")
+def eliminar_usuario(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_admin)
+):
+    """Elimina un usuario (Solo Admin). No puede eliminarse a sí mismo ni al último admin."""
+    if current_user.id == usuario_id:
+        raise HTTPException(status_code=400, detail="No podés eliminarte a vos mismo")
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    remaining_admins = db.query(Usuario).filter(
+        Usuario.role == "admin", Usuario.id != usuario_id
+    ).count()
+    if usuario.role == "admin" and remaining_admins == 0:
+        raise HTTPException(status_code=400, detail="No se puede eliminar el último administrador")
+    db.delete(usuario)
+    db.commit()
+    return {"message": "Usuario eliminado"}
+
 
 @router.put("/me/password", status_code=status.HTTP_200_OK)
 def update_password(

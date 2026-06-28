@@ -40,10 +40,16 @@ def listar_mascotas(
     propietario_id: Optional[int] = None,
     activo: Optional[bool] = None,
     search: Optional[str] = None,
+    especie: Optional[str] = None,
+    raza: Optional[str] = None,
+    sexo: Optional[str] = None,
+    estado_reproductivo: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Lista todas las mascotas con filtros opcionales y búsqueda"""
-    return MascotaService.listar_mascotas(db, skip, limit, propietario_id, activo, search)
+    return MascotaService.listar_mascotas(
+        db, skip, limit, propietario_id, activo, search, especie, raza, sexo, estado_reproductivo
+    )
 
 
 @router.post("/{mascota_id}/transferir", response_model=MascotaResponse)

@@ -36,14 +36,26 @@ class ConsultaService:
         db: Session,
         skip: int = 0,
         limit: int = 100,
-        mascota_id: Optional[int] = None
+        mascota_id: Optional[int] = None,
+        veterinario: Optional[str] = None,
+        fecha_inicio: Optional[str] = None,
+        fecha_fin: Optional[str] = None,
+        estado_pago: Optional[str] = None
     ) -> List[Consulta]:
         """Lista consultas con filtros opcionales"""
         query = db.query(Consulta)
-        
+
         if mascota_id:
             query = query.filter(Consulta.mascota_id == mascota_id)
-        
+        if veterinario:
+            query = query.filter(Consulta.veterinario.ilike(f"%{veterinario}%"))
+        if fecha_inicio:
+            query = query.filter(Consulta.fecha_consulta >= fecha_inicio)
+        if fecha_fin:
+            query = query.filter(Consulta.fecha_consulta <= fecha_fin)
+        if estado_pago:
+            query = query.filter(Consulta.estado_pago == estado_pago)
+
         return query.order_by(Consulta.fecha_consulta.desc()).offset(skip).limit(limit).all()
     
     @staticmethod

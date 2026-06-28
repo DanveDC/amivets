@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
+from decimal import Decimal
 
 
 # ========== PROPIETARIO SCHEMAS ==========
@@ -429,6 +430,11 @@ class UsuarioResponse(UsuarioBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class UsuarioUpdate(BaseModel):
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class PasswordUpdate(BaseModel):
     current_password: str = Field(..., min_length=4)
     new_password: str = Field(..., min_length=4)
@@ -555,5 +561,24 @@ class CatalogoServicioUpdate(BaseModel):
 class CatalogoServicioResponse(CatalogoServicioBase):
     id: int
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== ABONO SCHEMAS ==========
+class AbonoCreate(BaseModel):
+    monto: Decimal
+    metodo_pago: str
+    notas: Optional[str] = None
+
+
+class AbonoResponse(BaseModel):
+    id: int
+    numero_abono: Optional[str] = None
+    factura_id: int
+    monto: Decimal
+    metodo_pago: str
+    fecha: datetime
+    notas: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

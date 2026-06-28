@@ -61,15 +61,19 @@ class MascotaService:
         limit: int = 100,
         propietario_id: Optional[int] = None,
         activo: Optional[bool] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        especie: Optional[str] = None,
+        raza: Optional[str] = None,
+        sexo: Optional[str] = None,
+        estado_reproductivo: Optional[str] = None
     ) -> List[Mascota]:
         """Lista mascotas con filtros opcionales y búsqueda por nombre o apellido del dueño"""
         query = db.query(Mascota).join(Mascota.propietario).options(contains_eager(Mascota.propietario))
-        
+
         if search:
             search_filter = f"%{search}%"
             query = query.filter(
-                (Mascota.nombre.ilike(search_filter)) | 
+                (Mascota.nombre.ilike(search_filter)) |
                 (Propietario.nombre.ilike(search_filter)) |
                 (Propietario.apellido.ilike(search_filter)) |
                 (Mascota.codigo_historia.ilike(search_filter))
@@ -77,10 +81,22 @@ class MascotaService:
 
         if propietario_id:
             query = query.filter(Mascota.propietario_id == propietario_id)
-        
+
         if activo is not None:
             query = query.filter(Mascota.activo == activo)
-        
+
+        if especie:
+            query = query.filter(Mascota.especie.ilike(f"%{especie}%"))
+
+        if raza:
+            query = query.filter(Mascota.raza.ilike(f"%{raza}%"))
+
+        if sexo:
+            query = query.filter(Mascota.sexo == sexo)
+
+        if estado_reproductivo:
+            query = query.filter(Mascota.estado_reproductivo == estado_reproductivo)
+
         return query.offset(skip).limit(limit).all()
     
     @staticmethod

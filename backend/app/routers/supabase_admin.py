@@ -1,9 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from pydantic import BaseModel
 import os
 
 from supabase import create_client, Client
+from sqlalchemy.orm import Session
+
+from ..core.database import get_db
+from ..models.models import Usuario
 
 router = APIRouter(prefix="/api/admin/supabase", tags=["Admin QR / Supabase"])
 
@@ -35,7 +39,7 @@ class VeterinarioSBUpdate(BaseModel):
 
 
 class HorarioCreate(BaseModel):
-    veterinario_id: int
+    amivets_usuario_id: int             # ID del usuario en el DB principal
     dia_semana: int                    # 0 = Lunes … 6 = Domingo
     hora_inicio: str                   # "HH:MM"
     hora_fin: str                      # "HH:MM"
@@ -50,62 +54,108 @@ class HorarioUpdate(BaseModel):
     activo: Optional[bool] = None
 
 
-# ── Veterinarios en Supabase ───────────────────────────────────────────────────
+class CitaQRCreate(BaseModel):
+    amivets_usuario_id: int
+    fecha_cita: str       # "YYYY-MM-DD"
+    hora_cita: str        # "HH:MM"
+    nombre_cliente: str
+    telefono: str
+    nombre_mascota: str
+    tipo_mascota: Optional[str] = None
+    motivo: Optional[str] = None
+
+
+# ── Helper: obtener o crear vet en Supabase a partir del usuario principal ──────
+
+def _get_or_create_sb_vet(sb: Client, usuario: Usuario) -> int:
+    """Devuelve el ID del vet en Supabase, creándolo si no existe."""
+    resp = sb.table("veterinarios").select("id").eq("amivets_usuario_id", usuario.id).execute()
+    if resp.data:
+        return resp.data[0]["id"]
+    nombre = getattr(usuario, "nombre", None) or getattr(usuario, "username", None) or usuario.email
+    insert = sb.table("veterinarios").insert({
+        "nombre": nombre,
+        "amivets_usuario_id": usuario.id,
+        "activo": usuario.is_active,
+    }).execute()
+    if not insert.data:
+        raise HTTPException(status_code=500, detail="No se pudo sincronizar el veterinario con Supabase")
+    return insert.data[0]["id"]
+
+
+# ── Health check Supabase ─────────────────────────────────────────────────────
+
+@router.get("/health")
+def supabase_health():
+    """Verifica conectividad con Supabase."""
+    try:
+        sb = get_supabase()
+        sb.table("veterinarios").select("id").limit(1).execute()
+        return {"status": "ok", "message": "Supabase conectado correctamente"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ── Veterinarios (fuente: DB principal) ───────────────────────────────────────
 
 @router.get("/veterinarios")
-def listar_veterinarios():
-    sb = get_supabase()
-    resp = sb.table("veterinarios").select("*").order("nombre").execute()
-    return resp.data or []
-
-
-@router.post("/veterinarios", status_code=201)
-def crear_veterinario(data: VeterinarioSBCreate):
-    sb = get_supabase()
-    resp = sb.table("veterinarios").insert(data.model_dump()).execute()
-    if not resp.data:
-        raise HTTPException(status_code=400, detail="No se pudo crear el veterinario")
-    return resp.data[0]
-
-
-@router.put("/veterinarios/{vet_id}")
-def actualizar_veterinario(vet_id: int, data: VeterinarioSBUpdate):
-    sb = get_supabase()
-    payload = {k: v for k, v in data.model_dump().items() if v is not None}
-    resp = sb.table("veterinarios").update(payload).eq("id", vet_id).execute()
-    if not resp.data:
-        raise HTTPException(status_code=404, detail="Veterinario no encontrado")
-    return resp.data[0]
-
-
-@router.delete("/veterinarios/{vet_id}", status_code=204)
-def desactivar_veterinario(vet_id: int):
-    """Soft-delete: marca el vet como inactivo para no romper citas existentes."""
-    sb = get_supabase()
-    sb.table("veterinarios").update({"activo": False}).eq("id", vet_id).execute()
+def listar_veterinarios(db: Session = Depends(get_db)):
+    """Devuelve los veterinarios del DB principal (única fuente de verdad)."""
+    usuarios = db.query(Usuario).filter(
+        Usuario.role == "veterinario",
+        Usuario.is_active == True,
+    ).order_by(Usuario.username).all()
+    return [
+        {
+            "id": u.id,
+            "nombre": getattr(u, "nombre", None) or u.username,
+            "activo": u.is_active,
+            "amivets_usuario_id": u.id,
+        }
+        for u in usuarios
+    ]
 
 
 # ── Horarios en Supabase ───────────────────────────────────────────────────────
 
 @router.get("/horarios")
-def listar_horarios(veterinario_id: Optional[int] = None):
+def listar_horarios(
+    amivets_usuario_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
     sb = get_supabase()
-    q = sb.table("horarios_veterinarios").select("*, veterinarios(nombre)")
-    if veterinario_id:
-        q = q.eq("veterinario_id", veterinario_id)
+    q = sb.table("horarios_veterinarios").select("*, veterinarios(nombre, amivets_usuario_id)")
+    if amivets_usuario_id:
+        # Buscar el ID de Supabase para este usuario
+        sb_vet = sb.table("veterinarios").select("id").eq("amivets_usuario_id", amivets_usuario_id).execute()
+        if sb_vet.data:
+            q = q.eq("veterinario_id", sb_vet.data[0]["id"])
+        else:
+            return []
     resp = q.order("veterinario_id").order("dia_semana").order("hora_inicio").execute()
     return resp.data or []
 
 
 @router.post("/horarios", status_code=201)
-def crear_horario(data: HorarioCreate):
+def crear_horario(data: HorarioCreate, db: Session = Depends(get_db)):
     sb = get_supabase()
-    # Validar rango básico
     if data.hora_inicio >= data.hora_fin:
         raise HTTPException(status_code=400, detail="hora_inicio debe ser menor que hora_fin")
     if data.dia_semana < 0 or data.dia_semana > 6:
         raise HTTPException(status_code=400, detail="dia_semana debe estar entre 0 (Lunes) y 6 (Domingo)")
-    resp = sb.table("horarios_veterinarios").insert(data.model_dump()).execute()
+    usuario = db.query(Usuario).filter(Usuario.id == data.amivets_usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado en el sistema")
+    sb_vet_id = _get_or_create_sb_vet(sb, usuario)
+    payload = {
+        "veterinario_id": sb_vet_id,
+        "dia_semana": data.dia_semana,
+        "hora_inicio": data.hora_inicio,
+        "hora_fin": data.hora_fin,
+        "duracion_consulta_minutos": data.duracion_consulta_minutos,
+        "activo": data.activo,
+    }
+    resp = sb.table("horarios_veterinarios").insert(payload).execute()
     if not resp.data:
         raise HTTPException(status_code=400, detail="No se pudo crear el horario")
     return resp.data[0]
@@ -144,6 +194,31 @@ def listar_citas_qr(
         q = q.in_("estado", ["pendiente", "sincronizada", "rechazada"])
     resp = q.order("created_at", desc=True).limit(limit).execute()
     return resp.data or []
+
+
+@router.post("/citas-qr", status_code=201)
+def crear_cita_qr(data: CitaQRCreate, db: Session = Depends(get_db)):
+    """Registra una nueva cita desde el formulario público (QR). Sin autenticación requerida."""
+    sb = get_supabase()
+    usuario = db.query(Usuario).filter(Usuario.id == data.amivets_usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Veterinario no encontrado")
+    sb_vet_id = _get_or_create_sb_vet(sb, usuario)
+    payload = {
+        "veterinario_id": sb_vet_id,
+        "fecha_cita": data.fecha_cita,
+        "hora_cita": data.hora_cita,
+        "nombre_cliente": data.nombre_cliente,
+        "telefono": data.telefono,
+        "nombre_mascota": data.nombre_mascota,
+        "tipo_mascota": data.tipo_mascota,
+        "motivo": data.motivo,
+        "estado": "pendiente",
+    }
+    resp = sb.table("citas_agendadas").insert(payload).execute()
+    if not resp.data:
+        raise HTTPException(status_code=400, detail="No se pudo registrar la cita en Supabase")
+    return resp.data[0]
 
 
 @router.delete("/citas-qr/{cita_id}", status_code=204)

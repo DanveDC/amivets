@@ -1,8 +1,9 @@
 # AmiVets Models - Force Sync v2
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from typing import List, Optional
+from datetime import datetime
 import enum
 from app.core.database import Base
 
@@ -281,7 +282,7 @@ class Factura(Base):
     descuento = Column(Float, default=0.0)
     impuesto = Column(Float, default=0.0)  # IVA u otros impuestos
     total = Column(Float, nullable=False, default=0.0)
-    estado = Column(String(20), default="PENDIENTE")  # PENDIENTE, PAGADA, ANULADA
+    estado = Column(String(20), default="PENDIENTE")  # PENDIENTE, PAGADA, ANULADA, PARCIAL
     metodo_pago = Column(String(50))  # Efectivo, Tarjeta, Transferencia
     total_pagado = Column(Float, default=0.0) # Para Cuentas por Cobrar
     saldo_pendiente = Column(Float, default=0.0)
@@ -295,9 +296,28 @@ class Factura(Base):
     propietario = relationship("Propietario", back_populates="facturas")
     detalles = relationship("DetalleFactura", back_populates="factura", cascade="all, delete-orphan")
     consulta = relationship("Consulta", back_populates="factura")
-    
+    abonos = relationship("Abono", back_populates="factura")
+
     def __repr__(self):
         return f"<Factura {self.numero_factura}>"
+
+
+class Abono(Base):
+    """Modelo para pagos parciales sobre una factura"""
+    __tablename__ = "abonos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    numero_abono = Column(String(50), unique=True)
+    factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False)
+    monto = Column(Numeric(10, 2), nullable=False)
+    metodo_pago = Column(String(50), nullable=False)
+    fecha = Column(DateTime, default=datetime.utcnow)
+    notas = Column(Text, nullable=True)
+
+    factura = relationship("Factura", back_populates="abonos")
+
+    def __repr__(self):
+        return f"<Abono {self.numero_abono} - {self.monto}>"
 
 
 class DetalleFactura(Base):

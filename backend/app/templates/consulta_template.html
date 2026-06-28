@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 2cm;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #2D3748;
+            line-height: 1.5;
+            font-size: 10pt;
+        }
+        .header {
+            border-bottom: 2pt solid #2B6CB0;
+            padding-bottom: 10pt;
+            margin-bottom: 16pt;
+        }
+        .clinic-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #2B6CB0;
+        }
+        .clinic-sub {
+            font-size: 9pt;
+            color: #718096;
+        }
+        .doc-title {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #1A365D;
+            text-align: right;
+            margin-top: 4pt;
+        }
+        .doc-date {
+            font-size: 9pt;
+            color: #718096;
+            text-align: right;
+        }
+        .section {
+            margin-bottom: 14pt;
+        }
+        .section-title {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #2B6CB0;
+            border-bottom: 1pt solid #BEE3F8;
+            padding-bottom: 2pt;
+            margin-bottom: 6pt;
+        }
+        .two-col {
+            width: 100%;
+        }
+        .two-col td {
+            width: 50%;
+            vertical-align: top;
+            padding: 2pt 4pt;
+        }
+        .label {
+            font-weight: bold;
+            color: #4A5568;
+        }
+        .value {
+            color: #2D3748;
+        }
+        .field-row {
+            margin-bottom: 4pt;
+        }
+        .text-block {
+            background-color: #F7FAFC;
+            border-left: 3pt solid #BEE3F8;
+            padding: 6pt 8pt;
+            margin-top: 4pt;
+            font-size: 9pt;
+        }
+        table.services {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+        table.services th {
+            background-color: #2B6CB0;
+            color: #ffffff;
+            padding: 5pt 6pt;
+            text-align: left;
+        }
+        table.services td {
+            padding: 4pt 6pt;
+            border-bottom: 0.5pt solid #E2E8F0;
+        }
+        table.services tr:nth-child(even) td {
+            background-color: #EBF8FF;
+        }
+        table.services td.right {
+            text-align: right;
+        }
+        .footer {
+            border-top: 1pt solid #CBD5E0;
+            margin-top: 20pt;
+            padding-top: 6pt;
+            font-size: 8pt;
+            color: #718096;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <table style="width:100%;">
+            <tr>
+                <td>
+                    <div class="clinic-name">Amivets</div>
+                    <div class="clinic-sub">Clínica Veterinaria</div>
+                </td>
+                <td style="text-align:right;">
+                    <div class="doc-title">RESUMEN DE CONSULTA</div>
+                    <div class="doc-date">Impreso: {{ fecha_impresion }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {% if mascota %}
+    <div class="section">
+        <div class="section-title">Datos del Paciente</div>
+        <table class="two-col">
+            <tr>
+                <td>
+                    <div class="field-row"><span class="label">Nombre:</span> <span class="value">{{ mascota.nombre }}</span></div>
+                    <div class="field-row"><span class="label">Especie:</span> <span class="value">{{ mascota.especie }}</span></div>
+                    <div class="field-row"><span class="label">Raza:</span> <span class="value">{{ mascota.raza or '—' }}</span></div>
+                    <div class="field-row"><span class="label">Sexo:</span> <span class="value">{{ mascota.sexo or '—' }}</span></div>
+                </td>
+                <td>
+                    <div class="field-row"><span class="label">Historia:</span> <span class="value">{{ mascota.codigo_historia or '—' }}</span></div>
+                    {% if mascota.fecha_nacimiento %}
+                    <div class="field-row"><span class="label">Fecha de nacimiento:</span> <span class="value">{{ mascota.fecha_nacimiento }}</span></div>
+                    {% endif %}
+                    <div class="field-row"><span class="label">Estado reproductivo:</span> <span class="value">{{ mascota.estado_reproductivo or '—' }}</span></div>
+                    {% if mascota.microchip %}
+                    <div class="field-row"><span class="label">Microchip:</span> <span class="value">{{ mascota.microchip }}</span></div>
+                    {% endif %}
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if propietario %}
+    <div class="section">
+        <div class="section-title">Propietario</div>
+        <table class="two-col">
+            <tr>
+                <td>
+                    <div class="field-row"><span class="label">Nombre:</span> <span class="value">{{ propietario.nombre }} {{ propietario.apellido }}</span></div>
+                    <div class="field-row"><span class="label">Cédula:</span> <span class="value">{{ propietario.cedula }}</span></div>
+                </td>
+                <td>
+                    <div class="field-row"><span class="label">Teléfono:</span> <span class="value">{{ propietario.telefono or '—' }}</span></div>
+                    <div class="field-row"><span class="label">Email:</span> <span class="value">{{ propietario.email or '—' }}</span></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <div class="section-title">Datos de la Consulta</div>
+        <table class="two-col">
+            <tr>
+                <td>
+                    <div class="field-row"><span class="label">Fecha:</span> <span class="value">{{ consulta.fecha_consulta.strftime('%d/%m/%Y %H:%M') if consulta.fecha_consulta else '—' }}</span></div>
+                    <div class="field-row"><span class="label">Veterinario:</span> <span class="value">{{ consulta.veterinario or '—' }}</span></div>
+                    <div class="field-row"><span class="label">Motivo:</span> <span class="value">{{ consulta.motivo or '—' }}</span></div>
+                </td>
+                <td>
+                    <div class="field-row"><span class="label">Peso:</span> <span class="value">{{ consulta.peso ~ ' kg' if consulta.peso else '—' }}</span></div>
+                    <div class="field-row"><span class="label">Temperatura:</span> <span class="value">{{ consulta.temperatura ~ ' °C' if consulta.temperatura else '—' }}</span></div>
+                    <div class="field-row"><span class="label">Frecuencia cardíaca:</span> <span class="value">{{ consulta.frecuencia_cardiaca ~ ' bpm' if consulta.frecuencia_cardiaca else '—' }}</span></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {% if consulta.sintomas %}
+    <div class="section">
+        <div class="section-title">Síntomas</div>
+        <div class="text-block">{{ consulta.sintomas }}</div>
+    </div>
+    {% endif %}
+
+    {% if consulta.diagnostico %}
+    <div class="section">
+        <div class="section-title">Diagnóstico</div>
+        <div class="text-block">{{ consulta.diagnostico }}</div>
+    </div>
+    {% endif %}
+
+    {% if consulta.tratamiento %}
+    <div class="section">
+        <div class="section-title">Tratamiento</div>
+        <div class="text-block">{{ consulta.tratamiento }}</div>
+    </div>
+    {% endif %}
+
+    {% if servicios %}
+    <div class="section">
+        <div class="section-title">Servicios Administrados</div>
+        <table class="services">
+            <thead>
+                <tr>
+                    <th>Servicio</th>
+                    <th>Tipo</th>
+                    <th style="text-align:right;">Cant.</th>
+                    <th style="text-align:right;">Precio Unit.</th>
+                    <th style="text-align:right;">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in servicios %}
+                <tr>
+                    <td>{{ s.nombre_servicio or '—' }}</td>
+                    <td>{{ s.tipo_servicio or '—' }}</td>
+                    <td class="right">{{ s.cantidad }}</td>
+                    <td class="right">${{ "%.2f"|format(s.precio_unitario) }}</td>
+                    <td class="right">${{ "%.2f"|format(s.cantidad * s.precio_unitario) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if consulta.observaciones %}
+    <div class="section">
+        <div class="section-title">Observaciones del Veterinario</div>
+        <div class="text-block">{{ consulta.observaciones }}</div>
+    </div>
+    {% endif %}
+
+    {% if consulta.proxima_cita %}
+    <div class="section">
+        <div class="section-title">Próxima Cita</div>
+        <div class="field-row"><span class="label">Fecha sugerida:</span> <span class="value">{{ consulta.proxima_cita.strftime('%d/%m/%Y %H:%M') }}</span></div>
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        Este documento es un resumen de consulta veterinaria. No reemplaza el historial clínico completo.
+    </div>
+
+</body>
+</html>
