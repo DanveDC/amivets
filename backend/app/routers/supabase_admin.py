@@ -69,18 +69,23 @@ class CitaQRCreate(BaseModel):
 
 def _get_or_create_sb_vet(sb: Client, usuario: Usuario) -> int:
     """Devuelve el ID del vet en Supabase, creándolo si no existe."""
-    resp = sb.table("veterinarios").select("id").eq("amivets_usuario_id", usuario.id).execute()
-    if resp.data:
-        return resp.data[0]["id"]
-    nombre = getattr(usuario, "nombre", None) or getattr(usuario, "username", None) or usuario.email
-    insert = sb.table("veterinarios").insert({
-        "nombre": nombre,
-        "amivets_usuario_id": usuario.id,
-        "activo": usuario.is_active,
-    }).execute()
-    if not insert.data:
-        raise HTTPException(status_code=500, detail="No se pudo sincronizar el veterinario con Supabase")
-    return insert.data[0]["id"]
+    try:
+        resp = sb.table("veterinarios").select("id").eq("amivets_usuario_id", usuario.id).execute()
+        if resp.data:
+            return resp.data[0]["id"]
+        nombre = getattr(usuario, "nombre", None) or getattr(usuario, "username", None) or usuario.email
+        insert = sb.table("veterinarios").insert({
+            "nombre": nombre,
+            "amivets_usuario_id": usuario.id,
+            "activo": usuario.is_active,
+        }).execute()
+        if not insert.data:
+            raise HTTPException(status_code=500, detail="Supabase rechazó el insert del veterinario (sin datos devueltos)")
+        return insert.data[0]["id"]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error Supabase al sincronizar veterinario: {str(e)}")
 
 
 # ── Health check Supabase ─────────────────────────────────────────────────────
