@@ -37,7 +37,6 @@ COPY static/ /app/static/
 # Copiar el sync worker y el script de arranque
 COPY sync_worker.py /app/sync_worker.py
 COPY start.sh /app/start.sh
-COPY index.html /app/static/agendar.html
 
 # Variables de entorno para optimización
 ENV PYTHONUNBUFFERED=1 \
