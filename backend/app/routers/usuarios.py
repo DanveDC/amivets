@@ -102,10 +102,24 @@ def actualizar_usuario(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_admin)
 ):
-    """Actualiza rol y/o estado activo de un usuario (Solo Admin)"""
+    """Actualiza username, email, rol y/o estado activo de un usuario (Solo Admin)"""
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    if data.username is not None:
+        conflict = db.query(Usuario).filter(
+            Usuario.username == data.username, Usuario.id != usuario_id
+        ).first()
+        if conflict:
+            raise HTTPException(status_code=400, detail="El nombre de usuario ya existe")
+        usuario.username = data.username
+    if data.email is not None:
+        conflict = db.query(Usuario).filter(
+            Usuario.email == data.email, Usuario.id != usuario_id
+        ).first()
+        if conflict:
+            raise HTTPException(status_code=400, detail="El email ya está registrado")
+        usuario.email = data.email
     if data.role is not None:
         usuario.role = data.role
     if data.is_active is not None:

@@ -610,6 +610,10 @@ const loadUsuarios = async () => {
                 <td>${roleBadge(u.role)}</td>
                 <td>${u.is_active ? '✅ Activo' : '❌ Inactivo'}</td>
                 <td style="white-space:nowrap;">
+                    <button class="btn-secondary btn-sm" onclick="abrirEditarUsuario(${u.id}, '${u.username}', '${u.email}', '${u.role}')"
+                        style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-right:0.35rem;">
+                        Editar
+                    </button>
                     <button class="btn-secondary btn-sm" onclick="toggleUsuarioActivo(${u.id}, ${u.is_active})"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem;">
                         ${u.is_active ? 'Desactivar' : 'Activar'}
@@ -664,6 +668,14 @@ const deleteUsuario = async (id, username) => {
     } catch (error) {
         alert('Error: ' + error.message);
     }
+};
+
+const abrirEditarUsuario = (id, username, email, role) => {
+    document.getElementById('editUserId').value = id;
+    document.getElementById('editUsername').value = username;
+    document.getElementById('editEmail').value = email;
+    document.getElementById('editRole').value = role;
+    openModal('modalEditarUsuario');
 };
 
 // ============ EVOLUCION DE PESO (CHART) ============
@@ -2691,6 +2703,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.getElementById('btnShowModalUser')?.addEventListener('click', () => openModal('modalNuevoUsuario'));
     document.getElementById('formNuevoUsuario')?.addEventListener('submit', handleNuevoUsuarioSubmit);
+    document.getElementById('formEditarUsuario')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('editUserId').value;
+        const data = {
+            username: document.getElementById('editUsername').value,
+            email: document.getElementById('editEmail').value,
+            role: document.getElementById('editRole').value,
+        };
+        try {
+            await fetchAPI(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+            closeModal('modalEditarUsuario');
+            loadUsuarios();
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    });
     document.getElementById('formTransferir')?.addEventListener('submit', handleTransferirSubmit);
     document.getElementById('formReceta')?.addEventListener('submit', handleRecetaSubmit);
 

@@ -431,6 +431,8 @@ class UsuarioResponse(UsuarioBase):
 
 
 class UsuarioUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
 

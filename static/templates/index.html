@@ -773,6 +773,39 @@
             </div>
         </div>
 
+        <!-- Modal Editar Usuario (Admin) -->
+        <div id="modalEditarUsuario" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Editar Usuario</h2>
+                    <span class="close" data-modal="modalEditarUsuario" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <form id="formEditarUsuario">
+                    <input type="hidden" id="editUserId" />
+                    <div class="form-group">
+                        <label for="editUsername">Nombre de Usuario</label>
+                        <input type="text" id="editUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editEmail">Email</label>
+                        <input type="email" id="editEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editRole">Rol</label>
+                        <select id="editRole" required>
+                            <option value="user">Usuario Estándar</option>
+                            <option value="veterinario">Veterinario</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalEditarUsuario">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Modal Transferir Mascota -->
         <div id="modalTransferir" class="modal">
             <div class="modal-content">
