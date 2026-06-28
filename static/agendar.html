@@ -285,6 +285,7 @@
           return;
         }
         sel.innerHTML = '<option value="">Seleccioná un veterinario...</option>' +
+          '<option value="0">Cualquier veterinario disponible</option>' +
           vets.filter(v => v.activo).map(v =>
             `<option value="${v.id}">${v.nombre}</option>`
           ).join('');
@@ -303,12 +304,13 @@
       document.getElementById('horaSeleccionada').value = '';
       document.getElementById('slotsGroup').style.display = 'none';
 
-      if (!vetId) return;
+      if (vetId === '') return;
 
       try {
-        const horarios = await fetch(
-          `${API}/api/admin/supabase/horarios?amivets_usuario_id=${vetId}`
-        ).then(r => r.json());
+        const url = vetId === '0'
+          ? `${API}/api/admin/supabase/horarios`
+          : `${API}/api/admin/supabase/horarios?amivets_usuario_id=${vetId}`;
+        const horarios = await fetch(url).then(r => r.json());
         horariosVet = Array.isArray(horarios) ? horarios.filter(h => h.activo) : [];
         renderSlots();
       } catch (e) {
@@ -387,7 +389,7 @@
       const tipo = document.getElementById('tipoMascota').value;
       const motivo = document.getElementById('motivo').value.trim();
 
-      if (!vetId) { showAlert('Seleccioná un veterinario.', 'error'); return; }
+      if (vetId === '') { showAlert('Seleccioná un veterinario.', 'error'); return; }
       if (!fecha) { showAlert('Seleccioná una fecha.', 'error'); return; }
       if (!hora) { showAlert('Seleccioná un horario disponible.', 'error'); return; }
       if (!nombre) { showAlert('Ingresá tu nombre completo.', 'error'); return; }
@@ -403,7 +405,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amivets_usuario_id: parseInt(vetId),
+            amivets_usuario_id: vetId === '0' ? null : parseInt(vetId),
             fecha_cita: fecha,
             hora_cita: hora,
             nombre_cliente: nombre,
@@ -419,7 +421,9 @@
           throw new Error(err.detail || `Error ${res.status}`);
         }
 
-        const vetNombre = document.getElementById('selectVet').selectedOptions[0]?.text || '';
+        const vetNombre = vetId === '0'
+          ? 'el equipo de AmiVets'
+          : (document.getElementById('selectVet').selectedOptions[0]?.text || '');
         document.getElementById('successDetail').textContent =
           `Tu turno con ${vetNombre} el ${formatFecha(fecha)} a las ${hora} h fue registrado con éxito.`;
         document.getElementById('formView').style.display = 'none';

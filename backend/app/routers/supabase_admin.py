@@ -55,7 +55,7 @@ class HorarioUpdate(BaseModel):
 
 
 class CitaQRCreate(BaseModel):
-    amivets_usuario_id: int
+    amivets_usuario_id: Optional[int] = None
     fecha_cita: str       # "YYYY-MM-DD"
     hora_cita: str        # "HH:MM"
     nombre_cliente: str
@@ -214,10 +214,12 @@ def listar_citas_qr(
 def crear_cita_qr(data: CitaQRCreate, db: Session = Depends(get_db)):
     """Registra una nueva cita desde el formulario público (QR). Sin autenticación requerida."""
     sb = get_supabase()
-    usuario = db.query(Usuario).filter(Usuario.id == data.amivets_usuario_id).first()
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Veterinario no encontrado")
-    sb_vet_id = _get_or_create_sb_vet(sb, usuario)
+    sb_vet_id = None
+    if data.amivets_usuario_id:
+        usuario = db.query(Usuario).filter(Usuario.id == data.amivets_usuario_id).first()
+        if not usuario:
+            raise HTTPException(status_code=404, detail="Veterinario no encontrado")
+        sb_vet_id = _get_or_create_sb_vet(sb, usuario)
     payload = {
         "veterinario_id": sb_vet_id,
         "fecha_cita": data.fecha_cita,
