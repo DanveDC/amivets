@@ -2583,6 +2583,7 @@ const verRecetas = async (consultaId) => {
 // ============ INITIALIZATION ============
 document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
+    checkAdminAccess();
     setupRazasPerro();
     setupSearch();
     setupConsultorioSearch();
