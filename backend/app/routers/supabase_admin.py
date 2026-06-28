@@ -128,42 +128,51 @@ def listar_horarios(
     amivets_usuario_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
-    sb = get_supabase()
-    q = sb.table("horarios_veterinarios").select("*, veterinarios(nombre, amivets_usuario_id)")
-    if amivets_usuario_id:
-        # Buscar el ID de Supabase para este usuario
-        sb_vet = sb.table("veterinarios").select("id").eq("amivets_usuario_id", amivets_usuario_id).execute()
-        if sb_vet.data:
-            q = q.eq("veterinario_id", sb_vet.data[0]["id"])
-        else:
-            return []
-    resp = q.order("veterinario_id").order("dia_semana").order("hora_inicio").execute()
-    return resp.data or []
+    try:
+        sb = get_supabase()
+        q = sb.table("horarios_veterinarios").select("*, veterinarios(nombre, amivets_usuario_id)")
+        if amivets_usuario_id:
+            sb_vet = sb.table("veterinarios").select("id").eq("amivets_usuario_id", amivets_usuario_id).execute()
+            if sb_vet.data:
+                q = q.eq("veterinario_id", sb_vet.data[0]["id"])
+            else:
+                return []
+        resp = q.order("veterinario_id").order("dia_semana").order("hora_inicio").execute()
+        return resp.data or []
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error Supabase en horarios: {str(e)}")
 
 
 @router.post("/horarios", status_code=201)
 def crear_horario(data: HorarioCreate, db: Session = Depends(get_db)):
-    sb = get_supabase()
-    if data.hora_inicio >= data.hora_fin:
-        raise HTTPException(status_code=400, detail="hora_inicio debe ser menor que hora_fin")
-    if data.dia_semana < 0 or data.dia_semana > 6:
-        raise HTTPException(status_code=400, detail="dia_semana debe estar entre 0 (Lunes) y 6 (Domingo)")
-    usuario = db.query(Usuario).filter(Usuario.id == data.amivets_usuario_id).first()
-    if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado en el sistema")
-    sb_vet_id = _get_or_create_sb_vet(sb, usuario)
-    payload = {
-        "veterinario_id": sb_vet_id,
-        "dia_semana": data.dia_semana,
-        "hora_inicio": data.hora_inicio,
-        "hora_fin": data.hora_fin,
-        "duracion_consulta_minutos": data.duracion_consulta_minutos,
-        "activo": data.activo,
-    }
-    resp = sb.table("horarios_veterinarios").insert(payload).execute()
-    if not resp.data:
-        raise HTTPException(status_code=400, detail="No se pudo crear el horario")
-    return resp.data[0]
+    try:
+        sb = get_supabase()
+        if data.hora_inicio >= data.hora_fin:
+            raise HTTPException(status_code=400, detail="hora_inicio debe ser menor que hora_fin")
+        if data.dia_semana < 0 or data.dia_semana > 6:
+            raise HTTPException(status_code=400, detail="dia_semana debe estar entre 0 (Lunes) y 6 (Domingo)")
+        usuario = db.query(Usuario).filter(Usuario.id == data.amivets_usuario_id).first()
+        if not usuario:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado en el sistema")
+        sb_vet_id = _get_or_create_sb_vet(sb, usuario)
+        payload = {
+            "veterinario_id": sb_vet_id,
+            "dia_semana": data.dia_semana,
+            "hora_inicio": data.hora_inicio,
+            "hora_fin": data.hora_fin,
+            "duracion_consulta_minutos": data.duracion_consulta_minutos,
+            "activo": data.activo,
+        }
+        resp = sb.table("horarios_veterinarios").insert(payload).execute()
+        if not resp.data:
+            raise HTTPException(status_code=400, detail="Supabase rechazó el insert del horario (sin datos devueltos)")
+        return resp.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error Supabase al crear horario: {str(e)}")
 
 
 @router.put("/horarios/{horario_id}")
