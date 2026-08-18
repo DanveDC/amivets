@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 import os
 import sys
+import asyncio
+import uuid
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.limiter import limiter
@@ -43,7 +45,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Evento de inicio para crear usuario admin por defecto
 @app.on_event("startup")
-def create_default_admin():
+async def create_default_admin():
     db = Session(bind=engine)
     try:
         admin_user = db.query(Usuario).filter(Usuario.username == "admin").first()
@@ -61,10 +63,7 @@ def create_default_admin():
             db.commit()
             logger.info("Default admin user created: admin / admin123")
         else:
-            logger.info("Default admin user already exists. Resetting password to ensure latest credentials...")
-            admin_user.hashed_password = security.get_password_hash("admin123")
-            db.commit()
-            logger.info("Admin password synchronized: admin123")
+            logger.info("Default admin user already exists.")
     except Exception as e:
         logger.error(f"Error creating default admin: {e}")
     finally:
@@ -87,20 +86,22 @@ def create_default_admin():
             os.path.join(ROOT_DIR, "backend", "scripts", "seed_catalogo.py"),
             "backend/scripts/seed_catalogo.py"
         ]
+        loop = asyncio.get_event_loop()
         for s in catalogo_scripts_to_try:
             if os.path.exists(s):
-                subprocess.run([sys.executable, s], check=False)
+                logger.info(f"Scheduling catalogo seed script (non-blocking): {s}")
+                loop.run_in_executor(None, lambda script=s: subprocess.run([sys.executable, script], check=False))
                 break
-        
+
         seed_script = None
         for s in scripts_to_try:
             if os.path.exists(s):
                 seed_script = s
                 break
-        
+
         if seed_script:
-            logger.info(f"Running seed script: {seed_script}")
-            subprocess.run([sys.executable, seed_script], check=False)
+            logger.info(f"Scheduling seed script (non-blocking): {seed_script}")
+            loop.run_in_executor(None, lambda script=seed_script: subprocess.run([sys.executable, script], check=False))
         else:
             logger.warning("Seed script not found. Skipping auto-seeding.")
             
@@ -114,13 +115,25 @@ async def log_requests(request: Request, call_next):
     try:
         response = await call_next(request)
         process_time = time.time() - start_time
-        logger.info(f"Request: {request.method} {request.url.path} - Status: {response.status_code} - Duration: {process_time:.4f}s")
+        logger.info(
+            f"{request.method} {request.url.path} → {response.status_code} "
+            f"({process_time * 1000:.0f}ms)"
+        )
         return response
     except Exception as e:
-        logger.error(f"Error processing request: {e}")
+        process_time = time.time() - start_time
+        error_id = str(uuid.uuid4())[:8]
+        logger.error(
+            f"[{error_id}] Unhandled exception on {request.method} {request.url.path} "
+            f"({process_time * 1000:.0f}ms): {e}",
+            exc_info=True
+        )
         return JSONResponse(
             status_code=500,
-            content={"detail": "Internal Server Error"}
+            content={
+                "detail": "Error interno del servidor",
+                "error_id": error_id
+            }
         )
 
 # Configurar CORS
