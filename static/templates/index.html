@@ -21,8 +21,8 @@
                     <circle cx="20" cy="20" r="18" fill="url(#grad1)" />
                     <defs>
                         <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#6366F1;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#4F46E5;stop-opacity:1" />
+                            <stop offset="0%" style="stop-color:var(--primary);stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:var(--primary-dark);stop-opacity:1" />
                         </linearGradient>
                     </defs>
                     <path d="M20 10C15 10 12 13 12 18C12 22 15 25 20 30C25 25 28 22 28 18C28 13 25 10 20 10Z"
@@ -287,7 +287,7 @@
                         </select>
                     </div>
                     <div id="adminConsultaMsg"
-                        style="display: none; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem;">
+                        style="display: none; background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--info-dark); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 0.9rem;">
                         <span class="icon">ℹ️</span> <strong>Modo Administrador:</strong> Usted está generando una orden
                         de consulta. El médico asignado completará los detalles clínicos posteriormente.
                     </div>
@@ -382,7 +382,7 @@
 
                         <!-- Clinical Shortcuts Toolbar -->
                         <div
-                            style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; background: var(--surface-hover); border: 1px dashed var(--border); border-radius: 8px;">
+                            style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; background: var(--surface-hover); border: 1px dashed var(--border); border-radius: var(--radius-md);">
                             <span
                                 style="font-size: 0.75rem; color: var(--text-secondary); width: 100%; margin-bottom: 0.25rem; font-weight: bold; text-transform: uppercase;">Ir
                                 al registro especializado:</span>
@@ -407,9 +407,9 @@
                         </div>
 
                         <div
-                            style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 1.25rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                            style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1.25rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
                             <h4
-                                style="font-size: 0.9rem; color: #1e40af; margin-bottom: 0.75rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.025em; display: flex; align-items: center; gap: 0.5rem;">
+                                style="font-size: 0.9rem; color: var(--info-dark); margin-bottom: 0.75rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.025em; display: flex; align-items: center; gap: 0.5rem;">
                                 <span class="icon">➕</span> Registrar Acción Clínica o Nota
                             </h4>
                             <form id="formAgregarServicio" style="display: flex; gap: 0.75rem; flex-direction: column;">
@@ -419,9 +419,9 @@
                                 <!-- Fila 1: Categoría + Búsqueda -->
                                 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem;">
                                     <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                        <label style="font-size: 0.7rem; color: #1e40af; font-weight: bold; text-transform:uppercase;">Categoría *</label>
+                                        <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Categoría *</label>
                                         <select id="addServicioTipo" required
-                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid #bfdbfe; border-radius: 8px; background: var(--surface); font-size:0.9rem;">
+                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); background: var(--surface); font-size:0.9rem;">
                                             <option value="">— Seleccione —</option>
                                             <option value="INSUMO">💊 Insumo / Medicina</option>
                                             <option value="VACUNACION">💉 Vacunación</option>
@@ -434,48 +434,48 @@
                                         </select>
                                     </div>
                                     <div style="display: flex; flex-direction: column; gap: 0.25rem; position:relative;">
-                                        <label id="labelSeleccionDinamica" style="font-size: 0.7rem; color: #1e40af; font-weight: bold; text-transform:uppercase;">Buscar Item / Producto</label>
+                                        <label id="labelSeleccionDinamica" style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Buscar Item / Producto</label>
                                         <input type="text" id="addServicioItemSearch" list="listadoInventario"
                                             placeholder="Escriba nombre o código..."
-                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid #bfdbfe; border-radius: 8px; font-size:0.9rem;">
+                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); font-size:0.9rem;">
                                         <datalist id="listadoInventario"></datalist>
                                     </div>
                                 </div>
 
                                 <!-- Fila 2: Descripción -->
                                 <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                    <label style="font-size: 0.7rem; color: #1e40af; font-weight: bold; text-transform:uppercase;">Descripción del Acto Médico *</label>
+                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Descripción del Acto Médico *</label>
                                     <input type="text" id="addServicioNombre" placeholder="Ej: Amoxicilina 500mg, Triple Canina, Hemograma..."
                                         required
-                                        style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid #bfdbfe; border-radius: 8px; font-size:0.9rem;">
+                                        style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); font-size:0.9rem;">
                                 </div>
 
                                 <!-- Fila 3: Cantidad + Precio (VISIBLE) -->
                                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
                                     <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                        <label style="font-size:0.7rem; color:#1e40af; font-weight:bold; text-transform:uppercase;">Cantidad *</label>
+                                        <label style="font-size:0.7rem; color:var(--info-dark); font-weight:bold; text-transform:uppercase;">Cantidad *</label>
                                         <input type="number" id="addServicioCantidad" value="1" min="0.1" step="0.1" required
-                                            style="padding:0.6rem 0.5rem; border:1.5px solid #bfdbfe; border-radius:8px; font-size:0.9rem; font-weight:600; text-align:center;">
+                                            style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
                                     </div>
                                     <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                        <label style="font-size:0.7rem; color:#1e40af; font-weight:bold; text-transform:uppercase;">Precio Unitario ($) *</label>
+                                        <label style="font-size:0.7rem; color:var(--info-dark); font-weight:bold; text-transform:uppercase;">Precio Unitario ($) *</label>
                                         <input type="number" id="addServicioPrecio" value="0" min="0" step="0.01" required
-                                            style="padding:0.6rem 0.5rem; border:1.5px solid #bfdbfe; border-radius:8px; font-size:0.9rem; font-weight:600; text-align:center;">
+                                            style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
                                     </div>
                                 </div>
 
                                 <!-- Campos dinámicos por tipo -->
                                 <div id="containerCamposDinamicos"
-                                    style="margin-top: 0.25rem; display: none; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; background:#f0f4ff; padding:0.75rem; border-radius:8px; border:1px solid #c7d2fe;">
+                                    style="margin-top: 0.25rem; display: none; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; background:var(--primary-subtle); padding:0.75rem; border-radius:var(--radius-md); border:1px solid rgba(99, 102, 241, 0.25);">
                                 </div>
 
                                 <!-- Notas clínicas -->
-                                <div style="padding: 0.75rem; background: #f0f9ff; border: 1.5px solid #e0e7ff; border-radius: 10px;">
-                                    <label style="font-size: 0.7rem; color: #1e40af; font-weight: bold; display: block; margin-bottom: 0.4rem; text-transform:uppercase;">📒 Notas Clínicas (dosis, lote, observaciones)</label>
+                                <div style="padding: 0.75rem; background: var(--info-subtle); border: 1.5px solid var(--primary-subtle); border-radius: var(--radius-md);">
+                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; display: block; margin-bottom: 0.4rem; text-transform:uppercase;">📒 Notas Clínicas (dosis, lote, observaciones)</label>
                                     <textarea id="addServicioDetalles"
                                         placeholder="Ej: Lote: XX123, Vía SC, dosis 0.5ml. Paciente tolera bien..."
                                         rows="2"
-                                        style="width: 100%; border: none; background: transparent; outline: none; font-size: 0.875rem; font-family: inherit; resize: vertical; color: #1e40af;"></textarea>
+                                        style="width: 100%; border: none; background: transparent; outline: none; font-size: 0.875rem; font-family: inherit; resize: vertical; color: var(--info-dark);"></textarea>
                                 </div>
 
                                 <button type="submit" class="btn-primary"
@@ -543,7 +543,7 @@
                             placeholder="Ej: Reposo, dieta estricta..."></textarea>
                     </div>
 
-                    <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid #e5e7eb;">
+                    <hr style="margin: 1.5rem 0; border: 0; border-top: 1px solid var(--border);">
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                         <h4 style="margin: 0;">Medicamentos</h4>
@@ -644,7 +644,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Código</label>
-                            <input type="text" id="editProdCodigo" readonly style="background:#f8fafc; color:#6b7280;">
+                            <input type="text" id="editProdCodigo" readonly style="background:var(--surface-hover); color:var(--text-secondary);">
                         </div>
                         <div class="form-group">
                             <label for="editProdTipo">Categoría *</label>
@@ -676,8 +676,8 @@
                             <input type="number" id="editProdMinimo" min="0" required>
                         </div>
                         <div class="form-group">
-                            <label>Stock Actual <small style="color:#9ca3af;">(solo lectura)</small></label>
-                            <input type="number" id="editProdStock" readonly style="background:#f8fafc; color:#6b7280;">
+                            <label>Stock Actual <small style="color:var(--text-muted);">(solo lectura)</small></label>
+                            <input type="number" id="editProdStock" readonly style="background:var(--surface-hover); color:var(--text-secondary);">
                         </div>
                     </div>
                     <div class="form-row">
@@ -711,10 +711,10 @@
                 </div>
                 <form id="formMovimientoStock">
                     <input type="hidden" id="movStockProdId">
-                    <div style="background:#f8fafc; padding:1rem; border-radius:8px; margin-bottom:1.25rem; border:1px solid #e2e8f0;">
-                        <p style="margin:0; font-weight:600; color:#1e293b;" id="movStockNombre">Producto</p>
-                        <p style="margin:0.25rem 0 0; font-size:0.85rem; color:#64748b;">
-                            Stock actual: <strong id="movStockActual" style="color:#4F46E5;">—</strong> unidades
+                    <div style="background:var(--surface-hover); padding:1rem; border-radius:var(--radius-md); margin-bottom:1.25rem; border:1px solid var(--border);">
+                        <p style="margin:0; font-weight:600; color:var(--text-primary);" id="movStockNombre">Producto</p>
+                        <p style="margin:0.25rem 0 0; font-size:0.85rem; color:var(--text-secondary);">
+                            Stock actual: <strong id="movStockActual" style="color:var(--primary-dark);">—</strong> unidades
                         </p>
                     </div>
                     <div class="form-row">
@@ -1065,7 +1065,7 @@
                                             </span>
                                             <span>Evol. Peso</span>
                                         </div>
-                                        <div class="pet-nav-item" data-tab="facturacion" style="border-top: 1px solid #e5e7eb; margin-top: 4px; padding-top: 8px;">
+                                        <div class="pet-nav-item" data-tab="facturacion" style="border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;">
                                             <span class="icon">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                                             </span>
@@ -1078,7 +1078,7 @@
 
                                         <!-- Pet Content Area -->
                                         <div class="pet-content-body" id="petTabContent"
-                                            style="background: var(--surface); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 2rem; min-height: 400px;">
+                                            style="background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 2rem; min-height: 400px;">
                                             <!-- Dynamic content based on tab -->
                                             <div class="empty-state">
                                                 <div class="icon">📋</div>
@@ -1091,7 +1091,7 @@
 
                             <!-- Panel estado vacío -->
                             <div id="emptyPatientWrapper"
-                                style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; border: 2px dashed var(--border); border-radius: 8px; color: var(--text-muted); padding: 3rem;">
+                                style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; border: 2px dashed var(--border); border-radius: var(--radius-md); color: var(--text-muted); padding: 3rem;">
                                 <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                     stroke-width="2" style="margin-bottom: 1rem; opacity: 0.5;">
                                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -1166,7 +1166,7 @@
                     <h2>Gestión de Usuarios</h2>
                     <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
                 </div>
-                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.875rem; color: #1d4ed8;">
+                <div style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.875rem; color: var(--info-dark);">
                     <strong>Tip QR:</strong> Los usuarios con rol <strong>Veterinario</strong> aparecen en el formulario de reserva de turnos (QR/link público). Asigná el rol al crearlos.
                 </div>
                 <table class="consultas-table">
@@ -1193,7 +1193,7 @@
                         <p style="color:var(--text-secondary); font-size:0.875rem; margin:0;">Gestión de productos, medicamentos y materiales.</p>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        <button class="btn-secondary btn-sm" id="btnAlertasStock" style="color:#d97706; border-color:#fde68a; background:#fffbeb;">⚠️ Bajo Stock</button>
+                        <button class="btn-secondary btn-sm" id="btnAlertasStock" style="color:var(--warning-dark); border-color:rgba(245, 158, 11, 0.3); background:var(--warning-subtle);">⚠️ Bajo Stock</button>
                         <button class="btn-primary" id="btnNuevoProducto">+ Nuevo Producto</button>
                     </div>
                 </div>
@@ -1203,7 +1203,7 @@
                     <input type="text" id="searchInventario" placeholder="🔍 Buscar por nombre, código o categoría..."
                         class="search-input" style="flex:1; min-width:200px; margin:0;">
                     <select id="filtroInventarioCategoria"
-                        style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:8px; background:white; font-size:0.875rem; min-width:160px;">
+                        style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); background:white; font-size:0.875rem; min-width:160px;">
                         <option value="">Todas las categorías</option>
                         <option value="Antibiótico">Antibiótico</option>
                         <option value="Antiinflamatorio">Antiinflamatorio</option>
@@ -1216,7 +1216,7 @@
                     </select>
                 </div>
 
-                <div style="overflow-x:auto; border-radius:12px; border:1px solid var(--border);">
+                <div style="overflow-x:auto; border-radius:var(--radius-lg); border:1px solid var(--border);">
                     <table class="consultas-table" style="margin:0;">
                         <thead>
                             <tr>
@@ -1230,7 +1230,7 @@
                             </tr>
                         </thead>
                         <tbody id="inventarioTableBody">
-                            <tr><td colspan="7" style="text-align:center; padding:2rem; color:#9ca3af;">Cargando inventario...</td></tr>
+                            <tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando inventario...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1247,33 +1247,33 @@
                     </div>
                     
                     <div style="padding: 0 2.5rem;">
-                        <div style="background: var(--surface-hover); padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
+                        <div style="background: var(--surface-hover); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div>
-                                <span style="font-size: 0.8rem; color:#64748b; font-weight: bold;">FECHA EMISIÓN:</span>
-                                <div id="previewFacturaFecha" style="font-size: 1rem; color:#1e293b;"></div>
+                                <span style="font-size: 0.8rem; color:var(--text-secondary); font-weight: bold;">FECHA EMISIÓN:</span>
+                                <div id="previewFacturaFecha" style="font-size: 1rem; color:var(--text-primary);"></div>
                             </div>
                             <div>
-                                <span style="font-size: 0.8rem; color:#64748b; font-weight: bold;">ESTADO:</span>
-                                <div id="previewFacturaEstado" style="font-size: 1rem; color:#1e293b; font-weight: bold;"></div>
+                                <span style="font-size: 0.8rem; color:var(--text-secondary); font-weight: bold;">ESTADO:</span>
+                                <div id="previewFacturaEstado" style="font-size: 1rem; color:var(--text-primary); font-weight: bold;"></div>
                             </div>
                             <div>
-                                <span style="font-size: 0.8rem; color:#64748b; font-weight: bold;">MÉTODO PAGO:</span>
-                                <div id="previewFacturaMetodo" style="font-size: 1rem; color:#1e293b;"></div>
+                                <span style="font-size: 0.8rem; color:var(--text-secondary); font-weight: bold;">MÉTODO PAGO:</span>
+                                <div id="previewFacturaMetodo" style="font-size: 1rem; color:var(--text-primary);"></div>
                             </div>
                             <div>
-                                <span style="font-size: 0.8rem; color:#64748b; font-weight: bold;">ASOCIADO A:</span>
-                                <div id="previewFacturaConsulta" style="font-size: 1rem; color:#1e293b;"></div>
+                                <span style="font-size: 0.8rem; color:var(--text-secondary); font-weight: bold;">ASOCIADO A:</span>
+                                <div id="previewFacturaConsulta" style="font-size: 1rem; color:var(--text-primary);"></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                     <div style="padding: 0 2.5rem;">
-                        <h3 style="margin-bottom: 1rem; color:#374151; font-size: 1rem; font-weight: 700;">Detalle de Facturación</h3>
-                        <div style="border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
+                        <h3 style="margin-bottom: 1rem; color:var(--text-primary); font-size: 1rem; font-weight: 700;">Detalle de Facturación</h3>
+                        <div style="border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
                             <table class="data-table" style="width: 100%; margin: 0; border-collapse: collapse;">
-                                <thead style="background: var(--surface-hover); border-bottom: 2px solid #e5e7eb;">
+                                <thead style="background: var(--surface-hover); border-bottom: 2px solid var(--border);">
                                     <tr>
                                         <th style="padding: 1rem;">Descripción</th>
                                         <th style="padding: 1rem;">Cant.</th>
@@ -1289,8 +1289,8 @@
                     </div>
                     
                     <div style="padding: 0 2.5rem; display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
-                        <div style="text-align: right; width: 60%; background: var(--surface-hover); padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1.5px dashed #e2e8f0;">
+                        <div style="text-align: right; width: 60%; background: var(--surface-hover); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border);">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem; padding-bottom: 0.75rem; border-bottom: 1.5px dashed var(--border);">
                                 <span style="color: var(--text-secondary); font-weight: bold; font-size: 0.9rem;">SUBTOTAL</span>
                                 <span id="previewFacturaSubtotal" style="font-weight: 600; font-size: 1rem; color: var(--text-primary);">$0.00</span>
                             </div>
@@ -1303,7 +1303,7 @@
 
                     <div class="modal-footer" style="gap: 0.5rem;">
                         <button type="button" class="btn-secondary" data-close="modalPreviewFactura">Cerrar</button>
-                        <button type="button" class="btn-primary" id="btnDescargarPreviewFactura" style="background:#10b981; border-color:#059669;" onclick="">⬇ Descargar PDF</button>
+                        <button type="button" class="btn-primary" id="btnDescargarPreviewFactura" style="background:var(--secondary); border-color:var(--secondary-dark);" onclick="">⬇ Descargar PDF</button>
                     </div>
                 </div>
             </div>
@@ -1327,7 +1327,7 @@
                     </div>
                 </div>
 
-                <div class="card" style="background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
+                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden;">
                     <table class="consultas-table" style="width: 100%; border-collapse: collapse;">
                         <thead>
                             <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
@@ -1394,7 +1394,7 @@
                     style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; max-width: 1000px; padding: 1rem;">
                     <!-- Card: Información del Usuario -->
                     <div class="card"
-                        style="padding: 2rem; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+                        style="padding: 2rem; background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
                         <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem;">
                             <div
                                 style="width: 80px; height: 80px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 700;">
@@ -1422,13 +1422,13 @@
                                 style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Estado
                                 de la Cuenta</label>
                             <span id="profileStatus" class="badge"
-                                style="background: var(--secondary); color: white; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Activo</span>
+                                style="background: var(--secondary); color: white; padding: 0.25rem 0.75rem; border-radius: var(--radius-pill); font-size: 0.875rem;">Activo</span>
                         </div>
                     </div>
 
                     <!-- Card: Seguridad / Cambio de Contraseña -->
                     <div class="card"
-                        style="padding: 2rem; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);">
+                        style="padding: 2rem; background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
                         <h3
                             style="margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
                             <span>🔐</span> Seguridad
@@ -1441,19 +1441,19 @@
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label for="profileCurrentPassword">Contraseña Actual *</label>
                                 <input type="password" id="profileCurrentPassword" required placeholder="••••••••"
-                                    style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
                             </div>
                             <div class="form-group" style="margin-bottom: 1rem;">
                                 <label for="profileNewPassword">Nueva Contraseña *</label>
                                 <input type="password" id="profileNewPassword" required minlength="4"
                                     placeholder="••••••••"
-                                    style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
                             </div>
                             <div class="form-group" style="margin-bottom: 1.5rem;">
                                 <label for="profileConfirmPassword">Confirmar Nueva Contraseña *</label>
                                 <input type="password" id="profileConfirmPassword" required minlength="4"
                                     placeholder="••••••••"
-                                    style="width: 100%; padding: 0.75rem; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                    style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
                             </div>
 
                             <button type="submit" class="btn-primary"
@@ -1489,7 +1489,7 @@
                 <div id="tab-citas-qr" class="qr-tab-content">
                     <div style="display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem;">
                         <label style="font-weight: 500; font-size: 0.875rem;">Filtrar:</label>
-                        <select id="filtroCitasQR" style="padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.875rem;">
+                        <select id="filtroCitasQR" style="padding: 0.4rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); font-size: 0.875rem;">
                             <option value="">Todas</option>
                             <option value="pendiente" selected>Pendientes</option>
                             <option value="sincronizada">Sincronizadas</option>
@@ -1523,7 +1523,7 @@
                     <div style="display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1.5rem; flex-wrap: wrap;">
                         <div>
                             <label style="font-weight: 500; font-size: 0.875rem; display:block; margin-bottom: 4px;">Veterinario</label>
-                            <select id="selectVetHorario" style="padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; min-width: 220px;">
+                            <select id="selectVetHorario" style="padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); min-width: 220px;">
                                 <option value="">Cargando…</option>
                             </select>
                         </div>
@@ -1562,7 +1562,7 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:1rem; flex-wrap:wrap;">
                     <div style="display:flex; gap:0.75rem; flex:1; flex-wrap:wrap;">
                         <input type="text" id="catalogoSearch" placeholder="Buscar servicio..." class="search-input" style="flex:1; min-width:180px;" oninput="cargarCatalogo()">
-                        <select id="catalogoCategoriaFilter" style="padding:0.5rem 0.75rem; border:1px solid #d1d5db; border-radius:8px; font-size:0.9rem; background:#fff;" onchange="cargarCatalogo()">
+                        <select id="catalogoCategoriaFilter" style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.9rem; background:var(--surface);" onchange="cargarCatalogo()">
                             <option value="">Todas las categorías</option>
                         </select>
                     </div>
@@ -1608,7 +1608,7 @@
                 </div>
                 <div class="form-group">
                     <label>Categoría *</label>
-                    <select id="catalogoCategoria" required style="width:100%; padding:0.5rem; border:1px solid #d1d5db; border-radius:8px;">
+                    <select id="catalogoCategoria" required style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md);">
                         <option value="">Seleccionar...</option>
                         <option value="ADMINISTRACION VARIOS">ADMINISTRACION VARIOS</option>
                         <option value="CONSULTA">CONSULTA</option>
@@ -1647,18 +1647,18 @@
             <span class="close" data-modal="modalFactura" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
             <div class="modal-header">
                 <h2>Generar Factura <span id="facturaConsultaIdTxt" style="color: var(--text-secondary); font-size:1rem;"></span></h2>
-                <p style="color: #4b5563; font-size: 0.9rem;">Revise los ítems consumidos y genere el comprobante de pago.</p>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Revise los ítems consumidos y genere el comprobante de pago.</p>
             </div>
             
             <div style="padding: 0 2.5rem;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:#6366F1; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">CLIENTE</label>
-                        <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:#1e293b; font-weight:700; letter-spacing: -0.02em;"></div>
+                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">CLIENTE</label>
+                        <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
                     </div>
-                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:#6366F1; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">PACIENTE</label>
-                        <div id="facturaMascotaNombre" style="font-size: 1.25rem; color:#1e293b; font-weight:700; letter-spacing: -0.02em;"></div>
+                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
+                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">PACIENTE</label>
+                        <div id="facturaMascotaNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
                     </div>
                 </div>
             </div>
@@ -1679,21 +1679,21 @@
                     </div>
                 </div>
 
-                <h3 style="margin-bottom: 1rem; color:#374151; font-size: 1rem; font-weight: 700;">Detalle de Cargos a Facturar</h3>
-                <div style="max-height: 250px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; background: #ffffff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);" id="facturaItemsList">
+                <h3 style="margin-bottom: 1rem; color:var(--text-primary); font-size: 1rem; font-weight: 700;">Detalle de Cargos a Facturar</h3>
+                <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.5rem; background: var(--surface); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);" id="facturaItemsList">
                     <p style="text-align: center; color: var(--text-muted); padding: 1rem;">Buscando cargos aplicados...</p>
                 </div>
                 
                 <div style="display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
-                    <div style="text-align: right; background: #fffbeb; padding: 1.5rem 2.5rem; border-radius: 12px; border: 1px solid #fde68a; box-shadow: var(--shadow-sm);">
-                        <span style="font-size: 0.85rem; color: #b45309; text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: #d97706; letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
+                    <div style="text-align: right; background: var(--warning-subtle); padding: 1.5rem 2.5rem; border-radius: var(--radius-lg); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: var(--shadow-sm);">
+                        <span style="font-size: 0.85rem; color: var(--warning-dark); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: var(--warning-dark); letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
                     </div>
                 </div>
 
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary" data-close="modalFactura">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background:#10b981; border-color:#059669;">✔️ Emitir y Guardar</button>
+                    <button type="submit" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);">✔️ Emitir y Guardar</button>
                 </div>
             </form>
         </div>
@@ -1710,13 +1710,13 @@
                         <input type="hidden" id="horarioEditId">
                         <div class="form-group" style="margin-bottom:1rem;">
                             <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Veterinario</label>
-                            <select id="horarioVetId" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <select id="horarioVetId" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                                 <option value="">Seleccionar…</option>
                             </select>
                         </div>
                         <div class="form-group" style="margin-bottom:1rem;">
                             <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Día de la Semana</label>
-                            <select id="horarioDia" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <select id="horarioDia" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                                 <option value="0">Lunes</option>
                                 <option value="1">Martes</option>
                                 <option value="2">Miércoles</option>
@@ -1729,16 +1729,16 @@
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
                             <div>
                                 <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Hora inicio</label>
-                                <input type="time" id="horarioInicio" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                                <input type="time" id="horarioInicio" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                             </div>
                             <div>
                                 <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Hora fin</label>
-                                <input type="time" id="horarioFin" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                                <input type="time" id="horarioFin" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                             </div>
                         </div>
                         <div class="form-group" style="margin-bottom:1.5rem;">
                             <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Duración del bloque (minutos)</label>
-                            <select id="horarioDuracion" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <select id="horarioDuracion" required style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                                 <option value="30">30 min</option>
                                 <option value="60" selected>60 min (1 hora)</option>
                                 <option value="90">90 min</option>
@@ -1764,15 +1764,15 @@
                         <input type="hidden" id="vetQRId">
                         <div class="form-group" style="margin-bottom:1rem;">
                             <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Nombre</label>
-                            <input type="text" id="vetQRNombre" required placeholder="Dr. López" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <input type="text" id="vetQRNombre" required placeholder="Dr. López" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                         </div>
                         <div class="form-group" style="margin-bottom:1rem;">
                             <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Especialidad</label>
-                            <input type="text" id="vetQREspecialidad" placeholder="Medicina General" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <input type="text" id="vetQREspecialidad" placeholder="Medicina General" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                         </div>
                         <div class="form-group" style="margin-bottom:1.5rem;">
                             <label style="font-size:.85rem; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">ID Usuario Amivets (amivets_usuario_id)</label>
-                            <input type="number" id="vetQRAmivetId" placeholder="Ej: 1" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:8px;">
+                            <input type="number" id="vetQRAmivetId" placeholder="Ej: 1" style="width:100%; padding:10px 12px; border:1.5px solid var(--border); border-radius:var(--radius-md);">
                             <small style="color:var(--text-secondary);">ID del veterinario en la tabla Usuarios de Amivets.</small>
                         </div>
                         <div style="display:flex; gap:.75rem; justify-content:flex-end;">
@@ -1794,15 +1794,15 @@
                 <input type="hidden" id="abonoFacturaId">
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 4px;">Saldo Pendiente</label>
-                    <div id="abonoSaldoPendiente" style="font-size: 1.4rem; font-weight: 800; color: #d97706; padding: 0.5rem 0;">$0.00</div>
+                    <div id="abonoSaldoPendiente" style="font-size: 1.4rem; font-weight: 800; color: var(--warning-dark); padding: 0.5rem 0;">$0.00</div>
                 </div>
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label for="abonoMonto">Monto a Abonar *</label>
-                    <input type="number" id="abonoMonto" min="0.01" step="0.01" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 1rem;">
+                    <input type="number" id="abonoMonto" min="0.01" step="0.01" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 1rem;">
                 </div>
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label for="abonoMetodoPago">Método de Pago *</label>
-                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.95rem; background: white;">
+                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.95rem; background: white;">
                         <option value="EFECTIVO">Efectivo</option>
                         <option value="TARJETA">Tarjeta</option>
                         <option value="TRANSFERENCIA">Transferencia</option>
@@ -1811,11 +1811,11 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 1.5rem;">
                     <label for="abonoNotas">Notas (opcional)</label>
-                    <textarea id="abonoNotas" rows="2" style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: 8px; font-size: 0.9rem; resize: vertical;" placeholder="Ej: Pago parcial, referencia 123..."></textarea>
+                    <textarea id="abonoNotas" rows="2" style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.9rem; resize: vertical;" placeholder="Ej: Pago parcial, referencia 123..."></textarea>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary" data-close="modal-abono">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background: #10b981; border-color: #059669;">✔ Registrar Abono</button>
+                    <button type="submit" class="btn-primary" style="background: var(--secondary); border-color: var(--secondary-dark);">✔ Registrar Abono</button>
                 </div>
             </form>
         </div>
