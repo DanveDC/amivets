@@ -1877,6 +1877,18 @@ body.qr-booking-page {
 .qr-booking-page .alert-error { background: rgba(244, 63, 94, 0.06); color: var(--accent); border: 1px solid rgba(244, 63, 94, 0.25); }
 .qr-booking-page .alert-success { background: rgba(16, 185, 129, 0.08); color: var(--secondary-dark); border: 1px solid rgba(16, 185, 129, 0.25); }
 .qr-booking-page .alert-info { background: var(--info-subtle); color: var(--info-dark); border: 1px solid rgba(59, 130, 246, 0.3); }
+.qr-booking-page .alert-retry-btn {
+    display: block;
+    margin-top: .5rem;
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+}
 
 .qr-booking-page .empty-state {
     text-align: center;

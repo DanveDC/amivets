@@ -20,7 +20,16 @@ Usuarios de seed:
 | Usuario | Password | Rol |
 |---|---|---|
 | `admin` | `admin123` | admin |
-| `dr_pérez`, `dr_garcía`, ... | `doctor123` | user *(ver hallazgo #1 abajo — no `veterinario`)* |
+| `dr_pérez`, `dr_garcía`, ... | `doctor123` | user *(no `veterinario` — ver nota de producción abajo)* |
+
+**Nota de producción, no solo de test**: `backend/scripts/seed_data.py` —
+el mismo script que corre en un deploy nuevo de Render vía
+`start.sh` → `init_db.py` — nunca crea un usuario con `role='veterinario'`.
+Un despliegue fresco arranca con la lista de veterinarios de
+`agendar.html` vacía hasta que un admin cree o edite manualmente un
+usuario con ese rol desde el panel. La suite ahora siembra su propio
+veterinario de prueba (`e2e/qr-booking.spec.js`) para cubrir el camino
+con datos reales — no depende de que este gap de seed exista.
 
 ## 2. Instalar y correr la suite
 
@@ -111,58 +120,48 @@ ejercer las rutas reales sin cambios de código — usan
 Con el entorno tal como está hoy (`docker compose up -d`, sin credenciales
 de Supabase), la corrida esperada es:
 
-- **19 passed**
-- **2 failed** — bugs reales, documentados abajo. No están "rotos por la
-  suite"; el test afirma el comportamiento correcto y falla porque el
-  código actual no lo cumple. No los arregles silenciosamente: son el
-  resultado esperado de esta unidad.
+- **23 passed**
 - **1 skipped** — gate de Supabase (ver sección 4).
 
-Si alguna vez ves un número distinto de failed/skipped, revisá primero si
-cambió el estado de Supabase (`curl .../health`) antes de asumir una
-regresión nueva.
+Si alguna vez ves un `failed`, revisá primero si cambió el estado de
+Supabase (`curl .../health`) antes de asumir una regresión nueva.
 
-### Bugs reales encontrados (no corregidos — reportados por diseño de esta unidad)
+### Bugs de la Unidad A, cerrados en la tarea 02
 
-1. **Lista de veterinarios vacía en este entorno** —
-   `backend/app/routers/supabase_admin.py::listar_veterinarios` filtra
-   `Usuario.role == "veterinario"`, pero `backend/scripts/seed_data.py`
-   crea todos los `dr_*` con `role="user"`. Ningún usuario tiene
-   `role='veterinario'` en la DB local → `GET /api/admin/supabase/veterinarios`
-   devuelve `[]` → `agendar.html` muestra "Sin veterinarios disponibles" y
-   nunca ofrece nada para elegir.
-   Repro: `curl http://localhost/api/admin/supabase/veterinarios` → `[]`.
-   Test: `qr-booking.spec.js` → *"BUG: cargar la página debería listar
-   veterinarios reales..."*.
+Estos dos se reportaron sin arreglar por diseño en la unidad A de la tarea
+01. La tarea 02 los cerró; quedan documentados acá por historia, no como
+fallas activas.
 
-   **Efecto en cadena**: como la rama `vets.length === 0` en `agendar.html`
-   hace `return` antes de agregar la opción "Cualquier veterinario
-   disponible", la feature del commit `442c73d` queda invisible en este
-   entorno aunque su código esté bien (confirmado aparte con red mockeada
-   en `qr-booking.spec.js`, donde SÍ aparece si hay veterinarios).
+1. **Lista de veterinarios vacía** — era un problema de dato, no de UI: la
+   UI ya mostraba "Sin veterinarios disponibles" correctamente cuando la
+   lista venía vacía. `backend/scripts/seed_data.py` nunca crea
+   `role='veterinario'` (ver nota de producción en la sección 1). Arreglo:
+   la suite ahora siembra un veterinario real antes de
+   *"cargar la página lista veterinarios reales desde el backend"* y lo
+   borra al terminar; el estado vacío tiene su propia prueba determinística
+   con red mockeada (*"sin veterinarios disponibles, la página lo dice..."*).
+   El seed de producción sigue sin crear el rol — ver la nota de la
+   sección 1, es intencional no tocarlo acá.
 
-2. **`cargarHorarios()` en `agendar.html` no revisa `response.ok`** —
-   ```js
-   const horarios = await fetch(url).then(r => r.json());
-   ```
-   Ante un error del backend (por ejemplo el 500 de Supabase-no-configurado
-   de este mismo entorno), `r.json()` igual resuelve con el cuerpo del
-   error. Como no es un array, `horariosVet = []` sin que se muestre ningún
-   aviso: el usuario elige un veterinario y una fecha y no pasa nada visible
-   — ni error, ni turnos, ni el estado vacío "sin horarios disponibles".
-   Falla en silencio.
-   Test: `qr-booking.spec.js` → *"BUG: si el backend de horarios falla, el
-   error queda oculto..."*.
-   Comparar con `enviarCita()`, en el mismo archivo, que sí valida
-   `res.ok` y muestra el error con `showAlert`.
+2. **`cargarHorarios()` no revisaba `response.ok`** — corregido en
+   `static/agendar.html`: ahora distingue cargando / sin horarios / error,
+   con un botón "Reintentar" en el tercer caso. El mismo patrón se revisó
+   en la carga de veterinarios (`init()`/`cargarVeterinarios()`, tenía el
+   mismo defecto, mismo arreglo) y en `enviarCita()` (ya validaba `res.ok`
+   correctamente, no necesitó cambios). Cubierto por
+   *"si el backend de horarios falla..."* y *"si el backend de
+   veterinarios falla..."* en `qr-booking.spec.js`, ambas verifican
+   también que el botón de reintentar dispara un nuevo fetch.
 
-3. **Entorno: Supabase no está cableado en `docker-compose.yml`** — ver
+### Bugs/gaps que siguen abiertos
+
+1. **Entorno: Supabase no está cableado en `docker-compose.yml`** — ver
    sección 4. No es un bug de código, es un gap de configuración que impide
    probar (y hoy, usar) gran parte del flujo QR y del panel de horarios en
    local. Recomendado: agregar `SUPABASE_URL`/`SUPABASE_SECRET_KEY` al
    `environment:` de `backend` en `docker-compose.yml`.
 
-4. **Panel admin: no hay forma de editar un horario ya creado** —
+2. **Panel admin: no hay forma de editar un horario ya creado** —
    `static/js/app.js::guardarHorario()` soporta modo edición vía
    `#horarioEditId`, pero ningún elemento de la UI lo setea con el id de un
    bloque existente — `cargarHorariosVet()` solo renderiza un botón

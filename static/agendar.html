@@ -99,10 +99,22 @@
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('selectFecha').min = today;
       document.getElementById('selectFecha').value = today;
+      await cargarVeterinarios();
+    }
+
+    async function cargarVeterinarios() {
+      const sel = document.getElementById('selectVet');
+      sel.innerHTML = '<option value="">Cargando...</option>';
+      hideAlert();
 
       try {
-        const vets = await fetch(`${API}/api/admin/supabase/veterinarios`).then(r => r.json());
-        const sel = document.getElementById('selectVet');
+        const res = await fetch(`${API}/api/admin/supabase/veterinarios`);
+        if (!res.ok) {
+          sel.innerHTML = '<option value="">No se pudo cargar</option>';
+          showAlert('No se pudo cargar la lista de veterinarios. Intentá de nuevo.', 'error', { onRetry: cargarVeterinarios });
+          return;
+        }
+        const vets = await res.json();
         if (!Array.isArray(vets) || vets.length === 0) {
           sel.innerHTML = '<option value="">Sin veterinarios disponibles</option>';
           showAlert('No hay veterinarios disponibles por el momento.', 'info');
@@ -114,7 +126,8 @@
             `<option value="${v.id}">${v.nombre}</option>`
           ).join('');
       } catch (e) {
-        showAlert('Error al cargar veterinarios. Verificá tu conexión.', 'error');
+        sel.innerHTML = '<option value="">No se pudo cargar</option>';
+        showAlert('Error al cargar veterinarios. Verificá tu conexión.', 'error', { onRetry: cargarVeterinarios });
       }
     }
 
@@ -126,19 +139,35 @@
       horariosVet = [];
       selectedSlot = null;
       document.getElementById('horaSeleccionada').value = '';
-      document.getElementById('slotsGroup').style.display = 'none';
+      hideAlert();
 
-      if (vetId === '') return;
+      const grid = document.getElementById('slotsGrid');
+      const group = document.getElementById('slotsGroup');
+
+      if (vetId === '') {
+        group.style.display = 'none';
+        return;
+      }
+
+      group.style.display = 'block';
+      grid.innerHTML = '<p class="empty-state">Cargando horarios...</p>';
 
       try {
         const url = vetId === '0'
           ? `${API}/api/admin/supabase/horarios`
           : `${API}/api/admin/supabase/horarios?amivets_usuario_id=${vetId}`;
-        const horarios = await fetch(url).then(r => r.json());
+        const res = await fetch(url);
+        if (!res.ok) {
+          group.style.display = 'none';
+          showAlert('No se pudieron cargar los horarios del veterinario. Intentá de nuevo.', 'error', { onRetry: cargarHorarios });
+          return;
+        }
+        const horarios = await res.json();
         horariosVet = Array.isArray(horarios) ? horarios.filter(h => h.activo) : [];
         renderSlots();
       } catch (e) {
-        showAlert('Error al cargar los horarios del veterinario.', 'error');
+        group.style.display = 'none';
+        showAlert('Error al cargar los horarios del veterinario.', 'error', { onRetry: cargarHorarios });
       }
     }
 
@@ -260,10 +289,19 @@
       }
     }
 
-    function showAlert(msg, type) {
+    function showAlert(msg, type, { onRetry } = {}) {
       const box = document.getElementById('alertBox');
       box.className = `alert alert-${type}`;
-      box.textContent = msg;
+      box.innerHTML = '';
+      box.appendChild(document.createTextNode(msg));
+      if (onRetry) {
+        const retryBtn = document.createElement('button');
+        retryBtn.type = 'button';
+        retryBtn.className = 'alert-retry-btn';
+        retryBtn.textContent = 'Reintentar';
+        retryBtn.addEventListener('click', onRetry);
+        box.appendChild(retryBtn);
+      }
       box.style.display = 'block';
       box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
