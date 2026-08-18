@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..core.database import get_db
 from ..models.models import Usuario
+from .usuarios import get_current_admin
 
 router = APIRouter(prefix="/api/admin/supabase", tags=["Admin QR / Supabase"])
 
@@ -91,8 +92,8 @@ def _get_or_create_sb_vet(sb: Client, usuario: Usuario) -> int:
 # ── Health check Supabase ─────────────────────────────────────────────────────
 
 @router.get("/health")
-def supabase_health():
-    """Verifica conectividad con Supabase."""
+def supabase_health(current_user: Usuario = Depends(get_current_admin)):
+    """Verifica conectividad con Supabase. (Solo Admin)"""
     try:
         sb = get_supabase()
         sb.table("veterinarios").select("id").limit(1).execute()
@@ -146,7 +147,11 @@ def listar_horarios(
 
 
 @router.post("/horarios", status_code=201)
-def crear_horario(data: HorarioCreate, db: Session = Depends(get_db)):
+def crear_horario(
+    data: HorarioCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_admin),
+):
     try:
         sb = get_supabase()
         if data.hora_inicio >= data.hora_fin:
@@ -176,7 +181,11 @@ def crear_horario(data: HorarioCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/horarios/{horario_id}")
-def actualizar_horario(horario_id: int, data: HorarioUpdate):
+def actualizar_horario(
+    horario_id: int,
+    data: HorarioUpdate,
+    current_user: Usuario = Depends(get_current_admin),
+):
     sb = get_supabase()
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
     if not payload:
@@ -188,7 +197,10 @@ def actualizar_horario(horario_id: int, data: HorarioUpdate):
 
 
 @router.delete("/horarios/{horario_id}", status_code=204)
-def eliminar_horario(horario_id: int):
+def eliminar_horario(
+    horario_id: int,
+    current_user: Usuario = Depends(get_current_admin),
+):
     sb = get_supabase()
     sb.table("horarios_veterinarios").delete().eq("id", horario_id).execute()
 
@@ -199,6 +211,7 @@ def eliminar_horario(horario_id: int):
 def listar_citas_qr(
     estado: Optional[str] = None,
     limit: int = 100,
+    current_user: Usuario = Depends(get_current_admin),
 ):
     sb = get_supabase()
     q = sb.table("citas_agendadas").select("*, veterinarios(nombre)")
@@ -238,7 +251,10 @@ def crear_cita_qr(data: CitaQRCreate, db: Session = Depends(get_db)):
 
 
 @router.delete("/citas-qr/{cita_id}", status_code=204)
-def cancelar_cita_qr(cita_id: str):
-    """Cancela una cita pendiente antes de que sea sincronizada."""
+def cancelar_cita_qr(
+    cita_id: str,
+    current_user: Usuario = Depends(get_current_admin),
+):
+    """Cancela una cita pendiente antes de que sea sincronizada. (Solo Admin)"""
     sb = get_supabase()
     sb.table("citas_agendadas").update({"estado": "cancelada"}).eq("id", cita_id).execute()
