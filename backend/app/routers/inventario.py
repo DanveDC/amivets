@@ -118,7 +118,16 @@ def registrar_movimiento(
         producto.stock_actual += abs(cantidad)
     else:
         raise HTTPException(status_code=400, detail="Tipo de movimiento invalido")
-    
+
     db.commit()
     db.refresh(producto)
+
+    if producto.stock_actual <= producto.stock_minimo:
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.warning(
+            f"LOW STOCK ALERT: '{producto.nombre}' (id={producto.id}) "
+            f"stock={producto.stock_actual} <= minimo={producto.stock_minimo}"
+        )
+
     return producto
