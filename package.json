@@ -1,0 +1,14 @@
+{
+  "name": "amivets-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright E2E suite for AmiVets (Unidad A). Runs only against the local Docker stack (http://localhost).",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

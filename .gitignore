@@ -43,3 +43,8 @@ alembic/versions/*.pyc
 
 # Static files (si se generan)
 static/uploads/
+
+# Playwright E2E (Unidad A)
+node_modules/
+playwright-report/
+test-results/
