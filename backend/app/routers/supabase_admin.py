@@ -225,14 +225,17 @@ def listar_citas_qr(
 
 
 @router.post("/citas-qr", status_code=201)
-@limiter.limit("5/minute")
+@limiter.limit("60/minute")
 def crear_cita_qr(request: Request, data: CitaQRCreate, db: Session = Depends(get_db)):
     """Registra una nueva cita desde el formulario público (QR). Sin autenticación
-    requerida, pero limitado a 5 solicitudes por minuto por peer TCP para frenar
-    el llenado automatizado de la agenda (ver app/core/limiter.py para el
-    tradeoff detrás de proxy -- en producción es, en la práctica, un límite
-    global para esta ruta, no por visitante; ver también
-    docs/tareas/01-pruebas-funcionales-y-seguridad.md, B3)."""
+    requerida, pero limitado a 60 solicitudes por minuto por IP (última entrada
+    de X-Forwarded-For, con caída a request.client.host -- ver
+    app/core/limiter.py) para frenar el llenado automatizado de la agenda.
+    60 en vez de un número más ajustado por visitante: el conteo de saltos de
+    proxy en producción todavía no está verificado empíricamente (ver
+    GET /api/admin/diagnostics/proxy-chain), y a esta escala el límite frena
+    igual un script sin arriesgar molestar a nadie legítimo mientras se
+    confirma. Ver docs/tareas/02-bugs-previos-al-deploy.md, unidad C."""
     sb = get_supabase()
     sb_vet_id = None
     if data.amivets_usuario_id:
