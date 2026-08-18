@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,12 +9,11 @@ import asyncio
 import uuid
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.core.limiter import get_client_ip, limiter
+from app.core.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo
 from app.models.models import Usuario
-from app.routers.usuarios import get_current_admin
 from app.core import security
 from sqlalchemy.orm import Session
 import time
@@ -262,36 +261,6 @@ async def health_check():
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT
-    }
-
-
-@app.get("/api/admin/diagnostics/proxy-chain")
-async def proxy_chain_diagnostics(request: Request, current_user: Usuario = Depends(get_current_admin)):
-    """Verificación empírica del rate limiter (tarea 02, unidad C).
-
-    key_func confía en la ÚLTIMA entrada de X-Forwarded-For, asumiendo
-    exactamente un proxy de confianza delante (nginx local, o lo que sea que
-    Render use en producción). Este endpoint no valida esa asunción por sí
-    mismo -- la valida quien lo llame: pedile a alguien que abra
-    /agendar desde un navegador real después del deploy y golpee este
-    endpoint (con una cuenta admin) inmediatamente después. Si
-    `x_forwarded_for_chain` tiene más de una entrada, hay más de un proxy de
-    confianza y `rate_limit_key` (la última) puede no ser la IP del cliente
-    real -- en ese caso, ajustar el conteo de saltos en
-    app/core/limiter.py y bajar el límite a algo razonable por visitante.
-    Si tiene una sola entrada (o viene vacía y se cae a request.client.host),
-    la asunción actual es correcta.
-
-    Borrar este endpoint una vez verificado -- es diagnóstico, no una
-    feature permanente."""
-    xff = request.headers.get("x-forwarded-for")
-    chain = [p.strip() for p in xff.split(",")] if xff else []
-    return {
-        "x_forwarded_for_raw": xff,
-        "x_forwarded_for_chain": chain,
-        "chain_length": len(chain),
-        "client_host_tcp_peer": request.client.host if request.client else None,
-        "rate_limit_key_resolved": get_client_ip(request),
     }
 
 
