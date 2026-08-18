@@ -121,7 +121,11 @@ async def log_requests(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    # El frontend usa JWT en el header Authorization (localStorage), nunca
+    # cookies ni `credentials: 'include'` — no hay CORS credenciado que
+    # soportar. allow_credentials=True aquí además invalidaba el wildcard:
+    # los navegadores rechazan "*" combinado con credenciales.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
