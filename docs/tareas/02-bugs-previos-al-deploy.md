@@ -232,7 +232,7 @@ completo de ambos hallazgos.
       junto con el resto de la unidad C.** Queda como parte del trabajo de
       la tarea futura mencionada arriba.
 - [x] Commits separados por unidad.
-- [ ] **La rama está pusheada.**
+- [x] **La rama está pusheada.**
 
 # Fuera de alcance
 
