@@ -31,8 +31,15 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key-change-in-production-32chars}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:80,http://localhost:8000}
-    ports:
-      - "8000:8000"
+    # No publicar el puerto al host: nginx es el único ingreso permitido.
+    # Publicarlo (antes "8000:8000") dejaba saltear nginx por completo, lo
+    # que rompía cualquier lógica que asuma "hay exactamente un proxy de
+    # confianza delante" -- ver commit que revierte la unidad C de
+    # docs/tareas/02-bugs-previos-al-deploy.md. Para debuggear el backend
+    # directo en local: `docker exec -it veterinaria_backend sh` o
+    # `docker compose exec backend curl http://localhost:8000/health`.
+    expose:
+      - "8000"
     depends_on:
       db:
         condition: service_healthy
