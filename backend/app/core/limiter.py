@@ -1,36 +1,24 @@
-from starlette.requests import Request
 from slowapi import Limiter
+from slowapi.util import get_remote_address
 
-
-def get_client_ip(request: Request) -> str:
-    """Resuelve la IP del cliente para el rate limiter.
-
-    Usamos X-Real-IP, que nginx en local (ver nginx/nginx.conf) setea
-    siempre a $remote_addr -- nginx sobreescribe este header en cada
-    request, nunca lo concatena, así que un cliente no puede falsificarlo
-    para saltarse el límite. Deliberadamente NO usamos X-Forwarded-For:
-    nginx lo arma con proxy_add_x_forwarded_for, que ANEXA la IP real al
-    valor que ya venga en el header entrante, así que un atacante puede
-    mandar un X-Forwarded-For distinto en cada request y obtener un bucket
-    de rate limit nuevo cada vez, evadiendo el límite por completo.
-
-    Si no hay X-Real-IP (por ejemplo pegándole directo al backend en el
-    puerto 8000 en desarrollo local, sin pasar por nginx), caemos a
-    request.client.host.
-
-    Limitación conocida en producción (Render, sin nginx delante según
-    start.sh/render.yaml): Render corre uvicorn directo y no seteamos acá
-    ningún header de confianza equivalente a X-Real-IP para ese proxy de
-    borde. En ese caso el fallback a request.client.host puede terminar
-    siendo la IP del load balancer de Render en vez de la del cliente
-    real, agrupando todo el tráfico de producción bajo una sola key. No
-    implementamos lógica de "single trusted hop" para X-Forwarded-For acá
-    a propósito -- queda fuera de alcance de este fix.
-    """
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    return request.client.host if request.client else "unknown"
-
-
-limiter = Limiter(key_func=get_client_ip)
+# Deliberadamente NO leemos ningún header (X-Forwarded-For, X-Real-IP, etc.)
+# para la key del rate limiter. Ambos son controlables por el cliente salvo
+# que se verifique que el único hop que puede escribirlos es un proxy de
+# confianza -- y no podemos garantizar eso para el despliegue en Render:
+# start.sh corre uvicorn directo, sin nginx ni ningún proxy bajo nuestro
+# control delante, así que no hay forma de distinguir "lo puso nuestro
+# proxy" de "lo puso el atacante" para ningún header. Confiar en uno de
+# todos modos (probamos X-Real-IP primero, asumiendo que nginx lo pone
+# siempre) reabre exactamente el mismo bypass que este fix debía cerrar,
+# solo que en el único ambiente que está expuesto a internet de verdad.
+#
+# get_remote_address usa el peer TCP real (request.client.host), que un
+# cliente no puede falsificar vía headers. La contrapartida, aceptada a
+# propósito: detrás de cualquier proxy que no preserve la conexión TCP
+# original (nginx local, el borde de Render en producción), todo el
+# tráfico que pasa por ese proxy comparte una sola key -- el límite se
+# vuelve más grueso, no más laxo. Preferimos ese costo (posibles 429 entre
+# usuarios legítimos concurrentes) antes que un límite spoofeable que no
+# frena nada. Es un límite best-effort contra abuso por script, no un
+# control de seguridad duro.
+limiter = Limiter(key_func=get_remote_address)
