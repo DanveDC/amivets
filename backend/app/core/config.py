@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "AmiVets - Sistema de Gestión Veterinaria"
     APP_VERSION: str = "1.0.0"
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
         return v
     
     # JWT
-    JWT_SECRET_KEY: str = "your-jwt-secret-key"
+    JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     

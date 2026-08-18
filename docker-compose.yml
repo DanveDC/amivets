@@ -28,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-vetuser}:${POSTGRES_PASSWORD:-vetpass123}@db:5432/${POSTGRES_DB:-veterinaria_db}
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production-32chars}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-jwt-secret-key-change-in-production-32chars}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:80,http://localhost:8000}
     ports:
