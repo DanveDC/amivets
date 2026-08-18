@@ -17,7 +17,7 @@ services:
       - key: PORT
         value: 8000
       - key: CORS_ORIGINS
-        value: "*"
+        value: "https://amivets-backend.onrender.com"
     healthCheckPath: /health
     autoDeploy: true
 
