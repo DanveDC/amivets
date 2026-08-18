@@ -7,6 +7,9 @@ import os
 import sys
 from app.core.config import settings
 from app.core.database import engine, Base
+from app.core.limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo
 from app.models.models import Usuario
 from app.core import security
@@ -34,6 +37,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Evento de inicio para crear usuario admin por defecto
 @app.on_event("startup")

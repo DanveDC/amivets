@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from pydantic import BaseModel
 import os
@@ -7,6 +7,7 @@ from supabase import create_client, Client
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
+from ..core.limiter import limiter
 from ..models.models import Usuario
 from .usuarios import get_current_admin
 
@@ -224,8 +225,11 @@ def listar_citas_qr(
 
 
 @router.post("/citas-qr", status_code=201)
-def crear_cita_qr(data: CitaQRCreate, db: Session = Depends(get_db)):
-    """Registra una nueva cita desde el formulario público (QR). Sin autenticación requerida."""
+@limiter.limit("5/minute")
+def crear_cita_qr(request: Request, data: CitaQRCreate, db: Session = Depends(get_db)):
+    """Registra una nueva cita desde el formulario público (QR). Sin autenticación
+    requerida, pero limitado a 5 solicitudes por minuto por IP para frenar el
+    llenado automatizado de la agenda (ver docs/tareas/01-pruebas-funcionales-y-seguridad.md, B3)."""
     sb = get_supabase()
     sb_vet_id = None
     if data.amivets_usuario_id:
