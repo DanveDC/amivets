@@ -2,22 +2,47 @@
 const API_BASE_URL = '/api'; // Relative path for deployment
 
 // Utilidades
+
+const CircuitBreaker = (() => {
+    const state = {};
+    const THRESHOLD = 3;
+    const RESET_AFTER_MS = 30000;
+    return {
+        isOpen(endpoint) {
+            const s = state[endpoint];
+            if (!s || !s.open) return false;
+            if (Date.now() - s.lastFailure > RESET_AFTER_MS) {
+                s.open = false; s.failures = 0; return false;
+            }
+            return true;
+        },
+        recordFailure(endpoint) {
+            if (!state[endpoint]) state[endpoint] = { failures: 0, open: false };
+            state[endpoint].failures++;
+            state[endpoint].lastFailure = Date.now();
+            if (state[endpoint].failures >= THRESHOLD) state[endpoint].open = true;
+        },
+        recordSuccess(endpoint) {
+            if (state[endpoint]) state[endpoint] = { failures: 0, open: false };
+        }
+    };
+})();
+
 const fetchAPI = async (endpoint, options = {}) => {
+    if (CircuitBreaker.isOpen(endpoint)) {
+        showNotification('El servicio no está disponible temporalmente. Intentá en unos segundos.', 'warning');
+        return null;
+    }
+
     const token = localStorage.getItem('token');
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers,
     };
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...options,
-            headers: headers,
-        });
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
 
         if (response.status === 401) {
             logout();
@@ -30,37 +55,82 @@ const fetchAPI = async (endpoint, options = {}) => {
         }
 
         if (!response.ok) {
+            CircuitBreaker.recordFailure(endpoint);
             throw new Error((data && data.detail) || 'Error en la petición');
         }
 
+        CircuitBreaker.recordSuccess(endpoint);
         return data;
     } catch (error) {
+        if (error.name !== 'AbortError') CircuitBreaker.recordFailure(endpoint);
         console.error('Error en fetchAPI:', error);
         throw error;
     }
-}; const showNotification = (message, type = 'info') => {
+};
+
+const showNotification = (message, type = 'info') => {
+    const config = {
+        success: { bg: '#10b981', icon: '✓' },
+        error:   { bg: '#ef4444', icon: '✕' },
+        warning: { bg: '#f59e0b', icon: '⚠' },
+        info:    { bg: '#4F46E5', icon: 'ℹ' },
+    };
+    const { bg, icon } = config[type] || config.info;
+
     const container = document.getElementById('notification-container') || document.body;
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.style.cssText = `
         position: fixed; top: 20px; right: 20px; z-index: 9999;
-        background: ${type === 'success' ? '#10b981' : '#4F46E5'};
+        background: ${bg};
         color: white; padding: 1rem 1.5rem; border-radius: 8px;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         display: flex; align-items: center; gap: 0.75rem;
         transform: translateX(120%); transition: transform 0.3s ease;
-        font-weight: 500;
+        font-weight: 500; max-width: 380px;
     `;
     notification.innerHTML = `
-        <span>${type === 'success' ? '✅' : 'ℹ️'}</span>
+        <span>${icon}</span>
         <span>${message}</span>
     `;
     container.appendChild(notification);
     setTimeout(() => notification.style.transform = 'translateX(0)', 10);
+    const duration = type === 'error' ? 6000 : 4000;
     setTimeout(() => {
         notification.style.transform = 'translateX(120%)';
         setTimeout(() => notification.remove(), 300);
-    }, 4000);
+    }, duration);
+};
+
+// Global safety net for unhandled async errors
+window.addEventListener('unhandledrejection', (event) => {
+    event.preventDefault();
+    const message = event.reason?.message || 'Error inesperado. Intentá de nuevo.';
+    // Don't show notification for AbortError (user cancelled navigation)
+    if (event.reason?.name === 'AbortError') return;
+    showNotification(message, 'error');
+    // Silent beacon to backend for logging (fire-and-forget)
+    try {
+        navigator.sendBeacon('/api/client-errors', JSON.stringify({
+            event: 'unhandledrejection',
+            message,
+            url: window.location.href,
+            timestamp: new Date().toISOString()
+        }));
+    } catch (_) { /* sendBeacon not critical */ }
+});
+
+const submitWithLoading = async (buttonEl, asyncFn) => {
+    if (!buttonEl || buttonEl.disabled) return;
+    const originalText = buttonEl.textContent;
+    buttonEl.disabled = true;
+    buttonEl.textContent = 'Guardando...';
+    try {
+        return await asyncFn();
+    } finally {
+        buttonEl.disabled = false;
+        buttonEl.textContent = originalText;
+    }
 };
 
 /**
