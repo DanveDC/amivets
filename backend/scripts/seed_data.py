@@ -35,13 +35,18 @@ def seed_data():
                     username=username,
                     email=f"{username}@amivets.com",
                     hashed_password=get_password_hash("doctor123"),
-                    role="user",
+                    # role="veterinario": listar_veterinarios (supabase_admin.py) y
+                    # usuarios.py filtran por esta cadena exacta. Con role="user"
+                    # los médicos existían pero la página pública del QR salía vacía.
+                    role="veterinario",
                     is_active=True
                 )
                 db.add(user)
             else:
                 # Sincronizar contraseña incluso si ya existe
                 user.hashed_password = get_password_hash("doctor123")
+                # Y el rol: bases sembradas antes de este fix los dejaron en "user"
+                user.role = "veterinario"
             medicos.append(user)
         db.commit()
         

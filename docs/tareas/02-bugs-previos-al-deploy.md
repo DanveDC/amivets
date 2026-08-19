@@ -79,6 +79,15 @@ En cualquier caso hacen falta dos cosas:
 2. Sembrar el dato en el entorno de pruebas para que la suite cubra el camino
    real, y dejar el fallo de lista vacía como su propia prueba.
 
+### Resultado: causa raíz encontrada — `backend/scripts/seed_data.py`
+
+El estado vacío ya se manejaba bien en la UI, pero en un entorno recién
+sembrado la lista salía vacía **de verdad**, no solo mostraba el mensaje: el
+seed creaba los 10 médicos con `role="user"`, y tanto `listar_veterinarios`
+(`supabase_admin.py:112`) como `usuarios.py:88` filtran por
+`role == "veterinario"`. Corregido: el seed ahora crea (y, en la rama de
+usuario ya existente, sincroniza) `role="veterinario"`.
+
 ## B2 — `cargarHorarios()` traga los errores de red
 
 `static/agendar.html:124`. El `try` envuelve el `fetch` y el fallo se pierde:
