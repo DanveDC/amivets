@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AmiVets — sistema de diseño, vista previa</title>
+<!--
+  Vista previa del sistema de diseño definido en sistema.md.
+  Archivo autónomo: se abre con doble clic, no necesita servidor ni la app.
+  NO forma parte de la aplicación. Es material de revisión de la Fase 1.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #F2F5F6;  --surface: #FFFFFF;  --surface-sunken: #E9EEEF;  --surface-hover: #F3F6F7;
+    --border-subtle: #E4E9EA;  --border: #D3DBDD;  --border-control: #7E8C90;
+    --text-primary: #101718;  --text-secondary: #4A585B;  --text-muted: #626F73;
+    --accent: #0B6B70;  --accent-hover: #085458;  --accent-subtle: #E3F0F1;
+    --action: #1A2426;  --action-hover: #0E1517;  --on-action: #FFFFFF;
+    --success: #0F7A44;  --success-text: #0B5E34;  --success-subtle: #E3F3EA;
+    --warning: #B26A00;  --warning-text: #8A5200;  --warning-subtle: #FBEEDC;
+    --danger:  #B4231F;  --danger-text:  #97201C;  --danger-subtle:  #FBE7E6;
+    --info:    #1A56C4;  --info-text:    #164AAB;  --info-subtle:    #E5EDFB;
+    --neutral: #7E8C90;  --neutral-text: #4A585B;  --neutral-subtle: #E9EEEF;
+    --elev-1: 0 1px 2px rgba(16,23,24,.06);
+    --elev-3: 0 8px 24px -6px rgba(16,23,24,.16), 0 2px 6px -2px rgba(16,23,24,.08);
+    --radius-xs: 3px; --radius-sm: 5px; --radius-md: 7px; --radius-lg: 10px;
+}
+[data-theme="dark"] {
+    --bg: #0D1214;  --surface: #141A1C;  --surface-sunken: #0A0F10;  --surface-hover: #1A2224;
+    --border-subtle: #1E2628;  --border: #2A3436;  --border-control: #5E6A6D;
+    --text-primary: #E8EDEE;  --text-secondary: #A5B0B3;  --text-muted: #8B9699;
+    --accent: #4CC9D0;  --accent-hover: #7ADCE1;  --accent-subtle: #0F2C2E;
+    --action: #E8EDEE;  --action-hover: #FFFFFF;  --on-action: #0D1214;
+    --success: #3FBF7F;  --success-text: #5CD494;  --success-subtle: #0C2A1C;
+    --warning: #E0A040;  --warning-text: #EDB863;  --warning-subtle: #2E2008;
+    --danger:  #F0736B;  --danger-text:  #F58C85;  --danger-subtle:  #33130F;
+    --info:    #6BA0F5;  --info-text:    #8FB8F8;  --info-subtle:    #0F1F3D;
+    --neutral: #5E6A6D;  --neutral-text: #A5B0B3;  --neutral-subtle: #1E2628;
+    --elev-1: none;
+    --elev-3: 0 16px 40px -12px rgba(0,0,0,.7);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5;
+    background: var(--bg); color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    padding: 24px; max-width: 1100px; margin: 0 auto;
+}
+h1 { font-size: 22px; font-weight: 600; letter-spacing: -.015em; }
+h2 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; margin: 32px 0 12px; }
+p.lead { color: var(--text-secondary); margin-top: 4px; }
+.topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+          padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+         box-shadow: var(--elev-1); padding: 16px; }
+
+/* --- swatches --- */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.sw { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); }
+.sw .chip { height: 52px; display: flex; align-items: flex-end; justify-content: flex-end; padding: 4px 6px;
+            font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sw .meta { padding: 6px 8px; border-top: 1px solid var(--border-subtle); }
+.sw .name { font-size: 12px; font-weight: 500; }
+.sw .hex  { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums slashed-zero; }
+
+/* --- badges --- */
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;
+         border-radius: var(--radius-xs); font-size: 12px; font-weight: 500; }
+.badge .g { font-size: 10px; }
+.b-success { background: var(--success-subtle); color: var(--success-text); }
+.b-warning { background: var(--warning-subtle); color: var(--warning-text); }
+.b-danger  { background: var(--danger-subtle);  color: var(--danger-text); }
+.b-info    { background: var(--info-subtle);    color: var(--info-text); }
+.b-neutral { background: var(--neutral-subtle); color: var(--neutral-text); }
+
+/* --- buttons --- */
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: inherit; font-size: 14px; height: 32px; padding: 0 12px; cursor: pointer;
+         border-radius: var(--radius-sm); border: 1px solid transparent;
+         display: inline-flex; align-items: center; gap: 6px;
+         transition: background 90ms cubic-bezier(.2,0,.2,1), border-color 90ms cubic-bezier(.2,0,.2,1); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:active:not(:disabled) { transform: translateY(1px); }
+.b-primary { background: var(--action); color: var(--on-action); }
+.b-primary:hover { background: var(--action-hover); }
+.b-secondary { background: var(--surface); color: var(--text-primary); border-color: var(--border-control); }
+.b-secondary:hover { background: var(--surface-hover); border-color: var(--text-muted); }
+.b-ghost { background: transparent; color: var(--text-secondary); }
+.b-ghost:hover { background: var(--surface-hover); color: var(--text-primary); }
+.b-destructive { background: var(--surface); color: var(--danger-text); border-color: var(--danger); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* --- table --- */
+table { width: 100%; border-collapse: collapse; }
+th { background: var(--surface-sunken); color: var(--text-secondary);
+     font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+     text-align: left; padding: 8px 12px; }
+td { padding: 8px 12px; height: 40px; border-bottom: 1px solid var(--border-subtle); line-height: 1.45; }
+tr:hover td { background: var(--surface-hover); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.code { font-variant-numeric: tabular-nums slashed-zero; color: var(--text-secondary); }
+.primary-col { font-weight: 500; }
+.secondary-col { color: var(--text-secondary); }
+.unit { color: var(--text-muted); font-size: 12px; }
+
+/* --- type scale --- */
+.type-row { display: flex; align-items: baseline; gap: 16px; padding: 6px 0;
+            border-bottom: 1px solid var(--border-subtle); }
+.type-row .tag { flex: 0 0 100px; font-size: 11px; color: var(--text-muted);
+                 font-variant-numeric: tabular-nums; }
+
+/* --- inputs --- */
+label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; }
+input { font: inherit; font-size: 14px; width: 100%; height: 32px; padding: 0 12px;
+        border: 1px solid var(--border-control); border-radius: var(--radius-sm);
+        background: var(--surface); color: var(--text-primary); }
+input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+input.err { border-color: var(--danger); }
+.err-msg { font-size: 12px; color: var(--danger-text); margin-top: 4px; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.note { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.empty { text-align: center; padding: 40px 24px; }
+.empty .ico { font-size: 28px; color: var(--text-muted); }
+.empty .t { font-size: 16px; font-weight: 500; margin-top: 8px; }
+.empty .m { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+@media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition-duration: 1ms !important; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div>
+        <h1>AmiVets — sistema de diseño</h1>
+        <p class="lead">Vista previa de la Fase 1. Los valores salen de <code>sistema.md</code>.</p>
+    </div>
+    <button class="b-secondary" id="toggle" aria-label="Cambiar entre tema claro y oscuro">
+        Cambiar a oscuro
+    </button>
+</div>
+
+<h2>Neutros — el 90 % de la pantalla</h2>
+<p class="note" style="margin:0 0 8px">
+    El número sobre cada muestra es su contraste real contra la superficie blanca (o gris
+    oscura) donde se apoya, recalculado en vivo al cambiar de tema. Las superficies no
+    llevan número: no tiene sentido medir un fondo contra sí mismo.
+</p>
+<div class="swatches" id="sw-neutral"></div>
+
+<h2>Acento y acción</h2>
+<div class="swatches" id="sw-accent"></div>
+<p class="note">
+    El acento petróleo <strong>solo</strong> aparece en foco de teclado, sección activa,
+    enlaces y la serie principal de un gráfico. El botón principal es grafito neutro,
+    no de color: si el botón "Guardar" fuera de color, el color dejaría de significar estado.
+</p>
+
+<h2>Semántico — solo para estado real</h2>
+<div class="swatches" id="sw-semantic"></div>
+
+<h2>Badges de estado</h2>
+<div class="panel">
+    <div class="badges">
+        <span class="badge b-success"><span class="g">✓</span> Pagado</span>
+        <span class="badge b-success"><span class="g">✓</span> Finalizada</span>
+        <span class="badge b-warning"><span class="g">▲</span> En sala</span>
+        <span class="badge b-warning"><span class="g">▲</span> Bajo stock</span>
+        <span class="badge b-danger"><span class="g">✕</span> Vencido</span>
+        <span class="badge b-danger"><span class="g">✕</span> Cancelada</span>
+        <span class="badge b-info"><span class="g">●</span> Programada</span>
+        <span class="badge b-neutral"><span class="g">○</span> Inactivo</span>
+    </div>
+    <p class="note">
+        Cada estado lleva <strong>color, palabra y símbolo</strong>. Tapá los colores con la
+        mano: la información sigue estando. Eso es lo que hace que la app funcione para
+        alguien que no distingue rojo de verde — 1 de cada 12 hombres.
+    </p>
+</div>
+
+<h2>Botones</h2>
+<div class="panel">
+    <div class="btns">
+        <button class="b-primary">Guardar consulta</button>
+        <button class="b-secondary">Cancelar</button>
+        <button class="b-ghost">Ver detalle</button>
+        <button class="b-destructive">Eliminar</button>
+        <button class="b-primary" disabled>Deshabilitado</button>
+    </div>
+    <p class="note">Probá con la tecla Tab: el anillo de foco es el acento petróleo, siempre visible.</p>
+</div>
+
+<h2>Tipografía</h2>
+<div class="panel">
+    <div class="type-row"><span class="tag">36 px / 600</span><span style="font-size:36px;font-weight:600;letter-spacing:-.025em;font-variant-numeric:tabular-nums">$ 12.480,00</span></div>
+    <div class="type-row"><span class="tag">28 px / 600</span><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums">147</span></div>
+    <div class="type-row"><span class="tag">22 px / 600</span><span style="font-size:22px;font-weight:600;letter-spacing:-.015em">Inventario y farmacia</span></div>
+    <div class="type-row"><span class="tag">18 px / 600</span><span style="font-size:18px;font-weight:600;letter-spacing:-.01em">Registrar consulta</span></div>
+    <div class="type-row"><span class="tag">16 px / 500</span><span style="font-size:16px;font-weight:500">Coco — Canino, mestizo, 6 años</span></div>
+    <div class="type-row"><span class="tag">14 px / 400</span><span>Cuerpo del sistema: celdas de tabla, campos e instrucciones.</span></div>
+    <div class="type-row"><span class="tag">13 px / 400</span><span style="font-size:13px;color:var(--text-secondary)">Texto secundario en celdas densas.</span></div>
+    <div class="type-row"><span class="tag">12 px / 500</span><span style="font-size:12px;color:var(--text-muted)">Metadatos, unidades y ayuda.</span></div>
+    <div class="type-row" style="border:none"><span class="tag">11 px / 600</span><span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)">Cabecera de columna</span></div>
+</div>
+
+<h2>Tabla — densidad y cifras tabulares</h2>
+<div class="panel" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th><th>Lote</th><th>Categoría</th>
+                    <th class="num">Stock</th><th class="num">Precio unit.</th>
+                    <th>Vencimiento</th><th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td class="primary-col">Amoxicilina 500 mg</td><td class="code">AMX-2004</td><td class="secondary-col">Antibiótico</td><td class="num">120 <span class="unit">u.</span></td><td class="num">1.240,00</td><td class="secondary-col code">14/03/2027</td><td><span class="badge b-success"><span class="g">✓</span> OK</span></td></tr>
+                <tr><td class="primary-col">Enrofloxacina 50 mg</td><td class="code">ENR-0087</td><td class="secondary-col">Antibiótico</td><td class="num">8 <span class="unit">u.</span></td><td class="num">696,00</td><td class="secondary-col code">02/09/2026</td><td><span class="badge b-warning"><span class="g">▲</span> Bajo stock</span></td></tr>
+                <tr><td class="primary-col">Cefalexina 250 mg</td><td class="code">CFX-0900</td><td class="secondary-col">Antibiótico</td><td class="num">0 <span class="unit">u.</span></td><td class="num">20,00</td><td class="secondary-col code">30/01/2026</td><td><span class="badge b-danger"><span class="g">✕</span> Vencido</span></td></tr>
+                <tr><td class="primary-col">Anestesia corta</td><td class="code">ANC-1010</td><td class="secondary-col">Quirófano</td><td class="num">45 <span class="unit">u.</span></td><td class="num">9.803,50</td><td class="secondary-col code">08/11/2028</td><td><span class="badge b-success"><span class="g">✓</span> OK</span></td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="note">
+    Fila de 40 px en vez de ~76 px: entran alrededor de 17 filas por pantalla en vez de 9.
+    Las columnas de stock y precio usan cifras tabulares — todos los dígitos miden lo mismo,
+    así que la columna se compara mirando su forma, sin leer número por número.
+</p>
+
+<h2>Formulario y estado vacío</h2>
+<div class="grid2">
+    <div class="panel">
+        <div style="margin-bottom:12px">
+            <label for="f1">Nombre del paciente <span style="color:var(--danger)">*</span></label>
+            <input id="f1" value="Coco">
+        </div>
+        <div>
+            <label for="f2">Peso (kg) <span style="color:var(--danger)">*</span></label>
+            <input id="f2" class="err" value="-3" aria-invalid="true" aria-describedby="f2-err">
+            <p class="err-msg" id="f2-err" role="alert">✕ El peso tiene que ser mayor que cero.</p>
+        </div>
+    </div>
+    <div class="panel empty">
+        <div class="ico">○</div>
+        <div class="t">No hay pacientes esperando</div>
+        <div class="m">La sala de espera está vacía. Está todo al día.</div>
+    </div>
+</div>
+<p class="note">
+    Ese vacío no lleva botón a propósito: no falta nada, está todo bien. Un vacío que
+    pide una acción y un vacío que informa que todo está en orden no se dibujan igual.
+</p>
+
+<script>
+// [token, etiqueta, tipo]
+//   'fondo'  → es una superficie: no se le mide contraste contra sí misma
+//   'texto'  → se dibuja encima de --surface: se muestra su contraste real
+//   'gráfico'→ no es texto, le alcanza con 3:1 (WCAG 1.4.11)
+const TOKENS = {
+    'sw-neutral': [
+        ['--bg', 'Fondo de página', 'fondo'],
+        ['--surface', 'Tarjetas y tablas', 'fondo'],
+        ['--surface-sunken', 'Cabecera de tabla', 'fondo'],
+        ['--surface-hover', 'Fila con cursor', 'fondo'],
+        ['--border-subtle', 'Línea entre filas', 'fondo'],
+        ['--border', 'Borde de tarjeta', 'fondo'],
+        ['--border-control', 'Borde de campo', 'gráfico'],
+        ['--text-primary', 'Texto principal', 'texto'],
+        ['--text-secondary', 'Texto de apoyo', 'texto'],
+        ['--text-muted', 'Metadatos', 'texto']
+    ],
+    'sw-accent': [
+        ['--accent', 'Acento — foco, activo, enlaces', 'texto'],
+        ['--accent-hover', 'Acento con cursor', 'texto'],
+        ['--accent-subtle', 'Fondo de sección activa', 'fondo'],
+        ['--action', 'Botón principal', 'fondo'],
+        ['--action-hover', 'Botón principal con cursor', 'fondo']
+    ],
+    'sw-semantic': [
+        ['--success', 'Pagado · activo · finalizado', 'gráfico'],
+        ['--warning', 'Por vencer · bajo stock', 'gráfico'],
+        ['--danger', 'Vencido · agotado · error', 'gráfico'],
+        ['--info', 'Programada · informativo', 'gráfico'],
+        ['--neutral', 'Sin estado · inactivo', 'gráfico']
+    ]
+};
+
+// Contraste WCAG, calculado en vivo sobre el tema activo.
+const lin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const lum = hex => {
+    const h = hex.replace('#', '');
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16));
+    return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+};
+const ratio = (a, b) => {
+    const [x, y] = [lum(a), lum(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+const val = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function render() {
+    const surface = val('--surface');
+    for (const [id, list] of Object.entries(TOKENS)) {
+        document.getElementById(id).innerHTML = list.map(([token, label, kind]) => {
+            const hex = val(token);
+            // Etiqueta legible sobre el propio color de la muestra.
+            const ink = lum(hex) > 0.35 ? '#101718' : '#FFFFFF';
+
+            let tag = '';
+            if (kind !== 'fondo') {
+                const r = ratio(hex, surface);
+                const min = kind === 'texto' ? 4.5 : 3;
+                tag = `${r.toFixed(2)}:1 ${r >= min ? '✓' : '✕'}`;
+            }
+            return `<div class="sw">
+                <div class="chip" style="background:${hex};color:${ink}"
+                     title="${kind === 'fondo' ? 'Superficie' : 'Mínimo exigido ' + (kind === 'texto' ? '4.5:1 (texto)' : '3:1 (no textual)')}">${tag}</div>
+                <div class="meta">
+                    <div class="name">${label}</div>
+                    <div class="hex">${token} · ${hex.toUpperCase()}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+}
+
+const btn = document.getElementById('toggle');
+btn.addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    document.documentElement.dataset.theme = dark ? 'light' : 'dark';
+    btn.textContent = dark ? 'Cambiar a oscuro' : 'Cambiar a claro';
+    render();
+});
+
+render();
+</script>
+
+</body>
+</html>
