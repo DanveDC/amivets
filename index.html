@@ -98,8 +98,11 @@
 
   <script>
   // ── Configuración Supabase ──────────────────────────────────────────────────
-  const SUPABASE_URL = "https://twvytfictllxylhuynrw.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_M2FZrIRjwxWV12xB1gUrzg_AfNs2aPl";
+  // Clave PUBLICABLE (sb_publishable_): es segura acá porque el Row Level
+  // Security de supabase_setup.sql limita lo que puede hacer. La clave
+  // secreta (sb_secret_) NUNCA va en este archivo: ignora el RLS.
+  const SUPABASE_URL = "https://ishqdbxdoeffxjcwzujl.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_m436YXI7VWBfLofKFzpbaQ_1a3D2j6a";
   const { createClient } = supabase;
   const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
