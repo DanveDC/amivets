@@ -126,6 +126,28 @@ def listar_recetas_por_consulta(
     recetas = db.query(Receta).filter(Receta.consulta_id == consulta_id).all()
     return recetas
 
+@router.get("/{consulta_id}/recetas/{receta_id}/pdf")
+def descargar_receta_pdf(
+    consulta_id: int,
+    receta_id: int,
+    db: Session = Depends(get_db)
+):
+    """Genera y descarga el PDF de una receta médica"""
+    receta = db.query(Receta).filter(Receta.id == receta_id, Receta.consulta_id == consulta_id).first()
+    if not receta:
+        raise HTTPException(status_code=404, detail="Receta no encontrada")
+
+    pdf_content = PDFService.generar_receta_pdf(db, receta_id)
+    if not pdf_content:
+        raise HTTPException(status_code=500, detail="Error al generar el PDF de la receta")
+
+    return StreamingResponse(
+        BytesIO(pdf_content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Receta_{receta_id}.pdf"}
+    )
+
+
 @router.post("/{consulta_id}/servicios", response_model=ServicioConsultaResponse, status_code=status.HTTP_201_CREATED)
 def agregar_servicio_consulta(
     consulta_id: int,

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 2cm;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #2D3748;
+            line-height: 1.5;
+            font-size: 10pt;
+        }
+        .header {
+            border-bottom: 2pt solid #2B6CB0;
+            padding-bottom: 10pt;
+            margin-bottom: 16pt;
+        }
+        .clinic-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #2B6CB0;
+        }
+        .clinic-sub {
+            font-size: 9pt;
+            color: #718096;
+        }
+        .doc-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #1A365D;
+            text-align: right;
+        }
+        .doc-date {
+            font-size: 9pt;
+            color: #718096;
+            text-align: right;
+        }
+        .section {
+            margin-bottom: 14pt;
+        }
+        .section-title {
+            font-size: 10pt;
+            font-weight: bold;
+            color: #2B6CB0;
+            border-bottom: 1pt solid #BEE3F8;
+            padding-bottom: 2pt;
+            margin-bottom: 6pt;
+        }
+        .two-col {
+            width: 100%;
+        }
+        .two-col td {
+            width: 50%;
+            vertical-align: top;
+            padding: 2pt 4pt;
+        }
+        .label {
+            font-weight: bold;
+            color: #4A5568;
+        }
+        .value {
+            color: #2D3748;
+        }
+        .field-row {
+            margin-bottom: 4pt;
+        }
+        .text-block {
+            background-color: #F7FAFC;
+            border-left: 3pt solid #BEE3F8;
+            padding: 6pt 8pt;
+            margin-top: 4pt;
+            font-size: 9pt;
+        }
+        table.medicamentos {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+        table.medicamentos th {
+            background-color: #2B6CB0;
+            color: #ffffff;
+            padding: 5pt 6pt;
+            text-align: left;
+            border: 0.5pt solid #2B6CB0;
+        }
+        table.medicamentos td {
+            padding: 5pt 6pt;
+            border: 0.5pt solid #CBD5E0;
+        }
+        table.medicamentos tr:nth-child(even) td {
+            background-color: #EBF8FF;
+        }
+        .signature-block {
+            margin-top: 40pt;
+        }
+        .signature-line {
+            width: 60%;
+            border-top: 1pt solid #2D3748;
+            margin: 30pt auto 4pt auto;
+        }
+        .signature-caption {
+            width: 60%;
+            margin: 0 auto;
+            text-align: center;
+            font-size: 9pt;
+            color: #4A5568;
+        }
+        .footer {
+            border-top: 1pt solid #CBD5E0;
+            margin-top: 20pt;
+            padding-top: 6pt;
+            font-size: 8pt;
+            color: #718096;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <table style="width:100%;">
+            <tr>
+                <td>
+                    <div class="clinic-name">Amivets</div>
+                    <div class="clinic-sub">Clínica Veterinaria</div>
+                </td>
+                <td style="text-align:right;">
+                    <div class="doc-title">RECETA MÉDICA</div>
+                    <div class="doc-date">Fecha de emisión: {{ fecha_emision }}</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {% if mascota %}
+    <div class="section">
+        <div class="section-title">Paciente</div>
+        <table class="two-col">
+            <tr>
+                <td>
+                    <div class="field-row"><span class="label">Nombre:</span> <span class="value">{{ mascota.nombre }}</span></div>
+                    <div class="field-row"><span class="label">Especie:</span> <span class="value">{{ mascota.especie }}</span></div>
+                    <div class="field-row"><span class="label">Raza:</span> <span class="value">{{ mascota.raza or '—' }}</span></div>
+                </td>
+                <td>
+                    <div class="field-row"><span class="label">Peso:</span> <span class="value">{{ (consulta.peso ~ ' kg') if consulta and consulta.peso else '—' }}</span></div>
+                    <div class="field-row"><span class="label">Historia:</span> <span class="value">{{ mascota.codigo_historia or '—' }}</span></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if propietario %}
+    <div class="section">
+        <div class="section-title">Propietario</div>
+        <table class="two-col">
+            <tr>
+                <td>
+                    <div class="field-row"><span class="label">Nombre:</span> <span class="value">{{ propietario.nombre }} {{ propietario.apellido }}</span></div>
+                    <div class="field-row"><span class="label">Cédula:</span> <span class="value">{{ propietario.cedula }}</span></div>
+                </td>
+                <td>
+                    <div class="field-row"><span class="label">Teléfono:</span> <span class="value">{{ propietario.telefono or '—' }}</span></div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <div class="section-title">Medicamentos Prescriptos</div>
+        <table class="medicamentos">
+            <thead>
+                <tr>
+                    <th>Medicamento</th>
+                    <th>Dosis</th>
+                    <th>Frecuencia</th>
+                    <th>Duración</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in detalles %}
+                <tr>
+                    <td>{{ d.medicamento.nombre if d.medicamento else '—' }}</td>
+                    <td>{{ d.dosis }}</td>
+                    <td>{{ d.frecuencia }}</td>
+                    <td>{{ d.duracion }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if receta.indicaciones_generales %}
+    <div class="section">
+        <div class="section-title">Indicaciones Generales</div>
+        <div class="text-block">{{ receta.indicaciones_generales }}</div>
+    </div>
+    {% endif %}
+
+    <div class="section">
+        <div class="section-title">Veterinario Responsable</div>
+        <div class="field-row"><span class="label">Nombre:</span> <span class="value">{{ (consulta.veterinario if consulta and consulta.veterinario else None) or '—' }}</span></div>
+    </div>
+
+    <div class="signature-block">
+        <div class="signature-line"></div>
+        <div class="signature-caption">Firma y sello del veterinario</div>
+    </div>
+
+    <div class="footer">
+        Este documento es una receta médica veterinaria. No incluye información de facturación.
+    </div>
+
+</body>
+</html>

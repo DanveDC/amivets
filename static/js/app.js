@@ -1903,6 +1903,31 @@ window.exportarConsultaPDF = async (consultaId) => {
     }
 };
 
+window.exportarRecetaPDF = async (consultaId, recetaId) => {
+    try {
+        const token = localStorage.getItem('token');
+        showNotification('Generando PDF de receta...', 'info');
+        const response = await fetch(`${API_BASE_URL}/consultas/${consultaId}/recetas/${recetaId}/pdf`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Error al generar el PDF');
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `receta-${recetaId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (e) {
+        alert('Error descargando PDF de receta: ' + e.message);
+    }
+};
+
 const cargarConsultas = async (mascotaId, extraParams = {}) => {
     const tableBody = document.getElementById('consultasTableBody');
     if (!tableBody) return;
@@ -2363,6 +2388,7 @@ const cargarRecetasPet = async (mascotaId) => {
                         ${r.detalles.map(d => `<li>${d.medicamento_id}: ${d.dosis} (${d.frecuencia} / ${d.duracion})</li>`).join('')}
                     </ul>
                 </div>
+                <button class="btn-secondary btn-sm" onclick="exportarRecetaPDF(${r.consulta_id}, ${r.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 0.5rem; background:#f0f4ff; color:#4338ca; border-color:#c7d2fe;">🖨 PDF</button>
             </div>
         `).join('');
     } catch (e) {

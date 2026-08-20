@@ -57,6 +57,34 @@ class PDFService:
         return PDFService.render_to_pdf('consulta_template.html', context)
 
     @staticmethod
+    def generar_receta_pdf(db, receta_id: int):
+        """Genera el PDF de una receta médica (documento clínico, sin precios)"""
+        from app.models.models import Receta, Consulta, Mascota, Propietario
+
+        receta = db.query(Receta).filter(Receta.id == receta_id).first()
+        if not receta:
+            raise HTTPException(status_code=404, detail="Receta no encontrada")
+
+        detalles = receta.detalles
+        if not detalles:
+            raise HTTPException(status_code=422, detail="La receta no tiene medicamentos, no se puede generar el PDF")
+
+        consulta = db.query(Consulta).filter(Consulta.id == receta.consulta_id).first()
+        mascota = db.query(Mascota).filter(Mascota.id == consulta.mascota_id).first() if consulta else None
+        propietario = db.query(Propietario).filter(Propietario.id == mascota.propietario_id).first() if mascota else None
+
+        context = {
+            "receta": receta,
+            "consulta": consulta,
+            "mascota": mascota,
+            "propietario": propietario,
+            "detalles": detalles,
+            "fecha_emision": receta.fecha_emision.strftime("%d/%m/%Y") if receta.fecha_emision else "—",
+        }
+
+        return PDFService.render_to_pdf('receta_template.html', context)
+
+    @staticmethod
     def generar_abono_pdf(abono, factura):
         """Genera el PDF del comprobante de abono"""
         propietario = factura.propietario if factura else None
