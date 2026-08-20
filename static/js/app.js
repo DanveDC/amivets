@@ -3038,7 +3038,12 @@ window.facturarConsulta = async (consultaId) => {
         html += '</tbody></table>';
         itemsList.innerHTML = html;
         document.getElementById('facturaTotalCalculado').textContent = total.toFixed(2);
-        
+
+        const montoPagarInput = document.getElementById('facturaMontoPagar');
+        montoPagarInput.max = total.toFixed(2);
+        montoPagarInput.value = total.toFixed(2);
+        document.getElementById('facturaSaldoPendienteCalculado').textContent = '0.00';
+
         // Save items data globally so the submit handler can use it
         window.currentFacturaItems = dataContext.items.map(p => ({
             servicio_id: p.id_interno,
@@ -3057,15 +3062,27 @@ window.facturarConsulta = async (consultaId) => {
     }
 };
 
+document.getElementById('facturaMontoPagar')?.addEventListener('input', (e) => {
+    const total = window.currentFacturaTotal || 0;
+    const monto = parseFloat(e.target.value) || 0;
+    const saldo = Math.max(0, total - monto);
+    document.getElementById('facturaSaldoPendienteCalculado').textContent = saldo.toFixed(2);
+});
+
 document.getElementById('formFactura')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!window.currentFacturaItems || window.currentFacturaItems.length === 0) {
         alert("No hay items para facturar.");
         return;
     }
-    
-    // Total a pagar segun lo calculado
-    const totalPagar = window.currentFacturaTotal;
+
+    const total = window.currentFacturaTotal;
+    const montoPagar = parseFloat(document.getElementById('facturaMontoPagar').value);
+
+    if (isNaN(montoPagar) || montoPagar < 0 || montoPagar > total) {
+        alert(`El monto a pagar debe estar entre 0 y $${total.toFixed(2)}.`);
+        return;
+    }
 
     // Validar el body de acuerdo a FacturaCreate del router
     const data = {
@@ -3074,7 +3091,7 @@ document.getElementById('formFactura')?.addEventListener('submit', async (e) => 
         metodo_pago: document.getElementById('facturaMetodoPago').value,
         descuento: 0.0,
         impuesto: 0.0,
-        total_pagado: totalPagar,
+        total_pagado: montoPagar,
         es_presupuesto: false,
         detalles: window.currentFacturaItems.map(item => ({
              descripcion: item.descripcion,
@@ -3194,6 +3211,7 @@ document.getElementById('form-abono')?.addEventListener('submit', async (e) => {
         }
         showNotification('Abono registrado con éxito.', 'success');
         closeModal('modal-abono');
+        cargarHistorialFacturas();
         // Refresh the preview modal with updated data
         abrirPreviewFactura(parseInt(facturaId));
     } catch (err) {
@@ -3301,20 +3319,27 @@ window.abrirPreviewFactura = async (facturaId) => {
     }
 };
 
+const ESTADO_FACTURA_COLORS = {
+    PAGADA: { bg: '#d1fae5', fg: '#065f46' },
+    ANULADA: { bg: '#fee2e2', fg: '#991b1b' },
+    PARCIAL: { bg: '#dbeafe', fg: '#1e40af' },
+    PENDIENTE: { bg: '#fef3c7', fg: '#92400e' }
+};
+
 const cargarHistorialFacturas = async () => {
     const tableBody = document.getElementById('facturacionTableBody');
-    tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Cargando...</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Cargando...</td></tr>';
     try {
         const queryParams = new URLSearchParams();
         const searchVal = document.getElementById('searchFactura')?.value;
         const estadoFilter = document.getElementById('filterEstadoFactura')?.value;
-        
+
         if (searchVal) queryParams.append('search', searchVal);
         if (estadoFilter) queryParams.append('estado', estadoFilter);
-        
+
         const result = await fetchAPI(`/facturas/?${queryParams.toString()}`);
         if (!result || result.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No se encontraron facturas.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No se encontraron facturas.</td></tr>';
             return;
         }
 
@@ -3324,16 +3349,22 @@ const cargarHistorialFacturas = async () => {
             const fecha = f.fecha_emision ? new Date(f.fecha_emision).toLocaleDateString() : '-';
             const estado = f.estado || 'PENDIENTE';
             const metodo = f.metodo_pago || '-';
-            
+            const pagado = f.total_pagado || 0;
+            const saldo = f.saldo_pendiente !== undefined && f.saldo_pendiente !== null ? f.saldo_pendiente : Math.max(0, total - pagado);
+            const colors = ESTADO_FACTURA_COLORS[estado] || ESTADO_FACTURA_COLORS.PENDIENTE;
+
             return `
             <tr>
                 <td><b>#${numero}</b></td>
                 <td>${fecha}</td>
-                <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background: ${estado==='PAGADA'?'#d1fae5':(estado==='ANULADA'?'#fee2e2':'#fef3c7')}; color: ${estado==='PAGADA'?'#065f46':(estado==='ANULADA'?'#991b1b':'#92400e')};">${estado}</span></td>
+                <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background: ${colors.bg}; color: ${colors.fg};">${estado}</span></td>
                 <td><b style="color: #1e293b;">$${parseFloat(total).toFixed(2)}</b></td>
+                <td>$${parseFloat(pagado).toFixed(2)}</td>
+                <td><b style="color: ${saldo > 0 ? '#b45309' : '#1e293b'};">$${parseFloat(saldo).toFixed(2)}</b></td>
                 <td><span style="font-size: 0.85rem; color: #64748b;">${metodo}</span></td>
                 <td style="text-align: right;">
                     <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #10b981; border-color: #059669; border-radius: 6px;">💰 Abonar</button>` : ''}
                         <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #6366f1; border: none; border-radius: 6px;">📄 Ver PDF</button>
                         ${f.consulta_id ? `<button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${f.consulta_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Consulta</button>` : ''}
                     </div>
@@ -3342,7 +3373,7 @@ const cargarHistorialFacturas = async () => {
         }).join('');
     } catch (e) {
         console.error("Error cargando historial de facturacion:", e);
-        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error loading.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error loading.</td></tr>';
     }
 };
 

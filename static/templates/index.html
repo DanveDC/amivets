@@ -1322,6 +1322,7 @@
                             <option value="">Todos los estados</option>
                             <option value="PAGADA">Pagada</option>
                             <option value="PENDIENTE">Pendiente</option>
+                            <option value="PARCIAL">Parcial</option>
                             <option value="ANULADA">Anulada</option>
                         </select>
                     </div>
@@ -1335,6 +1336,8 @@
                                 <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
                                 <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Estado</th>
                                 <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Pagado</th>
+                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Saldo Pendiente</th>
                                 <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Método</th>
                                 <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
                             </tr>
@@ -1689,6 +1692,13 @@
                         <span style="font-size: 0.85rem; color: var(--warning-dark); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
                         <div style="font-size: 2.5rem; font-weight: 800; color: var(--warning-dark); letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
                     </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label>Monto a Pagar Ahora</label>
+                    <input type="number" id="facturaMontoPagar" min="0" step="0.01" required>
+                    <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">Dejá el total para pago completo, o ingresá un monto menor para abonar.</small>
+                    <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Saldo pendiente: $<span id="facturaSaldoPendienteCalculado">0.00</span></div>
                 </div>
 
                 <div class="modal-footer">

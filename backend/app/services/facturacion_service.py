@@ -110,7 +110,12 @@ class FacturacionService:
             
             total = subtotal - descuento + impuesto
             saldo_pendiente = total - pago
-            estado = "PAGADA" if saldo_pendiente <= 0 else "PENDIENTE"
+            if saldo_pendiente <= 0:
+                estado = "PAGADA"
+            elif pago > 0:
+                estado = "PARCIAL"
+            else:
+                estado = "PENDIENTE"
             
             nueva_factura = Factura(
                 numero_factura=numero_factura,
