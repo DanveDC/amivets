@@ -7,4 +7,10 @@ services:
     volumes:
       - ./backend:/app
       - ./static:/app/static
+    environment:
+      # Solo local: main.py crea el admin inicial con esta password si no
+      # existe. Nunca hardcodeada en código — ver Unidad A1 en
+      # docs/tareas/04-kpis-recetas-y-veterinarios.md. Sin esto, e2e/helpers.js
+      # no tiene con qué autenticarse.
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-admin123}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

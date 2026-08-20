@@ -13,9 +13,6 @@ from app.core.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo
-from app.models.models import Usuario
-from app.core import security
-from sqlalchemy.orm import Session
 import time
 import logging
 import subprocess
@@ -46,28 +43,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Evento de inicio para crear usuario admin por defecto
 @app.on_event("startup")
 async def create_default_admin():
-    db = Session(bind=engine)
+    # Password sale de ADMIN_INITIAL_PASSWORD — sin ella no se crea admin.
+    # Ver Unidad A1, docs/tareas/04-kpis-recetas-y-veterinarios.md (antes esto
+    # hardcodeaba admin/admin123, duplicado además en scripts/reset_db.py).
     try:
-        admin_user = db.query(Usuario).filter(Usuario.username == "admin").first()
-        if not admin_user:
-            logger.info("Creating default admin user...")
-            hashed_password = security.get_password_hash("admin123")
-            admin = Usuario(
-                username="admin",
-                email="admin@amivets.com",
-                hashed_password=hashed_password,
-                role="admin",
-                is_active=True
-            )
-            db.add(admin)
-            db.commit()
-            logger.info("Default admin user created: admin / admin123")
-        else:
-            logger.info("Default admin user already exists.")
+        from scripts.reset_db import create_initial_admin
+        create_initial_admin()
     except Exception as e:
         logger.error(f"Error creating default admin: {e}")
-    finally:
-        db.close()
     
     # Auto-seed check (non-blocking if possible or sequential)
     try:

@@ -18,34 +18,53 @@ def reset_database():
                 conn.execute(text("DROP TABLE IF EXISTS alembic_version;"))
             else:
                 conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE;"))
-            
+
         print("Eliminando todas las tablas...")
         Base.metadata.drop_all(bind=engine)
         print("Recreando estructura de base de datos desde los modelos...")
         Base.metadata.create_all(bind=engine)
-        # Como TRUNCATE CASCADE borró todo, necesitamos recrear al menos el admin inicial
-        from app.core.security import get_password_hash
-        from app.models.models import Usuario
-        
-        admin = Usuario(
-            username="admin",
-            email="admin@amivets.com",
-            hashed_password=get_password_hash("admin123"),
-            role="admin",
-            is_active=True
-        )
-        
-        # También el usuario de prueba de la verificación anterior si se desea, 
-        # pero el usuario pidió dejar "solo admin"
-        db.add(admin)
-        
-        db.commit()
-        print("Base de datos limpiada. Solo el usuario 'admin' (pass: admin123) permanece.")
+        print("Base de datos reseteada.")
     except Exception as e:
         db.rollback()
         print(f"Error al resetear la base de datos: {e}")
     finally:
         db.close()
 
+
+def create_initial_admin():
+    """Crea el usuario admin inicial si ADMIN_INITIAL_PASSWORD está seteada.
+
+    Sin la variable, no se crea admin — no hay fallback a una contraseña por
+    defecto (Unidad A1, docs/tareas/04-kpis-recetas-y-veterinarios.md). Idempotente:
+    seguro de llamar en cada arranque.
+    """
+    admin_password = os.getenv("ADMIN_INITIAL_PASSWORD")
+    if not admin_password:
+        print("[admin] ADMIN_INITIAL_PASSWORD no está definida: no se crea usuario admin.")
+        return
+
+    from app.core.security import get_password_hash
+    from app.models.models import Usuario
+
+    db = SessionLocal()
+    try:
+        if db.query(Usuario).filter(Usuario.username == "admin").first():
+            return
+        db.add(Usuario(
+            username="admin",
+            email="admin@amivets.com",
+            hashed_password=get_password_hash(admin_password),
+            role="admin",
+            is_active=True
+        ))
+        db.commit()
+        print("[admin] Usuario admin creado desde ADMIN_INITIAL_PASSWORD.")
+    except Exception as e:
+        db.rollback()
+        print(f"[admin] Error al crear el usuario admin: {e}")
+    finally:
+        db.close()
+
 if __name__ == "__main__":
     reset_database()
+    create_initial_admin()
