@@ -1036,6 +1036,180 @@ const loadReportes = async () => {
     } catch (error) {
         console.error('Error cargando reportes', error);
     }
+
+    initKpiRango();
+};
+
+// ============ KPIs POR PERÍODO (Unidad C) ============
+let kpiServiciosChart = null;
+let kpiListenersBound = false;
+
+const kpiFechaISOUTC = (date) => {
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+};
+
+const kpiFormatFecha = (yyyyMmDd) => {
+    if (!yyyyMmDd) return '';
+    const [y, m, d] = yyyyMmDd.split('-');
+    return `${d}/${m}/${y}`;
+};
+
+const kpiCalcularRango = (tipo) => {
+    const hoy = new Date();
+    const anio = hoy.getUTCFullYear();
+    const mes = hoy.getUTCMonth();
+
+    if (tipo === 'hoy') {
+        const iso = kpiFechaISOUTC(hoy);
+        return { inicio: iso, fin: iso };
+    }
+    if (tipo === 'este_mes') {
+        return {
+            inicio: kpiFechaISOUTC(new Date(Date.UTC(anio, mes, 1))),
+            fin: kpiFechaISOUTC(hoy)
+        };
+    }
+    if (tipo === 'mes_anterior') {
+        return {
+            inicio: kpiFechaISOUTC(new Date(Date.UTC(anio, mes - 1, 1))),
+            fin: kpiFechaISOUTC(new Date(Date.UTC(anio, mes, 0)))
+        };
+    }
+    if (tipo === 'este_anio') {
+        return {
+            inicio: kpiFechaISOUTC(new Date(Date.UTC(anio, 0, 1))),
+            fin: kpiFechaISOUTC(hoy)
+        };
+    }
+    return { inicio: null, fin: null };
+};
+
+const kpiFormatMoney = (valor) => `$${Number(valor).toFixed(2)}`;
+
+const kpiSetContador = (elId, valor) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = (valor === null || valor === undefined || valor === 0) ? 'Sin datos' : valor;
+};
+
+const kpiSetMonto = (elId, valor) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = (valor === null || valor === undefined) ? 'Sin datos' : kpiFormatMoney(valor);
+};
+
+const cargarKpisPeriodo = async (fechaInicio, fechaFin) => {
+    const rangoLabel = document.getElementById('kpiRangoActual');
+    if (rangoLabel) {
+        rangoLabel.textContent = `Rango seleccionado: ${kpiFormatFecha(fechaInicio)} a ${kpiFormatFecha(fechaFin)}`;
+    }
+
+    const params = new URLSearchParams({ fecha_inicio: fechaInicio, fecha_fin: fechaFin }).toString();
+
+    try {
+        const [consultas, ingresos, cuentas, servicios] = await Promise.all([
+            fetchAPI(`/reportes/kpi/consultas?${params}`),
+            fetchAPI(`/reportes/finanzas/ingresos?${params}`),
+            fetchAPI(`/reportes/finanzas/cuentas-por-cobrar?${params}`),
+            fetchAPI(`/reportes/kpi/servicios?${params}`)
+        ]);
+
+        kpiSetContador('kpiConsultasAtendidas', consultas?.consultas_atendidas);
+        kpiSetContador('kpiPacientesUnicos', consultas?.pacientes_unicos);
+        kpiSetMonto('kpiIngresosPeriodo', ingresos?.total_ingresos);
+        kpiSetMonto('kpiTicketPromedio', ingresos?.ticket_promedio);
+        kpiSetMonto('kpiCuentasPorCobrar', cuentas?.total_pendiente);
+
+        renderKpiServiciosChart(Array.isArray(servicios) ? servicios : []);
+    } catch (error) {
+        console.error('Error cargando KPIs del período', error);
+    }
+};
+
+const renderKpiServiciosChart = (servicios) => {
+    const wrap = document.getElementById('kpiServiciosChartWrap');
+    if (!wrap) return;
+
+    if (!servicios || servicios.length === 0) {
+        if (kpiServiciosChart) {
+            kpiServiciosChart.destroy();
+            kpiServiciosChart = null;
+        }
+        wrap.innerHTML = '<p style="text-align:center;color:#6b7280;padding:2rem;">Sin datos para el rango seleccionado.</p>';
+        return;
+    }
+
+    if (!document.getElementById('kpiServiciosChart')) {
+        wrap.innerHTML = '<canvas id="kpiServiciosChart"></canvas>';
+    }
+    const ctx = document.getElementById('kpiServiciosChart').getContext('2d');
+
+    if (kpiServiciosChart) kpiServiciosChart.destroy();
+
+    kpiServiciosChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: servicios.map(s => s.servicio),
+            datasets: [{
+                label: 'Unidades vendidas',
+                data: servicios.map(s => s.total_solicitudes),
+                backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                borderColor: '#4F46E5',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                title: { display: true, text: 'Servicios Más Solicitados' }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+        }
+    });
+};
+
+const initKpiRango = () => {
+    const fechaInicioInput = document.getElementById('kpiFechaInicio');
+    const fechaFinInput = document.getElementById('kpiFechaFin');
+    if (!fechaInicioInput || !fechaFinInput) return;
+
+    const aplicarRango = (inicio, fin) => {
+        fechaInicioInput.value = inicio;
+        fechaFinInput.value = fin;
+        cargarKpisPeriodo(inicio, fin);
+    };
+
+    if (!kpiListenersBound) {
+        document.querySelectorAll('.kpi-rango-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const { inicio, fin } = kpiCalcularRango(btn.dataset.kpiRango);
+                aplicarRango(inicio, fin);
+            });
+        });
+
+        document.getElementById('btnAplicarRangoKpi')?.addEventListener('click', () => {
+            const inicio = fechaInicioInput.value;
+            const fin = fechaFinInput.value;
+            if (!inicio || !fin) {
+                alert('Seleccioná una fecha de inicio y una fecha de fin.');
+                return;
+            }
+            cargarKpisPeriodo(inicio, fin);
+        });
+
+        kpiListenersBound = true;
+    }
+
+    if (!fechaInicioInput.value || !fechaFinInput.value) {
+        const { inicio, fin } = kpiCalcularRango('este_mes');
+        aplicarRango(inicio, fin);
+    }
 };
 
 // ============ EXISTING & SHARED FUNCTIONS ============

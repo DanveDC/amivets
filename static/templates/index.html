@@ -1368,6 +1368,57 @@
                         <div class="value warning" id="kpiStock">0</div>
                     </div>
                 </div>
+
+                <div style="margin-top: 2rem;">
+                    <h3 style="margin-bottom: 0.75rem; color: var(--text-primary);">Indicadores por Período</h3>
+
+                    <div id="kpiRangoFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
+                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
+                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
+                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                        <span style="width:1px; align-self:stretch; background:var(--border);"></span>
+                        <input type="date" id="kpiFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                        <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
+                        <input type="date" id="kpiFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                        <button type="button" id="btnAplicarRangoKpi" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Aplicar rango</button>
+                    </div>
+                    <p id="kpiRangoActual" style="font-size:0.85rem; color: var(--text-secondary); margin: 0 0 1rem 0; font-weight: 600;"></p>
+
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <h3>Consultas Atendidas</h3>
+                            <div class="value" id="kpiConsultasAtendidas">-</div>
+                        </div>
+                        <div class="kpi-card">
+                            <h3>Pacientes Únicos</h3>
+                            <div class="value" id="kpiPacientesUnicos">-</div>
+                        </div>
+                        <div class="kpi-card">
+                            <h3>Ingresos del Período</h3>
+                            <div class="value" id="kpiIngresosPeriodo">-</div>
+                            <p style="font-size:0.75rem; color: var(--text-secondary); margin: 0.35rem 0 0 0;">Suma del total de facturas emitidas en el rango seleccionado</p>
+                        </div>
+                        <div class="kpi-card">
+                            <h3>Ticket Promedio</h3>
+                            <div class="value" id="kpiTicketPromedio">-</div>
+                            <p style="font-size:0.75rem; color: var(--text-secondary); margin: 0.35rem 0 0 0;">Ingresos del período dividido entre la cantidad de facturas del rango</p>
+                        </div>
+                        <div class="kpi-card">
+                            <h3>Cuentas por Cobrar</h3>
+                            <div class="value warning" id="kpiCuentasPorCobrar">-</div>
+                            <p style="font-size:0.75rem; color: var(--text-secondary); margin: 0.35rem 0 0 0;">Saldo pendiente de facturas emitidas en el rango seleccionado</p>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding: 1.5rem; margin-top: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                        <h3 style="margin-top:0; color: var(--text-primary);">Servicios Más Solicitados</h3>
+                        <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Unidades vendidas por producto/servicio facturado en el rango seleccionado</p>
+                        <div id="kpiServiciosChartWrap" style="max-width: 700px; margin: 0 auto;">
+                            <canvas id="kpiServiciosChart"></canvas>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- Content Area: Órdenes Médico -->
