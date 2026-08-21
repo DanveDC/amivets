@@ -1038,6 +1038,7 @@ const loadReportes = async () => {
     }
 
     initKpiRango();
+    initConsultasPorVeterinario();
 };
 
 // ============ KPIs POR PERÍODO (Unidad C) ============
@@ -1209,6 +1210,135 @@ const initKpiRango = () => {
     if (!fechaInicioInput.value || !fechaFinInput.value) {
         const { inicio, fin } = kpiCalcularRango('este_mes');
         aplicarRango(inicio, fin);
+    }
+};
+
+// ============ CONSULTAS POR VETERINARIO (Unidad D) ============
+let consVetListenersBound = false;
+
+const cargarSelectorVeterinarios = async () => {
+    const select = document.getElementById('consVetSelect');
+    if (!select) return;
+    try {
+        const vets = await fetchAPI('/usuarios/veterinarios');
+        const previo = select.value;
+        select.innerHTML = '<option value="">Seleccioná un veterinario...</option>' +
+            (Array.isArray(vets) ? vets : []).map(v => `<option value="${v.id}">${v.username}</option>`).join('');
+        if (previo) select.value = previo;
+    } catch (error) {
+        console.error('Error cargando veterinarios', error);
+    }
+};
+
+const cargarConsultasPorVeterinario = async (veterinarioId, fechaInicio, fechaFin) => {
+    const rangoLabel = document.getElementById('consVetRangoActual');
+    const listaDiv = document.getElementById('consVetLista');
+    if (!listaDiv) return;
+
+    if (!veterinarioId) {
+        if (rangoLabel) rangoLabel.textContent = '';
+        listaDiv.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná un veterinario para ver su detalle.</p>';
+        return;
+    }
+
+    if (rangoLabel) {
+        rangoLabel.textContent = `Rango seleccionado: ${kpiFormatFecha(fechaInicio)} a ${kpiFormatFecha(fechaFin)}`;
+    }
+
+    const params = new URLSearchParams({ veterinario_id: veterinarioId, fecha_inicio: fechaInicio, fecha_fin: fechaFin }).toString();
+
+    try {
+        const data = await fetchAPI(`/reportes/consultas-por-veterinario?${params}`);
+        renderConsultasPorVeterinario(data);
+    } catch (error) {
+        console.error('Error cargando consultas por veterinario', error);
+        listaDiv.innerHTML = '<p style="text-align:center; color: #dc2626; padding: 1rem;">Error al cargar el detalle.</p>';
+    }
+};
+
+const renderConsultasPorVeterinario = (data) => {
+    const listaDiv = document.getElementById('consVetLista');
+    if (!listaDiv) return;
+
+    const consultas = data?.consultas || [];
+
+    if (consultas.length === 0) {
+        listaDiv.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Sin datos para el rango seleccionado.</p>';
+        return;
+    }
+
+    const filas = consultas.map(c => {
+        const fecha = c.fecha_consulta ? new Date(c.fecha_consulta).toLocaleDateString() : '-';
+        const servicios = (c.servicios || []).map(s => s.nombre_servicio || s.tipo_servicio).join(', ') || '-';
+        return `
+            <tr>
+                <td style="padding: 0.75rem 1rem;">${fecha}</td>
+                <td style="padding: 0.75rem 1rem;">${c.mascota || '-'}</td>
+                <td style="padding: 0.75rem 1rem;">${c.propietario || '-'}</td>
+                <td style="padding: 0.75rem 1rem;">${c.motivo || '-'}</td>
+                <td style="padding: 0.75rem 1rem;">${servicios}</td>
+                <td style="padding: 0.75rem 1rem; text-align: right;">
+                    <button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${c.id}, ${c.mascota_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Ver consulta</button>
+                </td>
+            </tr>`;
+    }).join('');
+
+    listaDiv.innerHTML = `
+        <p style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.75rem;">Consultas en el período: ${data.total_consultas}</p>
+        <table class="consultas-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                    <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
+                    <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Mascota</th>
+                    <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Propietario</th>
+                    <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Motivo</th>
+                    <th style="padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Servicios</th>
+                    <th style="padding: 0.75rem 1rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+        </table>
+    `;
+};
+
+const initConsultasPorVeterinario = () => {
+    const select = document.getElementById('consVetSelect');
+    const fechaInicioInput = document.getElementById('consVetFechaInicio');
+    const fechaFinInput = document.getElementById('consVetFechaFin');
+    if (!select || !fechaInicioInput || !fechaFinInput) return;
+
+    cargarSelectorVeterinarios();
+
+    const aplicar = () => {
+        if (!fechaInicioInput.value || !fechaFinInput.value) {
+            const { inicio, fin } = kpiCalcularRango('este_mes');
+            fechaInicioInput.value = inicio;
+            fechaFinInput.value = fin;
+        }
+        cargarConsultasPorVeterinario(select.value, fechaInicioInput.value, fechaFinInput.value);
+    };
+
+    if (!consVetListenersBound) {
+        select.addEventListener('change', aplicar);
+
+        document.querySelectorAll('.cons-vet-rango-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const { inicio, fin } = kpiCalcularRango(btn.dataset.consVetRango);
+                fechaInicioInput.value = inicio;
+                fechaFinInput.value = fin;
+                aplicar();
+            });
+        });
+
+        document.getElementById('btnAplicarConsVet')?.addEventListener('click', () => {
+            if (!fechaInicioInput.value || !fechaFinInput.value) {
+                alert('Seleccioná una fecha de inicio y una fecha de fin.');
+                return;
+            }
+            aplicar();
+        });
+
+        consVetListenersBound = true;
     }
 };
 

@@ -1418,6 +1418,32 @@
                             <canvas id="kpiServiciosChart"></canvas>
                         </div>
                     </div>
+
+                    <div class="card" style="padding: 1.5rem; margin-top: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                        <h3 style="margin-top:0; color: var(--text-primary);">Consultas por Veterinario</h3>
+                        <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Detalle de lo atendido por un profesional en el rango seleccionado</p>
+
+                        <div id="consVetFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                            <select id="consVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <option value="">Seleccioná un veterinario...</option>
+                            </select>
+                            <span style="width:1px; align-self:stretch; background:var(--border);"></span>
+                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
+                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
+                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
+                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                            <span style="width:1px; align-self:stretch; background:var(--border);"></span>
+                            <input type="date" id="consVetFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                            <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
+                            <input type="date" id="consVetFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                            <button type="button" id="btnAplicarConsVet" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Aplicar</button>
+                        </div>
+                        <p id="consVetRangoActual" style="font-size:0.85rem; color: var(--text-secondary); margin: 0 0 1rem 0; font-weight: 600;"></p>
+
+                        <div id="consVetLista" style="overflow-x:auto;">
+                            <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná un veterinario para ver su detalle.</p>
+                        </div>
+                    </div>
                 </div>
             </section>
 

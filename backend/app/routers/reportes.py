@@ -113,6 +113,65 @@ def rendimiento_veterinarios(
         for r in resultados
     ]
 
+@router.get("/consultas-por-veterinario")
+def consultas_por_veterinario(
+    veterinario_id: int,
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Detalle de las consultas atendidas por un veterinario puntual en un rango de fechas.
+    veterinario_id es obligatorio: mezclar consultas de varios profesionales sin
+    distinguir a quien pertenece cada una no sirve para esta vista.
+    """
+    vet = db.query(Usuario).filter(Usuario.id == veterinario_id).first()
+    if not vet:
+        raise HTTPException(status_code=404, detail="Veterinario no encontrado")
+
+    dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
+
+    query = db.query(Consulta).filter(Consulta.veterinario_id == veterinario_id)
+    if dt_inicio:
+        query = query.filter(Consulta.fecha_consulta >= dt_inicio)
+    if dt_fin:
+        query = query.filter(Consulta.fecha_consulta <= dt_fin)
+
+    consultas = query.order_by(Consulta.fecha_consulta.desc()).all()
+
+    detalle = []
+    for c in consultas:
+        propietario = c.mascota.propietario if c.mascota else None
+        servicios_activos = [s for s in c.servicios if not s.is_deleted]
+        detalle.append({
+            "id": c.id,
+            "fecha_consulta": c.fecha_consulta,
+            "mascota_id": c.mascota_id,
+            "mascota": c.mascota.nombre if c.mascota else None,
+            "propietario": f"{propietario.nombre} {propietario.apellido}" if propietario else None,
+            "motivo": c.motivo,
+            "servicios": [
+                {
+                    "id": s.id,
+                    "tipo_servicio": s.tipo_servicio,
+                    "nombre_servicio": s.nombre_servicio,
+                    "cantidad": s.cantidad,
+                    "precio_unitario": s.precio_unitario,
+                    "estado": s.estado
+                }
+                for s in servicios_activos
+            ]
+        })
+
+    return {
+        "veterinario_id": vet.id,
+        "veterinario": vet.username,
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "total_consultas": len(detalle),
+        "consultas": detalle
+    }
+
 @router.get("/kpi/consultas")
 def resumen_consultas(
     fecha_inicio: Optional[str] = None,
