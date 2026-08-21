@@ -15,6 +15,14 @@ from app.models.models import (
 )
 
 def seed_data():
+    # Herramienta explícita de desarrollo (Unidad A2,
+    # docs/tareas/04-kpis-recetas-y-veterinarios.md). Nunca se llama sola en
+    # el arranque — invocar a mano: python scripts/seed_data.py (o dentro del
+    # contenedor: docker compose exec backend python scripts/seed_data.py).
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    if environment == "production":
+        print("[seed] ENVIRONMENT=production: rechazado sin excepción. Este script es solo para desarrollo.")
+        return
     db = SessionLocal()
     try:
         # Check if full historical data already exists

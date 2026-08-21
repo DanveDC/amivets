@@ -51,19 +51,18 @@ async def create_default_admin():
         create_initial_admin()
     except Exception as e:
         logger.error(f"Error creating default admin: {e}")
-    
-    # Auto-seed check (non-blocking if possible or sequential)
-    try:
-        logger.info("Checking if database needs seeding...")
-        # Intentamos ejecutar el script de semillas. El script ya tienne su propia validación interna.
-        # Buscamos el script en las rutas posibles (Docker vs Local)
-        scripts_to_try = [
-            "/app/scripts/seed_data.py",
-            os.path.join(ROOT_DIR, "backend", "scripts", "seed_data.py"),
-            "backend/scripts/seed_data.py"
-        ]
 
-        # Seed catalogo de servicios (idempotente — solo corre si la tabla está vacía)
+    # scripts/seed_data.py (10 médicos dr_*, inventario y consultas de
+    # ejemplo) ya NO se agenda acá. Unidad A2,
+    # docs/tareas/04-kpis-recetas-y-veterinarios.md: el seed es una
+    # herramienta explícita de desarrollo, nunca un efecto secundario del
+    # arranque. Invocarlo a mano: python scripts/seed_data.py (rechaza
+    # ENVIRONMENT=production).
+    #
+    # Seed catalogo de servicios (idempotente — solo corre si la tabla está
+    # vacía) sí sigue en automático: no es dato de demo/prueba, es el
+    # catálogo de servicios que la app necesita para funcionar.
+    try:
         catalogo_scripts_to_try = [
             "/app/scripts/seed_catalogo.py",
             os.path.join(ROOT_DIR, "backend", "scripts", "seed_catalogo.py"),
@@ -75,21 +74,8 @@ async def create_default_admin():
                 logger.info(f"Scheduling catalogo seed script (non-blocking): {s}")
                 loop.run_in_executor(None, lambda script=s: subprocess.run([sys.executable, script], check=False))
                 break
-
-        seed_script = None
-        for s in scripts_to_try:
-            if os.path.exists(s):
-                seed_script = s
-                break
-
-        if seed_script:
-            logger.info(f"Scheduling seed script (non-blocking): {seed_script}")
-            loop.run_in_executor(None, lambda script=seed_script: subprocess.run([sys.executable, script], check=False))
-        else:
-            logger.warning("Seed script not found. Skipping auto-seeding.")
-            
     except Exception as e:
-        logger.error(f"Auto-seeding failed: {e}")
+        logger.error(f"Catalogo auto-seeding failed: {e}")
 
 # Middleware de logging y manejo de errores
 @app.middleware("http")
