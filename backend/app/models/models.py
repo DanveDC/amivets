@@ -128,17 +128,19 @@ class Consulta(Base):
     temperatura = Column(Float)  # en °C
     frecuencia_cardiaca = Column(Float) # bpm
     observaciones = Column(Text)
-    veterinario = Column(String(100)) # Profesional responsable
+    veterinario = Column(String(100)) # Profesional responsable (texto libre, legado/auditoria)
     proxima_cita = Column(DateTime(timezone=True))
-    
-    # Clave foránea
+
+    # Claves foráneas
     mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
-    
+    veterinario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
     estado_pago = Column(String(50), default="POR_COBRAR") # POR_COBRAR, COBRADO
     precio_consulta = Column(Float, default=0.0)
-    
+
     # Relaciones
     mascota = relationship("Mascota", back_populates="consultas")
+    veterinario_usuario = relationship("Usuario", foreign_keys=[veterinario_id])
     pruebas = relationship("PruebaComplementaria", back_populates="consulta", cascade="all, delete-orphan")
     recetas = relationship("Receta", back_populates="consulta", cascade="all, delete-orphan")
     vacunaciones = relationship("Vacunacion", back_populates="consulta", cascade="all, delete-orphan")

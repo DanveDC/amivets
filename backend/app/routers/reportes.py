@@ -4,7 +4,7 @@ from sqlalchemy import func, desc
 from typing import List, Dict, Any
 
 from app.core.database import get_db
-from app.models.models import DetalleFactura, Inventario, Consulta
+from app.models.models import DetalleFactura, Inventario, Consulta, Usuario
 
 router = APIRouter(prefix="/api/reportes", tags=["Reportes y Analitica"])
 
@@ -41,21 +41,22 @@ def rendimiento_veterinarios(
 ):
     """
     Retorna el rendimiento por veterinario (cantidad de consultas realizadas).
+    Agrupa por veterinario_id (FK a Usuario), no por el texto libre legado.
     """
-    # Consulta agrupada por el campo veterinario de la tabla consultas
     resultados = (
         db.query(
-            Consulta.veterinario,
+            Usuario.id,
+            Usuario.username,
             func.count(Consulta.id).label("total_consultas")
         )
-        .filter(Consulta.veterinario.isnot(None))
-        .group_by(Consulta.veterinario)
+        .join(Consulta, Consulta.veterinario_id == Usuario.id)
+        .group_by(Usuario.id, Usuario.username)
         .order_by(desc("total_consultas"))
         .all()
     )
-    
+
     return [
-        {"veterinario": r[0], "consultas_realizadas": r[1]} 
+        {"veterinario_id": r[0], "veterinario": r[1], "consultas_realizadas": r[2]}
         for r in resultados
     ]
 @router.get("/finanzas/ingresos")

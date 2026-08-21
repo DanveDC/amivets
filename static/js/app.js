@@ -1303,9 +1303,15 @@ const handleConsultaSubmit = async (e) => {
         const icc = document.getElementById('consultaICC').value || 'N/D';
         const tllc = document.getElementById('consultaTLLC').value || 'N/D';
 
+        const vetSelect = document.getElementById('consultaVeterinario');
+        const vetOption = vetSelect.options[vetSelect.selectedIndex];
+        const veterinarioId = vetSelect.value ? parseInt(vetSelect.value) : null;
+        const veterinarioNombre = vetOption?.dataset.username || null;
+
         const data = {
             mascota_id: parseInt(document.getElementById('consultaMascotaId').value),
-            veterinario: document.getElementById('consultaVeterinario').value,
+            veterinario_id: veterinarioId,
+            veterinario: veterinarioNombre,
             motivo: document.getElementById('consultaMotivo').value,
             sintomas: document.getElementById('consultaExamen').value || "Evaluación Clínica",
             diagnostico: document.getElementById('consultaProblemas').value || "No especificado",
@@ -2874,7 +2880,7 @@ const cargarVeterinarios = async () => {
         const opts1 = '<option value="">Seleccionar médico...</option>' +
             usuarios.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
         const opts2 = '<option value="">Seleccionar médico...</option>' +
-            usuarios.map(u => `<option value="${u.username}">${u.username} (${u.role})</option>`).join('');
+            usuarios.map(u => `<option value="${u.id}" data-username="${u.username}">${u.username} (${u.role})</option>`).join('');
 
         const scita = document.getElementById('citaVeterinarioId');
         if (scita) scita.innerHTML = opts1;

@@ -111,6 +111,7 @@ class ConsultaBase(BaseModel):
     frecuencia_cardiaca: Optional[float] = Field(None)
     observaciones: Optional[str] = None
     veterinario: Optional[str] = Field(None, max_length=100)
+    veterinario_id: Optional[int] = Field(None, gt=0)
     fecha_consulta: Optional[datetime] = None
     proxima_cita: Optional[datetime] = None
     estado_pago: Optional[str] = "POR_COBRAR"
@@ -143,6 +144,7 @@ class ConsultaUpdate(BaseModel):
     frecuencia_cardiaca: Optional[float] = Field(None, gt=0)
     observaciones: Optional[str] = None
     veterinario: Optional[str] = Field(None, max_length=100)
+    veterinario_id: Optional[int] = Field(None, gt=0)
     proxima_cita: Optional[datetime] = None
     estado_pago: Optional[str] = None
     precio_consulta: Optional[float] = None
