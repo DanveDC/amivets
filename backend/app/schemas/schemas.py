@@ -132,6 +132,9 @@ class ConsultaBase(BaseModel):
 
 class ConsultaCreate(ConsultaBase):
     mascota_id: int = Field(..., gt=0)
+    # Requerido desde ahora: una consulta sin veterinario asignado queda
+    # impagable en Liquidaciones (Unidad E), ver decision de Daniel.
+    veterinario_id: int = Field(..., gt=0)
 
 
 class ConsultaUpdate(BaseModel):
@@ -584,5 +587,62 @@ class AbonoResponse(BaseModel):
     metodo_pago: str
     fecha: datetime
     notas: Optional[str] = None
+
+
+# ========== LIQUIDACIONES A VETERINARIOS (Unidad E) ==========
+class TarifaConsultaUpdate(BaseModel):
+    tarifa_consulta: Optional[Decimal] = Field(None, ge=0)
+
+
+class TarifaConsultaResponse(BaseModel):
+    id: int
+    username: str
+    tarifa_consulta: Optional[Decimal] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LiquidacionCalculoRequest(BaseModel):
+    veterinario_id: int = Field(..., gt=0)
+    fecha_inicio: str = Field(..., description="YYYY-MM-DD")
+    fecha_fin: str = Field(..., description="YYYY-MM-DD")
+
+
+class LiquidacionPreviewItem(BaseModel):
+    consulta_id: int
+    factura_id: int
+    fecha_consulta: datetime
+    tarifa_aplicada: Decimal
+
+
+class LiquidacionPreviewResponse(BaseModel):
+    veterinario_id: int
+    veterinario: str
+    fecha_inicio: str
+    fecha_fin: str
+    tarifa_consulta: Decimal
+    total_consultas: int
+    total: Decimal
+    consultas: List[LiquidacionPreviewItem]
+
+
+class LiquidacionDetalleResponse(BaseModel):
+    id: int
+    consulta_id: int
+    factura_id: int
+    tarifa_aplicada: Decimal
+    fecha_consulta: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LiquidacionResponse(BaseModel):
+    id: int
+    veterinario_id: int
+    fecha_inicio: datetime
+    fecha_fin: datetime
+    fecha_calculo: datetime
+    total: Decimal
+    detalles: List[LiquidacionDetalleResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

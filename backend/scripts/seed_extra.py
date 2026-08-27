@@ -8,13 +8,14 @@ from app.models.models import Usuario, Propietario, Mascota, Consulta, Inventari
 def seed_extra():
     db = SessionLocal()
     try:
-        medicos = db.query(Usuario).filter(Usuario.username != "admin").all()
-        if not medicos:
-            medicos = db.query(Usuario).all()
+        # Solo veterinarios: veterinario_id es NOT NULL y debe referenciar un
+        # usuario con rol veterinario (Unidad E), o la consulta queda
+        # atribuida a alguien a quien la liquidacion nunca le va a pagar.
+        medicos = db.query(Usuario).filter(Usuario.role == "veterinario").all()
         mascotas_docs = db.query(Mascota).all()
-        
+
         if not medicos or not mascotas_docs:
-            print("Faltan usuarios o mascotas para enlazar los extra records.")
+            print("Faltan veterinarios o mascotas para enlazar los extra records.")
             return
 
         motivos = ["Observación post-tóxico", "Fractura", "Decaimiento general", "Dificulta respiratoria", "Control quirúrgico", "Remoción de tumores", "Esterilización de emergencia", "Limpieza dental profunda"]
@@ -35,6 +36,7 @@ def seed_extra():
                 temperatura=random.uniform(36.0, 40.5),
                 frecuencia_cardiaca=random.uniform(50, 140),
                 veterinario=f"Dr. {med.username}",
+                veterinario_id=med.id,
                 fecha_consulta=fecha_retroactiva
             )
             db.add(consulta)

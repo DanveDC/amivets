@@ -39,6 +39,14 @@ def populate_demo():
             db.flush()
 
         # 2. Crear una Consulta Principal
+        # veterinario_id es NOT NULL y debe referenciar a un usuario con rol
+        # veterinario (Unidad E): un fallback a "cualquier usuario" dejaria
+        # la consulta atribuida a alguien que la liquidacion nunca va a pagar.
+        vet = db.query(Usuario).filter(Usuario.role == "veterinario").first()
+        if not vet:
+            print("[!] No hay veterinarios en la base de datos. Corré seed_data.py primero.")
+            return
+
         consulta = Consulta(
             mascota_id=masc.id,
             motivo="Chequeo Completo de Demostración",
@@ -47,6 +55,7 @@ def populate_demo():
             tratamiento="Seguimiento de rutina y plan preventivo.",
             peso=32.5, temperatura=38.5, frecuencia_cardiaca=80,
             veterinario="Dr. Antigravity",
+            veterinario_id=vet.id,
             fecha_consulta=datetime.now()
         )
         db.add(consulta)

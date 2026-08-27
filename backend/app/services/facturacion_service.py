@@ -37,9 +37,28 @@ class FacturacionService:
         4. Calcula saldos y totales
         """
         try:
+            # Una consulta no puede tener dos facturas vivas a la vez: rompe
+            # la unicidad que asume Liquidaciones (Unidad E) al identificar
+            # "la" factura PAGADA de una consulta. Re-facturar requiere
+            # anular la anterior primero.
+            if factura_data.consulta_id:
+                factura_activa = (
+                    db.query(Factura)
+                    .filter(
+                        Factura.consulta_id == factura_data.consulta_id,
+                        Factura.estado != "ANULADA",
+                    )
+                    .first()
+                )
+                if factura_activa:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"La consulta {factura_data.consulta_id} ya tiene una factura activa (#{factura_activa.numero_factura}). Anúlela antes de crear una nueva.",
+                    )
+
             # Generar número de factura
             numero_factura = FacturacionService.generar_numero_factura(db)
-            
+
             subtotal = 0.0
             detalles_factura = []
             movimientos = []
@@ -162,19 +181,16 @@ class FacturacionService:
         except HTTPException:
             db.rollback()
             raise
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail=f"Error en transacción de facturación: {str(e)}")
-            
-        except IntegrityError as e:
+        except IntegrityError:
+            # Backstop del indice unico parcial (facturas.consulta_id,
+            # WHERE estado != 'ANULADA'): si dos requests pasaron el
+            # chequeo de arriba casi simultaneamente, la DB rechaza el
+            # segundo INSERT en vez de dejar dos facturas activas.
             db.rollback()
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Error al crear la factura. Verifique los datos."
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La consulta ya tiene una factura activa. Anúlela antes de crear una nueva.",
             )
-        except HTTPException:
-            db.rollback()
-            raise
         except Exception as e:
             db.rollback()
             raise HTTPException(

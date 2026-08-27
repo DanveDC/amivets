@@ -133,7 +133,7 @@ class Consulta(Base):
 
     # Claves foráneas
     mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
-    veterinario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    veterinario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
 
     estado_pago = Column(String(50), default="POR_COBRAR") # POR_COBRAR, COBRADO
     precio_consulta = Column(Float, default=0.0)
@@ -148,11 +148,29 @@ class Consulta(Base):
     cirugias = relationship("Cirugia", back_populates="consulta")
     hospitalizaciones = relationship("Hospitalizacion", back_populates="consulta")
     servicios = relationship("ServicioConsulta", back_populates="consulta", cascade="all, delete-orphan")
-    factura = relationship("Factura", back_populates="consulta", uselist=False)
-    
+    # uselist=True: una consulta puede tener mas de una Factura si la
+    # activa fue anulada y se reemitio (flujo sancionado en
+    # crear_factura). Con uselist=False, SQLAlchemy levanta
+    # MultipleResultsFound apenas eso pasa una vez, tumbando GET
+    # /api/consultas y /api/consultas/{id} enteros.
+    facturas = relationship("Factura", back_populates="consulta", uselist=True)
+
+    @property
+    def factura(self) -> Optional["Factura"]:
+        """La Factura relevante de esta consulta: la activa (no ANULADA) si
+        existe -- nunca debe quedar tapada por una anulada vieja -- si no,
+        la ANULADA mas reciente."""
+        if not self.facturas:
+            return None
+        activas = [f for f in self.facturas if f.estado != "ANULADA"]
+        if activas:
+            return max(activas, key=lambda f: f.id)
+        return max(self.facturas, key=lambda f: f.id)
+
     @property
     def factura_id(self) -> Optional[int]:
-        return self.factura.id if self.factura else None
+        factura = self.factura
+        return factura.id if factura else None
 
     def __repr__(self):
         return f"<Consulta {self.id} - {self.fecha_consulta}>"
@@ -268,6 +286,11 @@ class Usuario(Base):
     is_active = Column(Boolean, default=True)
     role = Column(String(20), default="user") # admin, user
 
+    # Monto fijo que cobra este veterinario por cada consulta liquidada
+    # (Unidad E). NULL = tarifa no configurada todavia: el calculo de
+    # liquidacion debe rechazar, no asumir 0.
+    tarifa_consulta = Column(Numeric(10, 2), nullable=True)
+
     def __repr__(self):
         return f"<Usuario {self.username}>"
 
@@ -297,7 +320,7 @@ class Factura(Base):
     # Relaciones
     propietario = relationship("Propietario", back_populates="facturas")
     detalles = relationship("DetalleFactura", back_populates="factura", cascade="all, delete-orphan")
-    consulta = relationship("Consulta", back_populates="factura")
+    consulta = relationship("Consulta", back_populates="facturas")
     abonos = relationship("Abono", back_populates="factura")
 
     def __repr__(self):
@@ -344,6 +367,59 @@ class DetalleFactura(Base):
     
     def __repr__(self):
         return f"<DetalleFactura {self.id} - Factura {self.factura_id}>"
+
+
+class Liquidacion(Base):
+    """Cabecera de una corrida de pago a un veterinario (Unidad E).
+
+    Registra el rango consultado y el total resultante. El detalle
+    consulta-por-consulta vive en LiquidacionDetalle para que el monto
+    siempre se pueda desglosar.
+    """
+    __tablename__ = "liquidaciones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    veterinario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    fecha_inicio = Column(DateTime(timezone=True), nullable=False)
+    fecha_fin = Column(DateTime(timezone=True), nullable=False)
+    fecha_calculo = Column(DateTime(timezone=True), server_default=func.now())
+    total = Column(Numeric(10, 2), nullable=False, default=0)
+
+    veterinario = relationship("Usuario")
+    detalles = relationship("LiquidacionDetalle", back_populates="liquidacion", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Liquidacion {self.id} - Veterinario {self.veterinario_id}>"
+
+
+class LiquidacionDetalle(Base):
+    """Una consulta incluida en una liquidacion, con la tarifa ya aplicada.
+
+    tarifa_aplicada es una COPIA de Usuario.tarifa_consulta tomada en el
+    momento del calculo, no una referencia viva: si la tarifa del
+    veterinario cambia despues, lo ya liquidado no se mueve (regla de
+    Daniel, Unidad E de docs/tareas/04-kpis-recetas-y-veterinarios.md).
+
+    consulta_id es unique: una consulta no puede quedar incluida en mas de
+    una liquidacion nunca, ni siquiera si se recalcula sobre un rango que
+    se superpone con uno ya liquidado.
+    """
+    __tablename__ = "liquidacion_detalles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    liquidacion_id = Column(Integer, ForeignKey("liquidaciones.id"), nullable=False)
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=False, unique=True)
+    factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False)
+    tarifa_aplicada = Column(Numeric(10, 2), nullable=False)
+    fecha_consulta = Column(DateTime(timezone=True), nullable=False)
+
+    liquidacion = relationship("Liquidacion", back_populates="detalles")
+    consulta = relationship("Consulta")
+    factura = relationship("Factura")
+
+    def __repr__(self):
+        return f"<LiquidacionDetalle {self.id} - Consulta {self.consulta_id}>"
+
 
 class MovimientoInventario(Base):
     """Trazabilidad obligatoria: Cada vez que entra o sale un producto"""

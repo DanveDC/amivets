@@ -187,6 +187,7 @@ def seed_data():
                 temperatura=round(random.uniform(37.8, 40.1), 1),
                 frecuencia_cardiaca=random.randint(70, 140),
                 veterinario=f"Dr. {dr.username.split('_')[1].capitalize()}",
+                veterinario_id=dr.id,
                 fecha_consulta=fecha
             )
             # Fix: weight might be .peso in model

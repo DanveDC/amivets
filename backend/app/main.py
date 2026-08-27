@@ -12,7 +12,7 @@ from app.core.database import engine, Base
 from app.core.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo
+from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo, liquidaciones
 import time
 import logging
 import subprocess
@@ -160,6 +160,7 @@ app.include_router(cirugias.router)
 app.include_router(clinico.router)
 app.include_router(supabase_admin.router)
 app.include_router(catalogo.router)
+app.include_router(liquidaciones.router)
 
 
 @app.get("/", response_class=HTMLResponse)

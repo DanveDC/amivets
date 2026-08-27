@@ -1444,6 +1444,69 @@
                             <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná un veterinario para ver su detalle.</p>
                         </div>
                     </div>
+
+                    <!-- Liquidación a Veterinarios (Unidad E) -->
+                    <div id="liqSeccion" class="admin-only" style="display:none; flex-direction:column; gap:1.5rem; margin-top:1.5rem;">
+                        <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Tarifa por Consulta</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Monto fijo que cobra cada veterinario por consulta liquidada. Sin tarifa configurada, ese veterinario queda excluido del cálculo.</p>
+                            <div style="overflow-x:auto;">
+                                <table class="consultas-table" style="width:100%; border-collapse:collapse;">
+                                    <thead>
+                                        <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Veterinario</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Tarifa ($)</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:right; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="liqTarifasBody">
+                                        <tr><td colspan="3" style="text-align:center; color: var(--text-secondary); padding: 1rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Calcular Liquidación</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Elegí veterinario y rango para ver qué se le pagaría antes de confirmar el cálculo.</p>
+
+                            <div id="liqCalcFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                                <select id="liqVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                    <option value="">Seleccioná un veterinario...</option>
+                                </select>
+                                <span style="width:1px; align-self:stretch; background:var(--border);"></span>
+                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
+                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
+                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
+                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                                <span style="width:1px; align-self:stretch; background:var(--border);"></span>
+                                <input type="date" id="liqFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
+                                <input type="date" id="liqFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <button type="button" id="btnLiqPreview" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Ver desglose</button>
+                            </div>
+
+                            <div id="liqPreviewWrap" style="overflow-x:auto;">
+                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná veterinario y rango, y hacé clic en "Ver desglose".</p>
+                            </div>
+                        </div>
+
+                        <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Historial de Liquidaciones</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Liquidaciones ya calculadas, con el detalle de las consultas que las componen.</p>
+
+                            <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.75rem;">
+                                <select id="liqHistVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                    <option value="">Todos los veterinarios</option>
+                                </select>
+                                <button type="button" id="btnLiqHistRefrescar" class="btn-secondary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Actualizar</button>
+                            </div>
+
+                            <div id="liqHistLista">
+                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Cargando…</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
