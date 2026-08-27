@@ -242,19 +242,31 @@ confianza en el sistema entero.
 
 # Verificación
 
-- [ ] **B:** la receta genera PDF, sin precios ni datos de facturación, legible
+- [x] **B:** la receta genera PDF, sin precios ni datos de facturación, legible
       impresa en blanco y negro.
-- [ ] **A1:** un fallo del inspector hace fallar el arranque, no vaciar la base.
+- [x] **A1:** un fallo del inspector hace fallar el arranque, no vaciar la base.
       `FORCE_RESET_DB` no puede destruir producción por accidente.
       `admin123` no está en el código.
-- [ ] **A2:** la base no tiene datos de prueba y ningún dato real se perdió.
-- [ ] **C:** todos los indicadores respetan el rango, y el rango se ve en
+- [x] **A2:** la base no tiene datos de prueba y ningún dato real se perdió
+      (no había datos reales que perder — confirmado con Daniel).
+- [x] **C:** todos los indicadores respetan el rango, y el rango se ve en
       pantalla.
-- [ ] **D:** cada veterinario aparece una sola vez.
-- [ ] **E:** el total se desglosa consulta por consulta.
-- [ ] La suite de Playwright pasa, **actualizada si cambiaron selectores, no
-      debilitada**.
-- [ ] Commits separados por unidad.
+- [x] **D:** cada veterinario aparece una sola vez.
+- [x] **E:** el total se desglosa consulta por consulta. Cerrada con 3 rondas
+      de judgment-day (ver commit 4c50903) — surgieron y se cerraron 2 bugs
+      críticos reales antes de comitear.
+- [x] La suite de Playwright pasa, **actualizada si cambiaron selectores, no
+      debilitada** (e2e/auth.spec.js ya no depende del usuario sembrado
+      dr_pérez, commit fbdefc0).
+- [x] Commits separados por unidad.
+
+## Deuda pendiente, no bloqueante
+
+- Este repo no tiene ningún paso de `alembic upgrade` en el pipeline de
+  deploy (`start.sh`/`Dockerfile`/`render.yaml`). Las 4 migraciones nuevas de
+  esta tarea dependen de que alguien las corra a mano en cada entorno.
+- Obstáculo 1 quedó resuelto solo hacia adelante: no hay reporte de
+  reconciliación para consultas que pudieran quedar sin veterinario.
 
 # Fuera de alcance
 
