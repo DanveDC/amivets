@@ -4,9 +4,9 @@
 // admins (checkAdminAccess, commit ec1645a), logout invalidates access.
 
 const { test, expect } = require('@playwright/test');
-const { ADMIN_CREDENTIALS } = require('./helpers');
+const { ADMIN_CREDENTIALS, getAdminToken, createTestUser, deleteTestUser } = require('./helpers');
 
-const DOCTOR_CREDENTIALS = { username: 'dr_pérez', password: 'doctor123' };
+const DOCTOR_PASSWORD = 'doctor123';
 
 test.describe('Autenticación', () => {
   test.afterEach(async ({ page }) => {
@@ -53,16 +53,25 @@ test.describe('Autenticación', () => {
     await expect(adminNav).toBeVisible();
   });
 
-  test('un usuario no-admin no ve el menú de administración', async ({ page }) => {
-    await page.goto('/login');
-    await page.fill('#username', DOCTOR_CREDENTIALS.username);
-    await page.fill('#password', DOCTOR_CREDENTIALS.password);
-    await page.click('#btnLogin');
-    await page.waitForURL('**/');
+  test('un usuario no-admin no ve el menú de administración', async ({ page, request }) => {
+    // No depende de un usuario sembrado por seed_data.py (dr_pérez, ya no
+    // se crea automáticamente) — arma su propio veterinario descartable.
+    const token = await getAdminToken(request);
+    const doctor = await createTestUser(request, token, { role: 'veterinario', password: DOCTOR_PASSWORD });
 
-    const adminNav = page.locator('.menu-item.admin-only[data-target="sec-usuarios"]');
-    // Element exists in the DOM but must stay hidden (display:none) for non-admins.
-    await expect(adminNav).toBeHidden();
+    try {
+      await page.goto('/login');
+      await page.fill('#username', doctor.username);
+      await page.fill('#password', DOCTOR_PASSWORD);
+      await page.click('#btnLogin');
+      await page.waitForURL('**/');
+
+      const adminNav = page.locator('.menu-item.admin-only[data-target="sec-usuarios"]');
+      // Element exists in the DOM but must stay hidden (display:none) for non-admins.
+      await expect(adminNav).toBeHidden();
+    } finally {
+      await deleteTestUser(request, token, doctor.id);
+    }
   });
 
   test('cerrar sesión invalida el acceso', async ({ page }) => {
