@@ -584,6 +584,50 @@ class Desparasitacion(Base):
     producto = relationship("Inventario")
 
 
+class NotaClinica(Base):
+    """Bitacora de notas fechadas atada al paciente (Unidad B, tarea 05).
+
+    mascota_id es obligatorio: toda nota vive siempre en la historia del
+    paciente, sea cual sea su origen. consulta_id es opcional -- permite
+    anclar una nota a una consulta puntual ("seguimiento de la consulta del
+    martes") sin exigir que exista una consulta formal, que es justo el
+    vacio que esta tabla viene a llenar (ej: "la dueña llamo, el animal
+    sigue sin comer" no ocurre dentro de ninguna consulta). Mismo criterio
+    que PruebaComplementaria, que ya tiene consulta_id nullable + mascota_id
+    obligatorio.
+    """
+    __tablename__ = "notas_clinicas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=False)
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    # Set fijo y simple (general/seguimiento/llamada/incidencia): es mas
+    # facil agregar una categoria despues que sacar texto libre ya cargado.
+    categoria = Column(String(20), nullable=False, default="general")
+    texto = Column(Text, nullable=False)
+    fecha_creacion = Column(DateTime(timezone=True), server_default=func.now())
+    # Borrado logico -- mismo patron que ServicioConsulta.is_deleted: en un
+    # contexto clinico, una nota que desaparece sin dejar rastro es un
+    # problema de auditoria.
+    is_deleted = Column(Boolean, default=False)
+
+    # Rastro de edicion/borrado en la misma fila. El proyecto no tiene
+    # precedente de un audit-log separado (Liquidacion/LiquidacionDetalle
+    # son snapshots, no historiales de cambios), asi que una tabla nueva
+    # solo para esto seria sobre-diseño.
+    fecha_edicion = Column(DateTime(timezone=True), nullable=True)
+    editado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    mascota = relationship("Mascota")
+    consulta = relationship("Consulta")
+    usuario = relationship("Usuario", foreign_keys=[usuario_id])
+    editado_por = relationship("Usuario", foreign_keys=[editado_por_id])
+
+    def __repr__(self):
+        return f"<NotaClinica {self.id} - Mascota {self.mascota_id}>"
+
+
 class CatalogoServicio(Base):
     """Catalogo maestro de servicios y procedimientos de la clinica"""
     __tablename__ = "catalogo_servicios"

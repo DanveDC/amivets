@@ -2648,6 +2648,10 @@ const switchPetTab = (tabName) => {
                 cargarConsultas(currentMascotaId, extraParams);
             });
             break;
+        case 'notas':
+            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formNota')">+ Nueva Nota</button>`;
+            cargarNotasPet(currentMascotaId);
+            break;
         case 'vacunas':
             actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formVacuna')">+ Registrar Vacuna</button>`;
             cargarVacunasPet(currentMascotaId);
@@ -2851,6 +2855,125 @@ const submitClinico = async (e, endpoint) => {
     } catch (err) { alert('Error: ' + err.message); }
 };
 
+const NOTA_CATEGORIA_LABELS = {
+    general: 'General',
+    seguimiento: 'Seguimiento',
+    llamada: 'Llamada',
+    incidencia: 'Incidencia',
+};
+
+const buildNotaForm = () => `
+    <form onsubmit="submitNota(event)" id="formNota" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
+        <h4 style="margin-top:0; color:#4F46E5;">Nueva Nota</h4>
+        <div style="display:grid; grid-template-columns:1fr 3fr; gap:1rem;">
+            <div class="form-group">
+                <label>Categoría</label>
+                <select name="categoria" class="form-control">
+                    ${Object.entries(NOTA_CATEGORIA_LABELS).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Texto</label>
+                <textarea name="texto" class="form-control" rows="3" required placeholder="Ej: la dueña llamó, el animal sigue sin comer..."></textarea>
+            </div>
+        </div>
+        <button type="submit" class="btn-primary">Guardar Nota</button>
+    </form>`;
+
+const submitNota = async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const data = {
+        mascota_id: currentMascotaId,
+        categoria: form.categoria.value,
+        texto: form.texto.value,
+    };
+    try {
+        await fetchAPI('/notas/', { method: 'POST', body: JSON.stringify(data) });
+        form.reset();
+        form.style.display = 'none';
+        cargarNotasPet(currentMascotaId);
+        actualizarCountsPet(currentMascotaId);
+    } catch (error) {
+        alert('Error al guardar la nota: ' + error.message);
+    }
+};
+
+const renderNotaCard = (n) => {
+    const currentUserId = parseInt(localStorage.getItem('user_id'), 10);
+    const role = localStorage.getItem('role');
+    const puedeModificar = role === 'admin' || n.usuario_id === currentUserId;
+    const fecha = new Date(n.fecha_creacion).toLocaleString();
+    const editada = n.fecha_edicion ? `<span style="font-style:italic; color:#9ca3af;"> (editada ${new Date(n.fecha_edicion).toLocaleString()}${n.editado_por_username ? ' por ' + n.editado_por_username : ''})</span>` : '';
+
+    return `
+        <div class="card-item" id="nota-${n.id}" style="border-left: 4px solid #6366f1;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
+                <div>
+                    <span class="badge" style="background:#eef2ff; color:#4338ca;">${NOTA_CATEGORIA_LABELS[n.categoria] || n.categoria}</span>
+                    <span style="font-size:0.85rem; color:#6b7280; margin-left:0.5rem;">${fecha} · <b>${n.autor || 'Desconocido'}</b>${editada}</span>
+                </div>
+                ${puedeModificar ? `
+                <div style="display:flex; gap:0.4rem; flex-shrink:0;">
+                    <button class="btn-secondary btn-sm" onclick="editarNota(${n.id})" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Editar</button>
+                    <button class="btn-secondary btn-sm" onclick="borrarNota(${n.id})" style="padding:0.15rem 0.5rem; font-size:0.78rem; background:#fee2e2; color:#b91c1c; border-color:#ef4444;">Borrar</button>
+                </div>` : ''}
+            </div>
+            <div class="nota-texto" style="margin-top:0.5rem; white-space:pre-wrap;">${n.texto}</div>
+        </div>`;
+};
+
+const cargarNotasPet = async (mascotaId) => {
+    const cnt = document.getElementById('petTabContent');
+    cnt.innerHTML = buildNotaForm() + `<div id="notasList"><p style="text-align:center;color:#9ca3af;">Cargando...</p></div>`;
+    try {
+        const data = await fetchAPI(`/notas/mascota/${mascotaId}`);
+        const list = document.getElementById('notasList');
+        if (!data.length) {
+            list.innerHTML = `<div class="empty-state"><div class="icon">📝</div><p>Todavía no hay notas para este paciente.<br>Usá "+ Nueva Nota" para registrar la primera.</p></div>`;
+        } else {
+            // Más reciente primero en pantalla; el backend ya las entrega en orden cronológico ascendente.
+            list.innerHTML = data.slice().reverse().map(renderNotaCard).join('');
+        }
+    } catch (e) {
+        document.getElementById('notasList').innerHTML = '<p>Error cargando notas.</p>';
+    }
+};
+
+const editarNota = (notaId) => {
+    const card = document.getElementById(`nota-${notaId}`);
+    if (!card) return;
+    const textoDiv = card.querySelector('.nota-texto');
+    const textoActual = textoDiv.textContent;
+    textoDiv.innerHTML = `
+        <textarea class="form-control" rows="3" id="editNotaTexto-${notaId}">${textoActual}</textarea>
+        <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+            <button class="btn-primary btn-sm" onclick="guardarEdicionNota(${notaId})" style="padding:0.2rem 0.6rem; font-size:0.8rem;">Guardar</button>
+            <button class="btn-secondary btn-sm" onclick="cargarNotasPet(currentMascotaId)" style="padding:0.2rem 0.6rem; font-size:0.8rem;">Cancelar</button>
+        </div>`;
+};
+
+const guardarEdicionNota = async (notaId) => {
+    const textarea = document.getElementById(`editNotaTexto-${notaId}`);
+    try {
+        await fetchAPI(`/notas/${notaId}`, { method: 'PUT', body: JSON.stringify({ texto: textarea.value }) });
+        cargarNotasPet(currentMascotaId);
+    } catch (error) {
+        alert('Error al editar la nota: ' + error.message);
+    }
+};
+
+const borrarNota = async (notaId) => {
+    if (!confirm('¿Borrar esta nota? Quedará oculta de la historia del paciente.')) return;
+    try {
+        await fetchAPI(`/notas/${notaId}`, { method: 'DELETE' });
+        cargarNotasPet(currentMascotaId);
+        actualizarCountsPet(currentMascotaId);
+    } catch (error) {
+        alert('Error al borrar la nota: ' + error.message);
+    }
+};
+
 const cargarVacunasPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
     cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
@@ -2969,14 +3092,16 @@ const actualizarCountsPet = async (mascotaId) => {
             fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`).catch(() => []),
             fetchAPI(`/clinico/cirugias/${mascotaId}`).catch(() => []),
             fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`).catch(() => []),
-            fetchAPI(`/facturas/mascota/${mascotaId}`).catch(() => [])
-        ]).then(([cons, vac, desp, hosp, cir, pru, fac]) => {
+            fetchAPI(`/facturas/mascota/${mascotaId}`).catch(() => []),
+            fetchAPI(`/notas/mascota/${mascotaId}`).catch(() => [])
+        ]).then(([cons, vac, desp, hosp, cir, pru, fac, notas]) => {
             setTxt('count-consultas', cons?.length || 0);
             setTxt('count-vacunas', vac?.length || 0);
             setTxt('count-desparasitaciones', desp?.length || 0);
             setTxt('count-hosp', hosp?.length || 0);
             setTxt('count-proc', cir?.length || 0);
             setTxt('count-facturas', fac?.length || 0);
+            setTxt('count-notas', notas?.length || 0);
 
             const p = pru || [];
             setTxt('count-lab', p.filter(x => x.tipo === 'Laboratorio').length);

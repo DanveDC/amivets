@@ -645,4 +645,77 @@ class LiquidacionResponse(BaseModel):
     total: Decimal
     detalles: List[LiquidacionDetalleResponse] = []
 
+
+# ========== NOTA CLINICA SCHEMAS (Unidad B, tarea 05) ==========
+CATEGORIAS_NOTA_VALIDAS = {"general", "seguimiento", "llamada", "incidencia"}
+
+
+class NotaClinicaBase(BaseModel):
+    categoria: str = Field(default="general", max_length=20)
+    texto: str = Field(..., min_length=1)
+    # Ancla opcional a una consulta puntual -- ver justificacion en
+    # NotaClinica (models.py): la mayoria de las notas nace fuera de una
+    # consulta formal.
+    consulta_id: Optional[int] = Field(None, gt=0)
+
+    @field_validator('categoria')
+    @classmethod
+    def validar_categoria(cls, v):
+        if v not in CATEGORIAS_NOTA_VALIDAS:
+            raise ValueError(f"Categoria invalida. Usar una de: {', '.join(sorted(CATEGORIAS_NOTA_VALIDAS))}")
+        return v
+
+
+class NotaClinicaCreate(NotaClinicaBase):
+    mascota_id: int = Field(..., gt=0)
+    # usuario_id NO se acepta desde el cliente: lo fija el backend con el
+    # usuario autenticado (mismo criterio que Consulta.veterinario_id, que
+    # tampoco puede ser texto libre falsificable).
+
+
+class NotaClinicaUpdate(BaseModel):
+    categoria: Optional[str] = Field(None, max_length=20)
+    texto: Optional[str] = Field(None, min_length=1)
+
+    @field_validator('categoria')
+    @classmethod
+    def validar_categoria(cls, v):
+        if v is not None and v not in CATEGORIAS_NOTA_VALIDAS:
+            raise ValueError(f"Categoria invalida. Usar una de: {', '.join(sorted(CATEGORIAS_NOTA_VALIDAS))}")
+        return v
+
+
+class NotaClinicaResponse(NotaClinicaBase):
+    id: int
+    mascota_id: int
+    usuario_id: int
+    autor: Optional[str] = None
+    fecha_creacion: datetime
+    fecha_edicion: Optional[datetime] = None
+    editado_por_username: Optional[str] = None
+    is_deleted: bool
+
+    @model_validator(mode='before')
+    def _adjuntar_nombres(cls, data):
+        # Igual criterio que MascotaResponse.append_apellido: si es un
+        # objeto ORM con las relaciones cargadas, resolvemos el nombre de
+        # autor/editor aca para que el frontend no tenga que pedir /usuarios
+        # aparte solo para mostrar quien escribio la nota.
+        # OJO: el campo de salida se llama "editado_por_username", NUNCA
+        # "editado_por" -- ese nombre ya es la relationship SQLAlchemy en
+        # NotaClinica, y pisarla con un string confunde a la instrumentacion
+        # del ORM (el objeto deja de ser serializable). "autor" no choca
+        # porque en el modelo esa relacion se llama "usuario".
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                if getattr(data, 'usuario', None):
+                    data.autor = data.usuario.username
+                if getattr(data, 'editado_por', None):
+                    data.editado_por_username = data.editado_por.username
+            except Exception:
+                pass
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
+
     model_config = ConfigDict(from_attributes=True)
