@@ -170,14 +170,27 @@ aparte, no una variante de esta.
 
 # Verificación
 
-- [ ] `docs/tecnico/import-pacientes.md` documenta qué se importó, qué quedó
+- [x] `docs/tecnico/import-pacientes.md` documenta qué se importó, qué quedó
       fuera y por qué.
-- [ ] El SQL fue validado contra los Excel con números, no de vista.
-- [ ] La tabla de notas tiene migración de Alembic y se ve en la historia.
-- [ ] El dictado funciona en Chrome y **desaparece limpiamente** donde no.
-- [ ] Lo dictado se puede corregir antes de guardar.
-- [ ] La suite de Playwright pasa, actualizada si cambiaron selectores.
-- [ ] Commits separados por unidad.
+- [x] El SQL fue validado contra los Excel con números, no de vista (2 rondas
+      de judgment-day, 4 jueces en total; el original tenía pérdida real de
+      datos, corregido en v2, ver commits 2b61e17/388355e).
+- [x] La tabla de notas tiene migración de Alembic y se ve en la historia
+      (commit 35e22f7).
+- [x] El dictado funciona en Chrome y **desaparece limpiamente** donde no
+      (commit f31c226).
+- [x] Lo dictado se puede corregir antes de guardar.
+- [x] La suite de Playwright pasa, actualizada si cambiaron selectores
+      (23 passed, 1 skipped por falta de Supabase — sin selectores que
+      cambiar en esta tarea).
+- [x] Commits separados por unidad.
+
+## Pendiente de tu decisión — no bloqueante
+
+- Historia 988/682 en el import: ¿es el mismo animal cargado dos veces?
+  Ver `docs/tecnico/import-pacientes.md`.
+- El import v2 sigue sin ejecutarse contra ninguna base — falta tu
+  autorización explícita (local o producción).
 
 # Fuera de alcance
 
