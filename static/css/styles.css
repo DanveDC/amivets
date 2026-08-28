@@ -1212,6 +1212,56 @@ textarea:focus-visible {
     min-height: 1em;
 }
 
+/* --- DICTADO POR VOZ (notas clínicas) --- */
+
+.dictado-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 0.5rem;
+}
+
+.btn-dictado {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-dictado:hover {
+    background: var(--surface-hover);
+    border-color: var(--text-muted);
+}
+
+.btn-dictado.dictado-activo {
+    /* #fee2e2/#b91c1c: mismo par usado en app.js para el botón "Borrar" de notas.
+       var(--accent) con texto blanco da ~3.67:1, por debajo del 4.5:1 que exige WCAG AA para texto normal. */
+    background: #fee2e2;
+    border-color: #b91c1c;
+    color: #b91c1c;
+    animation: dictadoPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dictadoPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.35); }
+    50%      { box-shadow: 0 0 0 6px rgba(185, 28, 28, 0); }
+}
+
+.dictado-status {
+    font-size: 0.78rem;
+    color: #b91c1c;
+    font-weight: 600;
+    min-height: 1em;
+}
+
 /* --- MICROINTERACTIONS (make-interfaces-feel-better) --- */
 
 /* Tactile press on all buttons */

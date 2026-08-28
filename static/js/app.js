@@ -2592,6 +2592,7 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
 };
 
 const switchPetTab = (tabName) => {
+    detenerDictado(); // cambiar de pestaña destruye el DOM de notas; no dejar el micrófono escuchando de fondo
     // UI Update Active State
     document.querySelectorAll('.pet-nav-item').forEach(el => {
         el.classList.toggle('active', el.dataset.tab === tabName);
@@ -2862,6 +2863,94 @@ const NOTA_CATEGORIA_LABELS = {
     incidencia: 'Incidencia',
 };
 
+// ============ DICTADO POR VOZ (Web Speech API) ============
+// Sin prefijo en navegadores modernos, con prefijo webkit en Chrome/Chromium.
+// Si ninguna existe (Firefox, Safari) queda undefined y el botón nunca se genera.
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+let dictadoRecognition = null;
+let dictadoActivoBtn = null;
+
+const dictadoBotonHTML = (targetId) => {
+    if (!SpeechRecognitionAPI) return '';
+    return `
+        <div class="dictado-wrap">
+            <button type="button" class="btn-dictado" data-target="${targetId}" aria-pressed="false" aria-label="Dictar nota por voz">
+                <span aria-hidden="true">🎤</span> Dictar
+            </button>
+            <span class="dictado-status" role="status" aria-live="polite"></span>
+        </div>`;
+};
+
+const detenerDictado = () => {
+    if (dictadoRecognition) dictadoRecognition.stop();
+};
+
+const iniciarDictado = (btn) => {
+    // Un solo micrófono abierto a la vez: si había otro botón dictando, se corta antes de empezar el nuevo.
+    if (dictadoActivoBtn && dictadoActivoBtn !== btn) detenerDictado();
+
+    const textarea = document.getElementById(btn.getAttribute('data-target'));
+    const statusEl = btn.parentElement.querySelector('.dictado-status');
+    if (!textarea) return;
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'es-VE'; // el sistema ya usa cédula/formato venezolano (import de pacientes); sin locale explícito previo
+    recognition.interimResults = true; // se necesita ver el texto mientras se habla, no solo al terminar
+    recognition.continuous = true; // no cortar el dictado en la primera pausa entre frases
+
+    const textoBase = textarea.value ? textarea.value.trim() + ' ' : '';
+    let textoFinal = '';
+
+    recognition.onstart = () => {
+        dictadoRecognition = recognition;
+        dictadoActivoBtn = btn;
+        btn.classList.add('dictado-activo');
+        btn.setAttribute('aria-pressed', 'true');
+        btn.setAttribute('aria-label', 'Detener dictado');
+        btn.innerHTML = '<span aria-hidden="true">⏺</span> Escuchando...';
+        if (statusEl) statusEl.textContent = 'Escuchando...';
+    };
+
+    recognition.onresult = (event) => {
+        let interino = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) textoFinal += transcript + ' ';
+            else interino += transcript;
+        }
+        // El texto queda editable en todo momento: esto solo actualiza el value del textarea, nunca lo bloquea.
+        textarea.value = textoBase + textoFinal + interino;
+    };
+
+    recognition.onerror = (event) => {
+        // 'not-allowed'/'service-not-allowed': el usuario bloqueó el micrófono o nunca dio el permiso.
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            showNotification('No se pudo acceder al micrófono. Revisá los permisos del navegador para dictar la nota.', 'error');
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+            showNotification('Hubo un problema con el dictado por voz. Podés seguir escribiendo la nota a mano.', 'warning');
+        }
+    };
+
+    recognition.onend = () => {
+        btn.classList.remove('dictado-activo');
+        btn.setAttribute('aria-pressed', 'false');
+        btn.setAttribute('aria-label', 'Dictar nota por voz');
+        btn.innerHTML = '<span aria-hidden="true">🎤</span> Dictar';
+        if (statusEl) statusEl.textContent = '';
+        dictadoRecognition = null;
+        dictadoActivoBtn = null;
+    };
+
+    recognition.start();
+};
+
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-dictado');
+    if (!btn) return;
+    if (btn.classList.contains('dictado-activo')) detenerDictado();
+    else iniciarDictado(btn);
+});
+
 const buildNotaForm = () => `
     <form onsubmit="submitNota(event)" id="formNota" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
         <h4 style="margin-top:0; color:#4F46E5;">Nueva Nota</h4>
@@ -2873,8 +2962,9 @@ const buildNotaForm = () => `
                 </select>
             </div>
             <div class="form-group">
-                <label>Texto</label>
-                <textarea name="texto" class="form-control" rows="3" required placeholder="Ej: la dueña llamó, el animal sigue sin comer..."></textarea>
+                <label for="notaTextoInput">Texto</label>
+                <textarea name="texto" id="notaTextoInput" class="form-control" rows="3" required placeholder="Ej: la dueña llamó, el animal sigue sin comer..."></textarea>
+                ${dictadoBotonHTML('notaTextoInput')}
             </div>
         </div>
         <button type="submit" class="btn-primary">Guardar Nota</button>
@@ -2882,6 +2972,7 @@ const buildNotaForm = () => `
 
 const submitNota = async (event) => {
     event.preventDefault();
+    detenerDictado();
     const form = event.target;
     const data = {
         mascota_id: currentMascotaId,
@@ -2924,6 +3015,7 @@ const renderNotaCard = (n) => {
 };
 
 const cargarNotasPet = async (mascotaId) => {
+    detenerDictado(); // este render reemplaza el DOM entero de la pestaña, no dejar un micrófono huérfano abierto
     const cnt = document.getElementById('petTabContent');
     cnt.innerHTML = buildNotaForm() + `<div id="notasList"><p style="text-align:center;color:#9ca3af;">Cargando...</p></div>`;
     try {
@@ -2945,8 +3037,10 @@ const editarNota = (notaId) => {
     if (!card) return;
     const textoDiv = card.querySelector('.nota-texto');
     const textoActual = textoDiv.textContent;
+    const targetId = `editNotaTexto-${notaId}`;
     textoDiv.innerHTML = `
-        <textarea class="form-control" rows="3" id="editNotaTexto-${notaId}">${textoActual}</textarea>
+        <textarea class="form-control" rows="3" id="${targetId}">${textoActual}</textarea>
+        ${dictadoBotonHTML(targetId)}
         <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
             <button class="btn-primary btn-sm" onclick="guardarEdicionNota(${notaId})" style="padding:0.2rem 0.6rem; font-size:0.8rem;">Guardar</button>
             <button class="btn-secondary btn-sm" onclick="cargarNotasPet(currentMascotaId)" style="padding:0.2rem 0.6rem; font-size:0.8rem;">Cancelar</button>
@@ -2954,6 +3048,7 @@ const editarNota = (notaId) => {
 };
 
 const guardarEdicionNota = async (notaId) => {
+    detenerDictado();
     const textarea = document.getElementById(`editNotaTexto-${notaId}`);
     try {
         await fetchAPI(`/notas/${notaId}`, { method: 'PUT', body: JSON.stringify({ texto: textarea.value }) });
