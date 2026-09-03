@@ -2831,10 +2831,13 @@ const hydrateCombos = async () => {
 const submitClinico = async (e, endpoint) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
-    if (data.consulta_id) data.consulta_id = parseInt(data.consulta_id);
-    if (data.vacuna_id) data.vacuna_id = parseInt(data.vacuna_id);
-    if (data.producto_id) data.producto_id = parseInt(data.producto_id);
-    if (data.cirujano_id) data.cirujano_id = parseInt(data.cirujano_id);
+    // Numeric fields: coerce when present, but DROP blanks entirely — an
+    // empty optional <input type="number"> (e.g. "Cirujano ID") serializes as
+    // "" and the backend rejects "" for an int column with a 422.
+    for (const key of ['consulta_id', 'vacuna_id', 'producto_id', 'cirujano_id']) {
+        if (data[key] === '' || data[key] == null) delete data[key];
+        else data[key] = parseInt(data[key], 10);
+    }
     data.mascota_id = currentMascotaId;
 
     try {
