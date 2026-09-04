@@ -3360,7 +3360,7 @@ const renderMedicamentoRow = async (medicamentos, isFirst = false) => {
     div.className = 'form-row receta-item';
     div.style = 'align-items: end; background: #f8fafc; padding: 1rem; border-radius: 12px; margin-bottom: 1rem; position: relative; border: 1px solid #e2e8f0;';
 
-    const removeBtn = isFirst ? '' : `<button type="button" class="btn-sm" style="position: absolute; top: 0.5rem; right: 0.5rem; background: # fee2e2; border: none; color: #ef4444; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="this.parentElement.remove()">✕</button>`;
+    const removeBtn = isFirst ? '' : `<button type="button" class="btn-sm" style="position: absolute; top: 0.5rem; right: 0.5rem; background: #fee2e2; border: none; color: #ef4444; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="this.parentElement.remove()">✕</button>`;
 
     div.innerHTML = `
         ${removeBtn}
