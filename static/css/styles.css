@@ -1512,6 +1512,62 @@ button:active:not(:disabled) {
 }
 
 /* ============================================================
+   TABLE RENDERER HOOKS — shared by the JS list/table renderers
+   (slices 5-6). Replaces per-row inline style blobs.
+   ============================================================ */
+.row-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.status-pill--ok    { color: var(--secondary); }
+.status-pill--warn  { color: var(--warning-dark); }
+.status-pill--muted { color: var(--text-muted); }
+
+/* Destructive row action — quiet red ghost */
+.btn-row-danger {
+    color: var(--accent);
+    border-color: var(--accent-subtle);
+}
+
+/* ============================================================
+   NOTIFICATION TOAST (showNotification, slice 6)
+   ============================================================ */
+.notification-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    color: #fff;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transform: translateX(120%);
+    transition: transform 0.3s ease;
+    font-weight: 500;
+    max-width: 380px;
+}
+.notification-toast--show { transform: translateX(0); }
+.notification-toast--success { background: var(--secondary-dark); }
+.notification-toast--error   { background: var(--accent-dark); }
+.notification-toast--warning { background: var(--warning-dark); }
+.notification-toast--info    { background: var(--primary-dark); }
+
+/* ============================================================
    SKELETON LOADERS
    ============================================================ */
 .skeleton-list { display: flex; flex-direction: column; gap: 0.5rem; }

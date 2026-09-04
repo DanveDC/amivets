@@ -70,36 +70,68 @@ const fetchAPI = async (endpoint, options = {}) => {
 
 const showNotification = (message, type = 'info') => {
     const config = {
-        success: { bg: '#10b981', icon: '✓' },
-        error:   { bg: '#ef4444', icon: '✕' },
-        warning: { bg: '#f59e0b', icon: '⚠' },
-        info:    { bg: '#4F46E5', icon: 'ℹ' },
+        success: { icon: ICONS.checkCircle },
+        error:   { icon: ICONS.xCircle },
+        warning: { icon: ICONS.alertTriangle },
+        info:    { icon: ICONS.info },
     };
-    const { bg, icon } = config[type] || config.info;
+    const resolvedType = config[type] ? type : 'info';
+    const { icon } = config[resolvedType];
 
     const container = document.getElementById('notification-container') || document.body;
     const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.style.cssText = `
-        position: fixed; top: 20px; right: 20px; z-index: 9999;
-        background: ${bg};
-        color: white; padding: 1rem 1.5rem; border-radius: 8px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        display: flex; align-items: center; gap: 0.75rem;
-        transform: translateX(120%); transition: transform 0.3s ease;
-        font-weight: 500; max-width: 380px;
-    `;
+    notification.className = `notification notification-${type} notification-toast notification-toast--${resolvedType}`;
     notification.innerHTML = `
         <span>${icon}</span>
         <span>${message}</span>
     `;
     container.appendChild(notification);
-    setTimeout(() => notification.style.transform = 'translateX(0)', 10);
+    setTimeout(() => notification.classList.add('notification-toast--show'), 10);
     const duration = type === 'error' ? 6000 : 4000;
     setTimeout(() => {
-        notification.style.transform = 'translateX(120%)';
+        notification.classList.remove('notification-toast--show');
         setTimeout(() => notification.remove(), 300);
     }, duration);
+};
+
+/**
+ * Lucide-style inline stroke icons used by the JS-rendered markup.
+ * They replace the emoji glyphs the renderers used to inline. Size comes
+ * from the `.inline-icon` CSS class; colour is inherited via currentColor.
+ */
+const ICONS = {
+    edit: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    trash: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>',
+    close: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+    check: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    checkCircle: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>',
+    info: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+    xCircle: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
+    alertTriangle: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+    clock: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    box: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+    paw: '<svg class="inline-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><circle cx="4" cy="16" r="2"/><circle cx="6" cy="8" r="2"/><path d="M12 10c-2.6 0-4.8 2.1-5.5 4.4-.4 1.4.7 2.9 2.2 2.9h6.6c1.5 0 2.6-1.5 2.2-2.9C16.8 12.1 14.6 10 12 10Z"/></svg>',
+    stethoscope: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg>',
+    scalpel: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 4 6 6-9 9H5v-6z"/><path d="m9 9 6 6"/></svg>',
+    flask: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>',
+    hospital: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z"/></svg>',
+    pill: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>',
+    syringe: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/></svg>',
+    search: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+    printer: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>',
+    fileText: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>',
+    receipt: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg>',
+    dollar: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+    plus: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
+    mic: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>',
+    recordDot: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>',
+    calendar: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></svg>',
+    thermometer: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>',
+    clipboard: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>',
+    notePencil: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>',
+    home: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/></svg>',
+    flag: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>',
+    heartPulse: '<svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></svg>',
 };
 
 // Global safety net for unhandled async errors
@@ -151,7 +183,7 @@ const createPrettySelect = (containerId, options = [], placeholder = 'Selecciona
     container.innerHTML = `
         <div class="custom-select-trigger" id="${containerId}-trigger">
             <span class="trigger-text">${placeholder}</span>
-            <span class="trigger-icon">▼</span>
+            <span class="trigger-icon"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
         </div>
         <div class="custom-select-dropdown" id="${dropdownId}">
             <div class="custom-select-search-wrapper">
@@ -573,7 +605,7 @@ const loadPropietarios = async (filter = '') => {
         }
 
         if (propietarios.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: #9ca3af;">No se encontraron propietarios.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">No se encontraron propietarios.</td></tr>';
             return;
         }
 
@@ -583,18 +615,18 @@ const loadPropietarios = async (filter = '') => {
                 <td style="font-weight: 500;">${p.nombre} ${p.apellido}</td>
                 <td>${p.cedula}</td>
                 <td>${p.telefono}</td>
-                <td>${p.email || '<span style="color: #9ca3af;">N/D</span>'}</td>
+                <td>${p.email || '<span style="color: var(--text-muted);">N/D</span>'}</td>
                 <td style="text-align: right;">
-                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                        <button class="btn-secondary btn-sm" onclick="verMascotasPropietario(${p.id}, '${p.nombre}')" title="Ver mascotas">🐾 Mascotas</button>
-                        <button class="btn-secondary btn-sm" onclick="abrirEditarPropietario(${p.id})" title="Editar">✏️</button>
-                        <button class="btn-secondary btn-sm" onclick="confirmEliminarPropietario(${p.id}, '${p.nombre} ${p.apellido}')" title="Eliminar" style="color: #ef4444; border-color: #fca5a5;">🗑️</button>
+                    <div class="row-actions">
+                        <button class="btn-secondary btn-sm" onclick="verMascotasPropietario(${p.id}, '${p.nombre}')" title="Ver mascotas" aria-label="Ver mascotas">${ICONS.paw} Mascotas</button>
+                        <button class="btn-secondary btn-sm" onclick="abrirEditarPropietario(${p.id})" title="Editar" aria-label="Editar">${ICONS.edit}</button>
+                        <button class="btn-secondary btn-sm btn-row-danger" onclick="confirmEliminarPropietario(${p.id}, '${p.nombre} ${p.apellido}')" title="Eliminar" aria-label="Eliminar">${ICONS.trash}</button>
                     </div>
                 </td>
             </tr>
         `).join('');
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 2rem;">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--accent); padding: 2rem;">Error: ${error.message}</td></tr>`;
     }
 };
 
@@ -667,18 +699,20 @@ const loadUsuarios = async () => {
         const meId = meResp?.id;
         const roleBadge = (role) => {
             const colors = {
-                admin: '#4F46E5',
-                veterinario: '#059669',
-                user: '#9ca3af'
+                admin: 'var(--primary)',
+                veterinario: 'var(--secondary)',
+                user: 'var(--text-muted)'
             };
-            return `<span class="badge" style="background:${colors[role] || '#9ca3af'}">${role}</span>`;
+            return `<span class="badge" style="background:${colors[role] || 'var(--text-muted)'}">${role}</span>`;
         };
         tbody.innerHTML = usuarios.map(u => `
             <tr>
                 <td>${u.username}</td>
                 <td>${u.email}</td>
                 <td>${roleBadge(u.role)}</td>
-                <td>${u.is_active ? '✅ Activo' : '❌ Inactivo'}</td>
+                <td>${u.is_active
+                    ? `<span class="status-pill status-pill--ok">${ICONS.checkCircle} Activo</span>`
+                    : `<span class="status-pill status-pill--muted">${ICONS.xCircle} Inactivo</span>`}</td>
                 <td style="white-space:nowrap;">
                     <button class="btn-secondary btn-sm" onclick="abrirEditarUsuario(${u.id}, '${u.username}', '${u.email}', '${u.role}')"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-right:0.35rem;">
@@ -688,15 +722,15 @@ const loadUsuarios = async () => {
                         style="font-size:0.75rem; padding:0.25rem 0.6rem;">
                         ${u.is_active ? 'Desactivar' : 'Activar'}
                     </button>
-                    ${u.id !== meId ? `<button class="btn-secondary btn-sm" onclick="deleteUsuario(${u.id}, '${u.username}')"
-                        style="font-size:0.75rem; padding:0.25rem 0.6rem; color:var(--accent); border-color:rgba(244,63,94,0.3); margin-left:0.35rem;">
+                    ${u.id !== meId ? `<button class="btn-secondary btn-sm btn-row-danger" onclick="deleteUsuario(${u.id}, '${u.username}')"
+                        style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-left:0.35rem;">
                         Eliminar
                     </button>` : ''}
                 </td>
             </tr>
         `).join('');
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--accent);">Error: ${error.message}</td></tr>`;
     }
 };
 
@@ -872,33 +906,35 @@ const loadInventario = async (filtro = '') => {
         }
 
         if (productos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: #9ca3af;">No se encontraron productos.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No se encontraron productos.</td></tr>';
             return;
         }
 
         tbody.innerHTML = productos.map(p => {
             const bajStock = p.stock_actual <= p.stock_minimo;
             const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : '—';
-            const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:#ef4444; font-weight:700;' : '';
+            const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:var(--accent); font-weight:700;' : '';
             return `
             <tr>
                 <td>
-                    <div style="font-weight:600; color:#1e293b;">${p.nombre}</div>
-                    <div style="font-size:0.75rem; color:#64748b;">${p.codigo}</div>
+                    <div style="font-weight:600; color:var(--text-primary);">${p.nombre}</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary);">${p.codigo}</div>
                 </td>
-                <td><span class="badge" style="background:#eef2ff; color:#4F46E5; font-size:0.75rem;">${p.categoria || '—'}</span></td>
-                <td style="font-weight:700; color:${bajStock ? '#ef4444' : '#059669'}">
+                <td><span class="badge" style="background:var(--primary-subtle); color:var(--primary); font-size:0.75rem;">${p.categoria || '—'}</span></td>
+                <td style="font-weight:700; color:${bajStock ? 'var(--accent)' : 'var(--secondary)'}">
                     ${p.stock_actual}
-                    <span style="font-size:0.75rem; font-weight:400; color:#94a3b8;">/ min ${p.stock_minimo}</span>
+                    <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">/ min ${p.stock_minimo}</span>
                 </td>
-                <td>$${(p.precio_unitario || 0).toFixed(2)}</td>
+                <td class="num">$${(p.precio_unitario || 0).toFixed(2)}</td>
                 <td style="${vencimientoStyle}">${vencimiento}</td>
-                <td>${bajStock ? '<span style="color:#ef4444; font-weight:700;">⚠️ Bajo</span>' : '<span style="color:#059669;">✅ OK</span>'}</td>
+                <td>${bajStock
+                    ? `<span class="status-pill status-pill--warn">${ICONS.alertTriangle} Bajo</span>`
+                    : `<span class="status-pill status-pill--ok">${ICONS.checkCircle} OK</span>`}</td>
                 <td style="text-align:right;">
-                    <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
-                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" title="Ajustar stock" style="font-size:0.75rem; padding:4px 8px;">📦 Stock</button>
-                        <button class="btn-secondary btn-sm" onclick="abrirEditarProducto(${p.id})" title="Editar" style="font-size:0.75rem; padding:4px 8px;">✏️</button>
-                        <button class="btn-secondary btn-sm" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" style="font-size:0.75rem; padding:4px 8px; color:#ef4444; border-color:#fca5a5;">🗑️</button>
+                    <div class="row-actions">
+                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" title="Ajustar stock" aria-label="Ajustar stock" style="font-size:0.75rem; padding:4px 8px;">${ICONS.box} Stock</button>
+                        <button class="btn-secondary btn-sm" onclick="abrirEditarProducto(${p.id})" title="Editar" aria-label="Editar" style="font-size:0.75rem; padding:4px 8px;">${ICONS.edit}</button>
+                        <button class="btn-secondary btn-sm btn-row-danger" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" aria-label="Desactivar" style="font-size:0.75rem; padding:4px 8px;">${ICONS.trash}</button>
                     </div>
                 </td>
             </tr>`;
@@ -909,7 +945,7 @@ const loadInventario = async (filtro = '') => {
         document.getElementById('badgeStock').textContent = lowStock > 0 ? lowStock : '';
 
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color:#ef4444;">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color:var(--accent);">Error: ${error.message}</td></tr>`;
     }
 };
 
@@ -1372,7 +1408,7 @@ const cargarTarifas = async () => {
         `).join('');
     } catch (error) {
         console.error('Error cargando tarifas', error);
-        body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#dc2626; padding: 1rem;">Error al cargar tarifas.</td></tr>';
+        body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--accent); padding: 1rem;">Error al cargar tarifas.</td></tr>';
     }
 };
 
@@ -1481,7 +1517,7 @@ const previewLiquidacion = async () => {
         const data = await fetchAPI(`/liquidaciones/preview?${params}`);
         renderLiqPreview(data);
     } catch (error) {
-        wrap.innerHTML = `<p style="text-align:center; color:#dc2626; padding: 1rem;">Error: ${error.message}</p>`;
+        wrap.innerHTML = `<p style="text-align:center; color:var(--accent); padding: 1rem;">Error: ${error.message}</p>`;
     }
 };
 
@@ -1555,7 +1591,7 @@ const cargarHistorialLiquidaciones = async () => {
         const data = await fetchAPI(`/liquidaciones/${params}`);
         renderLiqHistorial(Array.isArray(data) ? data : []);
     } catch (error) {
-        wrap.innerHTML = `<p style="text-align:center; color:#dc2626; padding: 1rem;">Error: ${error.message}</p>`;
+        wrap.innerHTML = `<p style="text-align:center; color:var(--accent); padding: 1rem;">Error: ${error.message}</p>`;
     }
 };
 
@@ -1887,14 +1923,14 @@ const handleConsultaSubmit = async (e) => {
 const initConsultorio = async () => {
     const listContainer = document.getElementById('consultorioMascotasList');
     if (!listContainer) return;
-    listContainer.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 1.5rem;">Cargando pacientes...</p>';
+    listContainer.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Cargando pacientes...</p>';
     try {
         const mascotas = await fetchAPI('/mascotas/?skip=0&limit=50');
         // Filtrar inactivas
         const activas = mascotas.filter(m => m.activo !== false);
         renderMascotasList(activas, listContainer);
     } catch (e) {
-        listContainer.innerHTML = '<p style="color: #ef4444; text-align:center; padding: 1.5rem; font-weight: 500;">❌ Error al cargar pacientes</p>';
+        listContainer.innerHTML = `<p style="color: var(--accent); text-align:center; padding: 1.5rem; font-weight: 500;">${ICONS.xCircle} Error al cargar pacientes</p>`;
     }
 };
 
@@ -1968,14 +2004,14 @@ const renderMascotasList = (mascotas, container) => {
         return;
     }
     container.innerHTML = mascotas.map(m => `
-        <div class="search-item pet-list-item" onclick="seleccionarMascota(${m.id}, '${m.nombre}', '${m.especie}', '${m.codigo_historia || ''}')" 
-             style="cursor: pointer; padding: 1rem; border-bottom: 1px solid #f1f5f9; transition: all 0.2s ease; display: flex; flex-direction: column; gap: 6px; border-radius: 8px; margin-bottom: 4px;">
+        <div class="search-item pet-list-item" onclick="seleccionarMascota(${m.id}, '${m.nombre}', '${m.especie}', '${m.codigo_historia || ''}')"
+             style="cursor: pointer; padding: 1rem; border-bottom: 1px solid var(--border-light); transition: all 0.2s ease; display: flex; flex-direction: column; gap: 6px; border-radius: 8px; margin-bottom: 4px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-weight: 700; color: #1e293b; font-size: 1.05rem; letter-spacing: -0.01em;">${m.nombre}</div>
-                <span style="color: #6366f1; font-weight: 800; font-size: 0.75rem; background: #eef2ff; padding: 2px 8px; border-radius: 6px;">#${m.codigo_historia || m.id}</span>
+                <div style="font-weight: 700; color: var(--text-primary); font-size: 1.05rem; letter-spacing: -0.01em;">${m.nombre}</div>
+                <span style="color: var(--primary); font-weight: 800; font-size: 0.75rem; background: var(--primary-subtle); padding: 2px 8px; border-radius: 6px;">#${m.codigo_historia || m.id}</span>
             </div>
-            <div style="font-size: 0.85rem; color: #64748b; font-weight: 500;">
-                🐾 ${m.especie}
+            <div style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">
+                ${ICONS.paw} ${m.especie}
             </div>
         </div>
     `).join('');
@@ -2020,7 +2056,7 @@ window.verConsultaCompleta = async (consultaId, mascotaId) => {
 const renderDetalleServicios = (servicios) => {
     const listDiv = document.getElementById('detalleConsultaServiciosList');
     if (!servicios || servicios.length === 0) {
-        listDiv.innerHTML = '<p style="color: #6b7280; font-style: italic; text-align: center; padding: 1rem;">No hay registros clínicos o cargos anexados.</p>';
+        listDiv.innerHTML = '<p style="color: var(--text-secondary); font-style: italic; text-align: center; padding: 1rem;">No hay registros clínicos o cargos anexados.</p>';
         const el = document.getElementById('detalleConsultaTotal');
         if (el) el.textContent = "$0.00";
         return;
@@ -2032,9 +2068,9 @@ const renderDetalleServicios = (servicios) => {
     let html = activos.map(s => {
         total += (s.cantidad * s.precio_unitario);
 
-        let statusIcon = s.estado === 'Aplicado' ? '✅' : '⏳';
-        let badgeColor = s.estado === 'Aplicado' ? 'background: #f8fafc; border: 1px solid #e2e8f0;' : 'background: #fffbeb; border: 1px solid #fde68a;';
-        let accentLine = s.estado === 'Aplicado' ? '#4F46E5' : '#d97706';
+        let statusIcon = s.estado === 'Aplicado' ? ICONS.checkCircle : ICONS.clock;
+        let badgeColor = s.estado === 'Aplicado' ? 'background: var(--surface-hover); border: 1px solid var(--border);' : 'background: var(--warning-subtle); border: 1px solid var(--warning);';
+        let accentLine = s.estado === 'Aplicado' ? 'var(--primary)' : 'var(--warning-dark)';
 
         // Parse clinical details if they follow the "Key: Value | Key: Value" format
         let detailsHtml = '';
@@ -2043,19 +2079,19 @@ const renderDetalleServicios = (servicios) => {
             if (parts.length > 1) {
                 // If it looks like structured data, render as a grid of labels
                 detailsHtml = `
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed #e2e8f0;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--border);">
                         ${parts.map(p => {
                     const [k, v] = p.trim().split(':');
-                    if (v) return `<div style="font-size: 0.75rem; color: #475569;"><span style="font-weight: 700; color: #1e293b; text-transform: uppercase; font-size: 0.65rem; opacity: 0.7;">${k}:</span> ${v}</div>`;
-                    return `<div style="grid-column: span 2; font-size: 0.75rem; color: #475569; font-style: italic;">${p.trim()}</div>`;
+                    if (v) return `<div style="font-size: 0.75rem; color: var(--text-secondary);"><span style="font-weight: 700; color: var(--text-primary); text-transform: uppercase; font-size: 0.65rem; opacity: 0.7;">${k}:</span> ${v}</div>`;
+                    return `<div style="grid-column: span 2; font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">${p.trim()}</div>`;
                 }).join('')}
                     </div>
                 `;
             } else {
                 // Regular text block
                 detailsHtml = `
-                    <div style="margin-top: 0.6rem; padding: 0.6rem; background: #f8fafc; border-radius: 6px; font-size: 0.8rem; color: #334155; border-left: 3px solid #cbd5e1;">
-                         📄 ${s.detalles_clinicos}
+                    <div style="margin-top: 0.6rem; padding: 0.6rem; background: var(--surface-hover); border-radius: 6px; font-size: 0.8rem; color: var(--text-primary); border-left: 3px solid var(--border);">
+                         ${ICONS.fileText} ${s.detalles_clinicos}
                     </div>
                 `;
             }
@@ -2064,22 +2100,22 @@ const renderDetalleServicios = (servicios) => {
         return `
             <div class="clinical-data-row" style="${badgeColor} margin-bottom: 1rem; border-radius: 12px; padding: 1rem; position: relative; overflow: hidden;">
                 <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: ${accentLine};"></div>
-                
+
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="font-weight: 800; color: #1e293b; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.02em;">
+                    <div style="font-weight: 800; color: var(--text-primary); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.02em;">
                         ${statusIcon} ${s.nombre_servicio || s.tipo_servicio}
                     </div>
                     <div style="display: flex; gap:0.5rem; align-items: center;">
-                        <button onclick="eliminarServicioConsulta(${s.id})" title="Eliminar registro" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.2rem; hover: color: #ef4444;">×</button>
+                        <button onclick="eliminarServicioConsulta(${s.id})" title="Eliminar registro" aria-label="Eliminar registro" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">${ICONS.close}</button>
                     </div>
                 </div>
-                
+
                 <div style="display: flex; gap: 0.75rem; margin-top: 0.25rem;">
-                    <div style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
-                         CATEGORÍA: <span style="color: #4F46E5;">${s.tipo_servicio}</span>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">
+                         CATEGORÍA: <span style="color: var(--primary);">${s.tipo_servicio}</span>
                     </div>
-                    <div style="font-size: 0.7rem; color: #64748b; font-weight: 600;">
-                         VALOR: <span style="color: #059669;">$${(s.cantidad * s.precio_unitario).toFixed(2)}</span>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">
+                         VALOR: <span style="color: var(--secondary);">$${(s.cantidad * s.precio_unitario).toFixed(2)}</span>
                     </div>
                 </div>
 
@@ -2087,13 +2123,13 @@ const renderDetalleServicios = (servicios) => {
 
                 <div style="margin-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="font-size: 0.65rem; font-weight: 700; color: #94a3b8; text-transform: uppercase;">Estado:</span>
-                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 3px 10px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.75rem; cursor: pointer; background: white; font-weight: 600; color: #475569;">
-                            <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>⏳ Pendiente</option>
-                            <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>✅ Aplicado</option>
+                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Estado:</span>
+                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.75rem; cursor: pointer; background: white; font-weight: 600; color: var(--text-secondary);">
+                            <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
+                            <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>Aplicado</option>
                         </select>
                     </div>
-                    <span style="font-size: 0.6rem; color: #94a3b8; font-style: italic;">Ref ID: #${s.id}</span>
+                    <span style="font-size: 0.6rem; color: var(--text-muted); font-style: italic;">Ref ID: #${s.id}</span>
                 </div>
             </div>
         `;
@@ -2399,18 +2435,18 @@ document.getElementById('formAgregarServicio').addEventListener('submit', async 
         const egr = e.target.querySelector('.dinamico-hosp-egreso')?.value;
         const est = e.target.querySelector('.dinamico-hosp-estado')?.value;
         const jau = e.target.querySelector('.dinamico-hosp-jaula')?.value;
-        detallesExtra = `📅 ENTRADA: ${ing || 'N/D'} | 🏁 SALIDA: ${egr || 'En curso'} | 🏥 JAULA: ${jau || 'N/A'} | 🌡️ ESTADO: ${est}\n`;
+        detallesExtra = `ENTRADA: ${ing || 'N/D'} | SALIDA: ${egr || 'En curso'} | JAULA: ${jau || 'N/A'} | ESTADO: ${est}\n`;
     } else if (tipo === 'VACUNACION') {
         const lote = e.target.querySelector('.dinamico-vac-lote')?.value;
         const refu = e.target.querySelector('.dinamico-vac-refuerzo')?.value;
-        detallesExtra = `💉 LOTE: ${lote || 'N/D'} | 📅 REFUERZO: ${refu || 'N/D'}\n`;
+        detallesExtra = `LOTE: ${lote || 'N/D'} | REFUERZO: ${refu || 'N/D'}\n`;
     } else if (tipo === 'CIRUGIA') {
         const asa = e.target.querySelector('.dinamico-cir-asa')?.value;
         const px = e.target.querySelector('.dinamico-cir-precio')?.value;
-        detallesExtra = `🔪 RIESGO ASA: ${asa} ${px ? `| 💰 RECARGO: $${px}` : ''}\n`;
+        detallesExtra = `RIESGO ASA: ${asa} ${px ? `| RECARGO: $${px}` : ''}\n`;
     } else if (tipo === 'LABORATORIO') {
         const labTipo = e.target.querySelector('.dinamico-lab-tipo')?.value;
-        detallesExtra = `🔬 MUESTRA/TIPO: ${labTipo || 'N/D'}\n`;
+        detallesExtra = `MUESTRA/TIPO: ${labTipo || 'N/D'}\n`;
     }
 
     const body = {
@@ -3554,27 +3590,27 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const productos = await fetchAPI('/inventario/?bajo_stock=true&limit=200');
             if (productos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:#059669; padding:2rem;">✅ Todo el inventario está por encima del stock mínimo.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--secondary); padding:2rem;">Todo el inventario está por encima del stock mínimo.</td></tr>';
                 return;
             }
             // Reusar el renderizado de loadInventario temporalmente
             const bajStock = true;
             tbody.innerHTML = productos.map(p => {
                 const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : '—';
-                const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:#ef4444; font-weight:700;' : '';
+                const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:var(--accent); font-weight:700;' : '';
                 return `
-                <tr style="background:#fef2f2;">
+                <tr style="background:var(--accent-subtle);">
                     <td>
-                        <div style="font-weight:600; color:#1e293b;">${p.nombre}</div>
-                        <div style="font-size:0.75rem; color:#64748b;">${p.codigo}</div>
+                        <div style="font-weight:600; color:var(--text-primary);">${p.nombre}</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);">${p.codigo}</div>
                     </td>
-                    <td><span class="badge" style="background:#eef2ff; color:#4F46E5; font-size:0.75rem;">${p.categoria || '—'}</span></td>
-                    <td style="font-weight:700; color:#ef4444;">${p.stock_actual} <span style="font-size:0.75rem; font-weight:400; color:#94a3b8;">/ min ${p.stock_minimo}</span></td>
-                    <td>$${(p.precio_unitario || 0).toFixed(2)}</td>
+                    <td><span class="badge" style="background:var(--primary-subtle); color:var(--primary); font-size:0.75rem;">${p.categoria || '—'}</span></td>
+                    <td style="font-weight:700; color:var(--accent);">${p.stock_actual} <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">/ min ${p.stock_minimo}</span></td>
+                    <td class="num">$${(p.precio_unitario || 0).toFixed(2)}</td>
                     <td style="${vencimientoStyle}">${vencimiento}</td>
-                    <td><span style="color:#ef4444; font-weight:700;">⚠️ BAJO</span></td>
+                    <td><span class="status-pill status-pill--warn">${ICONS.alertTriangle} BAJO</span></td>
                     <td style="text-align:right;">
-                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" style="font-size:0.75rem; padding:4px 8px;">📦 Reponer</button>
+                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" style="font-size:0.75rem; padding:4px 8px;">${ICONS.box} Reponer</button>
                     </td>
                 </tr>`;
             }).join('');
@@ -4287,10 +4323,10 @@ async function cargarCitasQR() {
             tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-secondary);">No hay citas.</td></tr>';
             return;
         }
-        const estadoColor = { pendiente: '#f59e0b', sincronizada: '#10b981', rechazada: '#ef4444', cancelada: '#6b7280' };
+        const estadoColor = { pendiente: 'var(--warning)', sincronizada: 'var(--secondary)', rechazada: 'var(--accent)', cancelada: 'var(--text-muted)' };
         tbody.innerHTML = data.map(c => {
             const vetNombre = c.veterinarios?.nombre || '—';
-            const color = estadoColor[c.estado] || '#6b7280';
+            const color = estadoColor[c.estado] || 'var(--text-muted)';
             const fecha = new Date(c.created_at).toLocaleString('es', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
             return `<tr>
                 <td><strong>${c.fecha_cita}</strong><br><small>${c.hora_cita?.slice(0,5)}</small></td>
@@ -4361,10 +4397,10 @@ async function cargarHorariosVet() {
             const bloques = porDia[idx];
             const bloquesHTML = bloques.length
                 ? bloques.map(b => `
-                    <div style="background:var(--primary-light,#eff6ff); border:1px solid var(--primary,#4f46e5); border-radius:8px; padding:6px 8px; margin-bottom:6px; font-size:.8rem;">
-                        <div style="font-weight:600; color:var(--primary,#4f46e5);">${b.hora_inicio.slice(0,5)} – ${b.hora_fin.slice(0,5)}</div>
+                    <div style="background:var(--secondary-subtle); border:1px solid var(--primary); border-radius:8px; padding:6px 8px; margin-bottom:6px; font-size:.8rem;">
+                        <div style="font-weight:600; color:var(--primary);">${b.hora_inicio.slice(0,5)} – ${b.hora_fin.slice(0,5)}</div>
                         <div style="color:var(--text-secondary);">${b.duracion_consulta_minutos} min / bloque</div>
-                        <button onclick="eliminarHorario(${b.id})" style="margin-top:4px; background:none; border:none; color:#ef4444; cursor:pointer; font-size:.75rem; padding:0;">✕ Eliminar</button>
+                        <button onclick="eliminarHorario(${b.id})" style="margin-top:4px; background:none; border:none; color:var(--accent); cursor:pointer; font-size:.75rem; padding:0;">${ICONS.close} Eliminar</button>
                     </div>`).join('')
                 : '<p style="font-size:.8rem; color:var(--text-secondary); text-align:center;">Sin horario</p>';
             return `
@@ -4438,7 +4474,9 @@ async function cargarVetsQR() {
         tbody.innerHTML = vets.map(v => `<tr>
             <td>${v.id}</td>
             <td>${v.nombre}</td>
-            <td>${v.activo ? '✅ Activo' : '❌ Inactivo'}</td>
+            <td>${v.activo
+                ? `<span class="status-pill status-pill--ok">${ICONS.checkCircle} Activo</span>`
+                : `<span class="status-pill status-pill--muted">${ICONS.xCircle} Inactivo</span>`}</td>
         </tr>`).join('');
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="3" style="color:red; text-align:center;">Error: ${err.message}</td></tr>`;
@@ -4491,19 +4529,23 @@ async function cargarCatalogo() {
             <tr style="${s.activo ? '' : 'opacity:0.5;'}">
                 <td>${s.id}</td>
                 <td style="font-weight:600;">${s.nombre}</td>
-                <td><span style="background:#ede9fe; color:#5b21b6; padding:2px 8px; border-radius:12px; font-size:0.75rem;">${s.categoria}</span></td>
-                <td style="font-weight:700; color:#059669;">$${s.precio_ref.toFixed(2)}</td>
-                <td style="text-align:center;">${s.precio_variable ? '✓' : ''}</td>
-                <td style="font-size:0.8rem; color:#6b7280;">${s.unidad || ''}</td>
-                <td style="text-align:center;">${s.activo ? '<span style="color:#059669;">✓</span>' : '<span style="color:#ef4444;">✗</span>'}</td>
+                <td><span style="background:var(--primary-subtle); color:var(--primary); padding:2px 8px; border-radius:12px; font-size:0.75rem;">${s.categoria}</span></td>
+                <td class="num" style="font-weight:700; color:var(--secondary);">$${s.precio_ref.toFixed(2)}</td>
+                <td style="text-align:center;">${s.precio_variable ? `<span class="status-pill status-pill--muted">${ICONS.check}</span>` : ''}</td>
+                <td style="font-size:0.8rem; color:var(--text-secondary);">${s.unidad || ''}</td>
+                <td style="text-align:center;">${s.activo
+                    ? `<span class="status-pill status-pill--ok">${ICONS.checkCircle}</span>`
+                    : `<span class="status-pill status-pill--muted">${ICONS.xCircle}</span>`}</td>
                 <td>
-                    <button onclick="abrirModalServicio(${s.id})" style="padding:3px 10px; font-size:0.8rem; border:1px solid #6366f1; background:#ede9fe; color:#4f46e5; border-radius:6px; cursor:pointer; margin-right:4px;">Editar</button>
-                    ${s.activo ? `<button onclick="desactivarServicio(${s.id})" style="padding:3px 10px; font-size:0.8rem; border:1px solid #fca5a5; background:#fef2f2; color:#dc2626; border-radius:6px; cursor:pointer;">Desact.</button>` : ''}
+                    <div class="row-actions" style="justify-content:flex-start;">
+                        <button onclick="abrirModalServicio(${s.id})" class="btn-secondary btn-sm" style="font-size:0.8rem;">Editar</button>
+                        ${s.activo ? `<button onclick="desactivarServicio(${s.id})" class="btn-secondary btn-sm btn-row-danger" style="font-size:0.8rem;">Desact.</button>` : ''}
+                    </div>
                 </td>
             </tr>
         `).join('');
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:#dc2626;">Error: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--accent);">Error: ${err.message}</td></tr>`;
     }
 }
 
