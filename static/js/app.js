@@ -512,11 +512,11 @@ const loadAgenda = async () => {
 
 const getStatusColor = (status) => {
     switch (status) {
-        case 'Programada': return '#3b82f6'; // blue
-        case 'En Sala': return '#f59e0b'; // warning
-        case 'Finalizada': return '#10b981'; // green
-        case 'Cancelada': return '#ef4444'; // red
-        default: return '#9ca3af'; // gray
+        case 'Programada': return 'var(--info)'; // blue
+        case 'En Sala': return 'var(--warning)'; // warning
+        case 'Finalizada': return 'var(--secondary)'; // green
+        case 'Cancelada': return 'var(--accent)'; // red
+        default: return 'var(--text-muted)'; // gray
     }
 };
 
@@ -1911,7 +1911,7 @@ const handleConsultaSubmit = async (e) => {
             observaciones: `ICC: ${icc}, TLLC: ${tllc} | Pruebas: ${document.getElementById('consultaPruebas')?.value || 'N/A'}`
         };
         await fetchAPI('/consultas/', { method: 'POST', body: JSON.stringify(data) });
-        showNotification('📜 Consulta registrada y archivada correctamente.', 'success');
+        showNotification('Consulta registrada y archivada correctamente.', 'success');
         closeModal('modalConsulta');
         if (currentMascotaId) cargarConsultas(currentMascotaId);
         cargarBadgeOrdenes();
@@ -2000,7 +2000,7 @@ const setupConsultorioSearch = () => {
 
 const renderMascotasList = (mascotas, container) => {
     if (!mascotas || mascotas.length === 0) {
-        container.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 1rem;">No se encontraron pacientes.</p>';
+        container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 1rem;">No se encontraron pacientes.</p>';
         return;
     }
     container.innerHTML = mascotas.map(m => `
@@ -2209,41 +2209,41 @@ document.getElementById('addServicioTipo').addEventListener('change', async (e) 
         if (tipo === 'HOSPITALIZACION') {
             fieldsHtml = `
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🔥 FECHA INGRESO</label>
-                    <input type="datetime-local" class="dinamico-hosp-ingreso" value="${now}" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.calendar} FECHA INGRESO</label>
+                    <input type="datetime-local" class="dinamico-hosp-ingreso" value="${now}" style="padding:0.4rem; border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">
                 </div>
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🏁 FECHA EGRESO (OPC)</label>
-                    <input type="datetime-local" class="dinamico-hosp-egreso" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.flag} FECHA EGRESO (OPC)</label>
+                    <input type="datetime-local" class="dinamico-hosp-egreso" style="padding:0.4rem; border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">
                 </div>
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🌡️ ESTADO PACIENTE</label>
-                    <select class="dinamico-hosp-estado" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.heartPulse} ESTADO PACIENTE</label>
+                    <select class="dinamico-hosp-estado" style="padding:0.4rem; border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">
                         <option>Estable</option><option>Crítico</option><option>Reservado</option>
                     </select>
                 </div>
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🏠 NRO. JAULA</label>
-                    <input type="text" placeholder="Ej: A-01" class="dinamico-hosp-jaula" style="padding:0.4rem; border:1px solid #bfdbfe; border-radius:6px; font-size:0.8rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.home} NRO. JAULA</label>
+                    <input type="text" placeholder="Ej: A-01" class="dinamico-hosp-jaula" style="padding:0.4rem; border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">
                 </div>
             `;
             document.getElementById('addServicioNombre').value = "Ingreso a Hospitalización";
         } else if (tipo === 'VACUNACION') {
             fieldsHtml = `
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">📦 LOTE / SERIE</label>
-                    <input type="text" placeholder="Lote" class="dinamico-vac-lote" style="padding:0.5rem; border:1px solid #bfdbfe; border-radius:8px; font-size:0.9rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.box} LOTE / SERIE</label>
+                    <input type="text" placeholder="Lote" class="dinamico-vac-lote" style="padding:0.5rem; border:1px solid var(--border); border-radius:8px; font-size:0.9rem;">
                 </div>
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">📅 FECHA REFUERZO</label>
-                    <input type="date" class="dinamico-vac-refuerzo" style="padding:0.5rem; border:1px solid #bfdbfe; border-radius:8px; font-size:0.9rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.calendar} FECHA REFUERZO</label>
+                    <input type="date" class="dinamico-vac-refuerzo" style="padding:0.5rem; border:1px solid var(--border); border-radius:8px; font-size:0.9rem;">
                 </div>
             `;
         } else if (tipo === 'CIRUGIA') {
             fieldsHtml = `
                 <div style="display:flex; flex-direction:column; gap:0.2rem;">
-                    <label style="font-size:0.65rem; color:#1e40af; font-weight:bold;">🫀 RIESGO ASA</label>
-                    <select class="dinamico-cir-asa" style="padding:0.5rem; border:1px solid #bfdbfe; border-radius:8px; font-size:0.9rem;">
+                    <label style="font-size:0.65rem; color:var(--info-dark); font-weight:bold;">${ICONS.heartPulse} RIESGO ASA</label>
+                    <select class="dinamico-cir-asa" style="padding:0.5rem; border:1px solid var(--border); border-radius:8px; font-size:0.9rem;">
                         <option>I</option><option>II</option><option>III</option><option>IV</option><option>V</option>
                     </select>
                 </div>
@@ -2471,7 +2471,7 @@ document.getElementById('formAgregarServicio').addEventListener('submit', async 
         if (container) { container.innerHTML = ''; container.style.display = 'none'; }
 
         verConsultaCompleta(cid, currentMascotaId);
-        showNotification("🎨 Acto médico y registro clínico guardados.", "success");
+        showNotification("Acto médico y registro clínico guardados.", "success");
     } catch (err) {
         alert("Error agregando cargo: " + err.message);
     }
@@ -2556,16 +2556,16 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
                     ${c.peso ? `<b>Peso:</b> ${peso}kg<br>` : ''}
                     ${c.temperatura ? `<b>Temp:</b> ${temp}C` : ''}
                 </td>
-                <td><span style="font-size:0.8rem; padding:2px 6px; border-radius:4px; background:${c.estado_pago==='COBRADO'?'#d1fae5':'#fef3c7'}; color:${c.estado_pago==='COBRADO'?'#065f46':'#92400e'};">${c.estado_pago||'POR_COBRAR'}</span></td>
+                <td><span class="status-pill ${c.estado_pago==='COBRADO'?'status-pill--ok':'status-pill--warn'}" style="padding:2px 6px; border-radius:4px; background:${c.estado_pago==='COBRADO'?'var(--secondary-subtle)':'var(--warning-subtle)'};">${c.estado_pago||'POR_COBRAR'}</span></td>
                 <td style="text-align: right;">
-                    <button class="btn-primary btn-sm" onclick="verConsultaCompleta(${c.id}, ${mascotaId})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px;">🔍 Completa</button><br>
-                    <button class="btn-secondary btn-sm" onclick="exportarConsultaPDF(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px; background:#f0f4ff; color:#4338ca; border-color:#c7d2fe;">🖨 PDF</button><br>
-                    <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #ecfdf5; color: #047857; border-color: #059669;">💊 Recetar</button>
+                    <button class="btn-primary btn-sm" onclick="verConsultaCompleta(${c.id}, ${mascotaId})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px;">${ICONS.search} Completa</button><br>
+                    <button class="btn-secondary btn-sm" onclick="exportarConsultaPDF(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-bottom: 4px; background:var(--primary-subtle); color:var(--primary-dark); border-color:var(--primary-subtle);">${ICONS.printer} PDF</button><br>
+                    <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--secondary-subtle); color: var(--secondary-dark); border-color: var(--secondary);">${ICONS.pill} Recetar</button>
                     ${c.factura_id ?
-                        `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #3b82f6; border-color: #2563eb; margin-top: 4px;">📄 Facturado</button>` :
-                        `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fef3c7; color: #92400e; border-color: #d97706;">💲 Facturar</button>`
+                        `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--info); border-color: var(--info-dark); margin-top: 4px;">${ICONS.fileText} Facturado</button>` :
+                        `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`
                     }
-                    <button class="btn-secondary btn-sm" onclick="switchPetTab('hospitalizaciones'); setTimeout(()=>toggleForm('formHospitalizacion'), 200);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: #fee2e2; color: #b91c1c; border-color: #ef4444;">🏥 Internar</button>
+                    <button class="btn-secondary btn-sm" onclick="switchPetTab('hospitalizaciones'); setTimeout(()=>toggleForm('formHospitalizacion'), 200);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>
                 </td>
             </tr>`;
         }).join('');
@@ -2573,7 +2573,7 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
         if (btnVerPeso) btnVerPeso.style.display = 'inline-block';
     } catch (error) {
         console.error("Error cargando consultas:", error);
-        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error loading.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--accent);">Error loading.</td></tr>';
     }
 };
 
@@ -2596,7 +2596,7 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
             ${m.especie} ${m.raza ? `(${m.raza})` : ''} 
             ${m.codigo_historia ? `- ID: ${m.codigo_historia}` : ''}
             <br>
-            <span style="font-size: 0.85rem; color: #6366f1;">
+            <span style="font-size: 0.85rem; color: var(--primary);">
                 ${m.sexo || ''} | ${m.estado_reproductivo || 'Reprod: N/D'}
             </span>
         `;
@@ -2636,14 +2636,14 @@ const switchPetTab = (tabName) => {
 
     const contentArea = document.getElementById('petTabContent');
     const actionsArea = document.getElementById('petTabActions');
-    contentArea.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 2rem;">Cargando...</p>';
+    contentArea.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Cargando...</p>';
     actionsArea.innerHTML = '';
 
     switch (tabName) {
         case 'historia':
             contentArea.innerHTML = `
                 <div class="empty-state">
-                    <div class="icon">📄</div>
+                    <div class="icon">${ICONS.fileText}</div>
                     <p>Resumen de Historia Clínica</p>
                     <div id="historiaResumen" style="width: 100%; text-align: left; margin-top: 1rem;"></div>
                 </div>`;
@@ -2764,13 +2764,13 @@ const renderHistoriaTab = async () => {
 
         let vacunasHTML = '';
         if (v.length > 0) {
-            vacunasHTML = `<div style="margin-top:1rem;"><b>Vacunas aplicadas:</b><br><ul style="margin:0; padding-left:1.5rem; color:#4b5563;">` +
+            vacunasHTML = `<div style="margin-top:1rem;"><b>Vacunas aplicadas:</b><br><ul style="margin:0; padding-left:1.5rem; color:var(--text-secondary);">` +
                 v.map(vac => `<li>${vac.vacuna_nombre} (Lote: ${vac.lote})</li>`).join('') +
                 `</ul></div>`;
         }
 
         res.innerHTML = `
-            <div style="background: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0;">
+            <div style="background: var(--surface-hover); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div><b>Especie:</b> ${m.especie}</div>
                     <div><b>Raza:</b> ${m.raza || 'N/A'}</div>
@@ -2779,7 +2779,7 @@ const renderHistoriaTab = async () => {
                     <div><b>Peso actual:</b> ${m.peso ? parseFloat(m.peso).toFixed(2) : 'N/A'} kg</div>
                     <div><b>Estado:</b> ${m.estado_reproductivo || 'N/A'}</div>
                 </div>
-                <hr style="margin: 1rem 0; border: 0; border-top: 1px solid #e2e8f0;">
+                <hr style="margin: 1rem 0; border: 0; border-top: 1px solid var(--border);">
                 <div><b>Observaciones:</b><br>${m.observaciones || 'Sin observaciones.'}</div>
                 ${vacunasHTML}
             </div>`;
@@ -2798,8 +2798,8 @@ const buildClinicoForm = (type) => {
         <select name="consulta_id" class="form-control combo-consultas" required><option value="">Seleccione consulta...</option></select>
     </div>`;
 
-    if (type === 'vacuna') return `<form onsubmit="submitClinico(event, 'vacunacion')" id="formVacuna" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
-        <h4 style="margin-top:0; color:#4F46E5;">Aplicar Vacunación</h4>
+    if (type === 'vacuna') return `<form onsubmit="submitClinico(event, 'vacunacion')" id="formVacuna" class="clinico-inline-form" style="display:none;">
+        <h4>Aplicar Vacunación</h4>
         ${comboConsultas}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
             <div class="form-group"><label>Vacuna (ID Inventario)</label><input type="number" name="vacuna_id" class="form-control" required placeholder="Ej: 3"></div>
@@ -2808,8 +2808,8 @@ const buildClinicoForm = (type) => {
         <button type="submit" class="btn-primary">Guardar Registro</button>
     </form>`;
 
-    if (type === 'desparasitacion') return `<form onsubmit="submitClinico(event, 'desparasitacion')" id="formDesparasitacion" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
-        <h4 style="margin-top:0; color:#4F46E5;">Aplicar Desparasitante</h4>
+    if (type === 'desparasitacion') return `<form onsubmit="submitClinico(event, 'desparasitacion')" id="formDesparasitacion" class="clinico-inline-form" style="display:none;">
+        <h4>Aplicar Desparasitante</h4>
         ${comboConsultas}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
             <div class="form-group"><label>Producto (ID Inventario)</label><input type="number" name="producto_id" class="form-control" required></div>
@@ -2819,8 +2819,8 @@ const buildClinicoForm = (type) => {
         <button type="submit" class="btn-primary">Guardar Registro</button>
     </form>`;
 
-    if (type === 'hospitalizacion') return `<form onsubmit="submitClinico(event, 'hospitalizacion')" id="formHospitalizacion" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
-        <h4 style="margin-top:0; color:#4F46E5;">Registrar Ingreso Hospitalario</h4>
+    if (type === 'hospitalizacion') return `<form onsubmit="submitClinico(event, 'hospitalizacion')" id="formHospitalizacion" class="clinico-inline-form" style="display:none;">
+        <h4>Registrar Ingreso Hospitalario</h4>
         ${comboConsultas}
         <div class="form-group"><label>Motivo</label><input type="text" name="motivo" class="form-control" required></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
@@ -2832,8 +2832,8 @@ const buildClinicoForm = (type) => {
         <button type="submit" class="btn-primary">Guardar Registro</button>
     </form>`;
 
-    if (type === 'cirugia') return `<form onsubmit="submitClinico(event, 'cirugia')" id="formCirugia" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
-        <h4 style="margin-top:0; color:#4F46E5;">Registrar Intervención Quirúrgica</h4>
+    if (type === 'cirugia') return `<form onsubmit="submitClinico(event, 'cirugia')" id="formCirugia" class="clinico-inline-form" style="display:none;">
+        <h4>Registrar Intervención Quirúrgica</h4>
         ${comboConsultas}
         <div class="form-group"><label>Procedimiento</label><input type="text" name="tipo_procedimiento" class="form-control" required></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
@@ -2843,8 +2843,8 @@ const buildClinicoForm = (type) => {
         <button type="submit" class="btn-primary">Guardar Registro</button>
     </form>`;
 
-    if (type === 'prueba') return `<form onsubmit="submitClinico(event, 'prueba_complementaria')" id="formPrueba" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
-        <h4 style="margin-top:0; color:#4F46E5;">Registrar Estudio</h4>
+    if (type === 'prueba') return `<form onsubmit="submitClinico(event, 'prueba_complementaria')" id="formPrueba" class="clinico-inline-form" style="display:none;">
+        <h4>Registrar Estudio</h4>
         ${comboConsultas}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
             <div class="form-group"><label>Tipo</label><select name="tipo" class="form-control"><option>Laboratorio</option><option>Rayos X</option><option>Ecografía</option></select></div>
@@ -2878,7 +2878,7 @@ const submitClinico = async (e, endpoint) => {
 
     try {
         await fetchAPI(`/clinico/${endpoint}`, { method: 'POST', body: JSON.stringify(data) });
-        showNotification('📜 Registro clínico guardado y vinculado a la consulta.', 'success');
+        showNotification('Registro clínico guardado y vinculado a la consulta.', 'success');
         e.target.reset();
         e.target.style.display = 'none';
 
@@ -2914,7 +2914,7 @@ const dictadoBotonHTML = (targetId) => {
     return `
         <div class="dictado-wrap">
             <button type="button" class="btn-dictado" data-target="${targetId}" aria-pressed="false" aria-label="Dictar nota por voz">
-                <span aria-hidden="true">🎤</span> Dictar
+                ${ICONS.mic} Dictar
             </button>
             <span class="dictado-status" role="status" aria-live="polite"></span>
         </div>`;
@@ -2946,7 +2946,7 @@ const iniciarDictado = (btn) => {
         btn.classList.add('dictado-activo');
         btn.setAttribute('aria-pressed', 'true');
         btn.setAttribute('aria-label', 'Detener dictado');
-        btn.innerHTML = '<span aria-hidden="true">⏺</span> Escuchando...';
+        btn.innerHTML = `${ICONS.recordDot} Escuchando...`;
         if (statusEl) statusEl.textContent = 'Escuchando...';
     };
 
@@ -2974,7 +2974,7 @@ const iniciarDictado = (btn) => {
         btn.classList.remove('dictado-activo');
         btn.setAttribute('aria-pressed', 'false');
         btn.setAttribute('aria-label', 'Dictar nota por voz');
-        btn.innerHTML = '<span aria-hidden="true">🎤</span> Dictar';
+        btn.innerHTML = `${ICONS.mic} Dictar`;
         if (statusEl) statusEl.textContent = '';
         dictadoRecognition = null;
         dictadoActivoBtn = null;
@@ -2991,8 +2991,8 @@ document.addEventListener('click', (e) => {
 });
 
 const buildNotaForm = () => `
-    <form onsubmit="submitNota(event)" id="formNota" style="display:none; background:#f8fafc; padding:1.5rem; border-radius:8px; margin-bottom:1.5rem; border:1px solid #e2e8f0;">
-        <h4 style="margin-top:0; color:#4F46E5;">Nueva Nota</h4>
+    <form onsubmit="submitNota(event)" id="formNota" class="clinico-inline-form" style="display:none;">
+        <h4>Nueva Nota</h4>
         <div style="display:grid; grid-template-columns:1fr 3fr; gap:1rem;">
             <div class="form-group">
                 <label>Categoría</label>
@@ -3034,19 +3034,19 @@ const renderNotaCard = (n) => {
     const role = localStorage.getItem('role');
     const puedeModificar = role === 'admin' || n.usuario_id === currentUserId;
     const fecha = new Date(n.fecha_creacion).toLocaleString();
-    const editada = n.fecha_edicion ? `<span style="font-style:italic; color:#9ca3af;"> (editada ${new Date(n.fecha_edicion).toLocaleString()}${n.editado_por_username ? ' por ' + n.editado_por_username : ''})</span>` : '';
+    const editada = n.fecha_edicion ? `<span style="font-style:italic; color:var(--text-muted);"> (editada ${new Date(n.fecha_edicion).toLocaleString()}${n.editado_por_username ? ' por ' + n.editado_por_username : ''})</span>` : '';
 
     return `
-        <div class="card-item" id="nota-${n.id}" style="border-left: 4px solid #6366f1;">
+        <div class="card-item" id="nota-${n.id}" style="border-left: 4px solid var(--primary);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
                 <div>
-                    <span class="badge" style="background:#eef2ff; color:#4338ca;">${NOTA_CATEGORIA_LABELS[n.categoria] || n.categoria}</span>
-                    <span style="font-size:0.85rem; color:#6b7280; margin-left:0.5rem;">${fecha} · <b>${n.autor || 'Desconocido'}</b>${editada}</span>
+                    <span class="badge" style="background:var(--primary-subtle); color:var(--primary);">${NOTA_CATEGORIA_LABELS[n.categoria] || n.categoria}</span>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); margin-left:0.5rem;">${fecha} · <b>${n.autor || 'Desconocido'}</b>${editada}</span>
                 </div>
                 ${puedeModificar ? `
-                <div style="display:flex; gap:0.4rem; flex-shrink:0;">
+                <div class="row-actions">
                     <button class="btn-secondary btn-sm" onclick="editarNota(${n.id})" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Editar</button>
-                    <button class="btn-secondary btn-sm" onclick="borrarNota(${n.id})" style="padding:0.15rem 0.5rem; font-size:0.78rem; background:#fee2e2; color:#b91c1c; border-color:#ef4444;">Borrar</button>
+                    <button class="btn-secondary btn-sm btn-row-danger" onclick="borrarNota(${n.id})" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Borrar</button>
                 </div>` : ''}
             </div>
             <div class="nota-texto" style="margin-top:0.5rem; white-space:pre-wrap;">${n.texto}</div>
@@ -3056,12 +3056,12 @@ const renderNotaCard = (n) => {
 const cargarNotasPet = async (mascotaId) => {
     detenerDictado(); // este render reemplaza el DOM entero de la pestaña, no dejar un micrófono huérfano abierto
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildNotaForm() + `<div id="notasList"><p style="text-align:center;color:#9ca3af;">Cargando...</p></div>`;
+    cnt.innerHTML = buildNotaForm() + `<div id="notasList"><p style="text-align:center;color:var(--text-muted);">Cargando...</p></div>`;
     try {
         const data = await fetchAPI(`/notas/mascota/${mascotaId}`);
         const list = document.getElementById('notasList');
         if (!data.length) {
-            list.innerHTML = `<div class="empty-state"><div class="icon">📝</div><p>Todavía no hay notas para este paciente.<br>Usá "+ Nueva Nota" para registrar la primera.</p></div>`;
+            list.innerHTML = `<div class="empty-state"><div class="icon">${ICONS.notePencil}</div><p>Todavía no hay notas para este paciente.<br>Usá "+ Nueva Nota" para registrar la primera.</p></div>`;
         } else {
             // Más reciente primero en pantalla; el backend ya las entrega en orden cronológico ascendente.
             list.innerHTML = data.slice().reverse().map(renderNotaCard).join('');
@@ -3110,41 +3110,41 @@ const borrarNota = async (notaId) => {
 
 const cargarVacunasPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/vacunaciones/${mascotaId}`);
         const tbody = document.getElementById('tblVac');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay vacunas registradas.</td></tr>`;
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No hay vacunas registradas.</td></tr>`;
         else tbody.innerHTML = data.map(v => `<tr><td>${new Date(v.fecha_aplicacion).toLocaleDateString()}</td><td>${v.vacuna_nombre}</td><td>${v.lote || '-'}</td></tr>`).join('');
     } catch (e) { }
 };
 
 const cargarDesparasitacionesPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('desparasitacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr></thead><tbody id="tblDesp"><tr><td colspan="4" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('desparasitacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr></thead><tbody id="tblDesp"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/desparasitaciones/${mascotaId}`);
         const tbody = document.getElementById('tblDesp');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#9ca3af;">No hay registros.</td></tr>`;
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No hay registros.</td></tr>`;
         else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_aplicacion).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.producto_nombre}</td><td>${d.dosis}</td></tr>`).join('');
     } catch (e) { }
 };
 
 const cargarHospitalizacionesPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Egreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="5" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Egreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`);
         const tbody = document.getElementById('tblHosp');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#9ca3af;">No hay registros de hospitalización.</td></tr>`;
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No hay registros de hospitalización.</td></tr>`;
         else tbody.innerHTML = data.map(d => `<tr>
             <td>${new Date(d.fecha_ingreso).toLocaleString()}</td>
-            <td>${d.fecha_egreso ? new Date(d.fecha_egreso).toLocaleString() : '<span style="color:#d97706; font-style:italic;">En curso</span>'}</td>
+            <td>${d.fecha_egreso ? new Date(d.fecha_egreso).toLocaleString() : '<span style="color:var(--warning-dark); font-style:italic;">En curso</span>'}</td>
             <td>${d.motivo}</td>
-            <td><span class="badge" style="background:#f3f4f6; color:#374151;">${d.estado_paciente || '-'}</span></td>
+            <td><span class="badge" style="background:var(--surface-hover); color:var(--text-secondary);">${d.estado_paciente || '-'}</span></td>
             <td>${d.jaula_nro || '-'}</td>
         </tr>`).join('');
     } catch (e) { }
@@ -3152,19 +3152,19 @@ const cargarHospitalizacionesPet = async (mascotaId) => {
 
 const cargarCirugiasPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('cirugia') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Riesgo ASA</th></tr></thead><tbody id="tblCir"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('cirugia') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Riesgo ASA</th></tr></thead><tbody id="tblCir"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/cirugias/${mascotaId}`);
         const tbody = document.getElementById('tblCir');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay cirugías registradas.</td></tr>`;
+        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No hay cirugías registradas.</td></tr>`;
         else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_cirugia).toLocaleDateString()}</td><td>${d.tipo_procedimiento}</td><td>${d.riesgo_asa || '-'}</td></tr>`).join('');
     } catch (e) { }
 };
 
 const cargarPruebasPet = async (mascotaId, filterType) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('prueba') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Resultados</th></tr></thead><tbody id="tblPrueba"><tr><td colspan="3" style="text-align:center;color:#9ca3af;">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('prueba') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Resultados</th></tr></thead><tbody id="tblPrueba"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`);
@@ -3174,7 +3174,7 @@ const cargarPruebasPet = async (mascotaId, filterType) => {
         if (filterType === 'laboratorio') filtered = data.filter(d => d.tipo === 'Laboratorio');
         if (filterType === 'imagenes') filtered = data.filter(d => d.tipo !== 'Laboratorio');
 
-        if (!filtered.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#9ca3af;">No hay estudios registrados.</td></tr>`;
+        if (!filtered.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No hay estudios registrados.</td></tr>`;
         else tbody.innerHTML = filtered.map(d => `<tr><td>${new Date(d.fecha).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.resultado} ${d.archivo_url ? `<a href="${d.archivo_url}" target="_blank">[Ver Link]</a>` : ''}</td></tr>`).join('');
     } catch (e) { }
 };
@@ -3191,21 +3191,21 @@ const cargarRecetasPet = async (mascotaId) => {
         }
 
         if (allRecetas.length === 0) {
-            contentArea.innerHTML = '<div class="empty-state"><div class="icon">💊</div><p>No hay fórmulas médicas registradas.</p></div>';
+            contentArea.innerHTML = `<div class="empty-state"><div class="icon">${ICONS.pill}</div><p>No hay fórmulas médicas registradas.</p></div>`;
             return;
         }
 
         contentArea.innerHTML = allRecetas.map(r => `
-            <div class="card-item" style="border-left: 4px solid #10b981;">
-                <div style="font-weight: 700; color: #059669;">Receta - ${new Date(r.fecha_emision).toLocaleDateString()}</div>
-                <div style="font-size: 0.85rem; color: #6b7280; margin-bottom: 0.5rem;">Consulta del ${new Date(r.consulta_fecha).toLocaleDateString()}</div>
-                <div style="background: #f0fdf4; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem;">
+            <div class="card-item" style="border-left: 4px solid var(--secondary);">
+                <div style="font-weight: 700; color: var(--secondary-dark);">Receta - ${new Date(r.fecha_emision).toLocaleDateString()}</div>
+                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Consulta del ${new Date(r.consulta_fecha).toLocaleDateString()}</div>
+                <div style="background: var(--secondary-subtle); padding: 0.75rem; border-radius: 8px; font-size: 0.9rem;">
                     <b>Indicaciones:</b> ${r.indicaciones_generales || 'Ninguna'}
                     <ul style="margin-top: 0.5rem; padding-left: 1.2rem;">
                         ${r.detalles.map(d => `<li>${d.medicamento_id}: ${d.dosis} (${d.frecuencia} / ${d.duracion})</li>`).join('')}
                     </ul>
                 </div>
-                <button class="btn-secondary btn-sm" onclick="exportarRecetaPDF(${r.consulta_id}, ${r.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 0.5rem; background:#f0f4ff; color:#4338ca; border-color:#c7d2fe;">🖨 PDF</button>
+                <button class="btn-secondary btn-sm" onclick="exportarRecetaPDF(${r.consulta_id}, ${r.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 0.5rem; background:var(--primary-subtle); color:var(--primary-dark); border-color:var(--primary-subtle);">${ICONS.printer} PDF</button>
             </div>
         `).join('');
     } catch (e) {
@@ -3393,10 +3393,9 @@ const cargarMedicamentosParaReceta = async () => {
 
 const renderMedicamentoRow = async (medicamentos, isFirst = false) => {
     const div = document.createElement('div');
-    div.className = 'form-row receta-item';
-    div.style = 'align-items: end; background: #f8fafc; padding: 1rem; border-radius: 12px; margin-bottom: 1rem; position: relative; border: 1px solid #e2e8f0;';
+    div.className = 'form-row receta-item receta-item-row';
 
-    const removeBtn = isFirst ? '' : `<button type="button" class="btn-sm" style="position: absolute; top: 0.5rem; right: 0.5rem; background: #fee2e2; border: none; color: #ef4444; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="this.parentElement.remove()">✕</button>`;
+    const removeBtn = isFirst ? '' : `<button type="button" class="btn-sm" style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--accent-subtle); border: none; color: var(--accent); border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center;" onclick="this.parentElement.remove()">${ICONS.close}</button>`;
 
     div.innerHTML = `
         ${removeBtn}
@@ -3742,7 +3741,7 @@ const cargarBadgeOrdenes = async () => {
                     <div style="display: flex; justify-content: space-between; align-items: start;">
                         <div>
                             <div style="font-weight: 700; font-size: 1.1rem; color: var(--primary);">Paciente: ID #${c.mascota_id}</div>
-                            <div style="font-size: 0.9rem; color: #6b7280;">${new Date(c.fecha_cita).toLocaleString()}</div>
+                            <div style="font-size: 0.9rem; color: var(--text-secondary);">${new Date(c.fecha_cita).toLocaleString()}</div>
                             <div style="margin-top: 0.5rem;"><b>Motivo:</b> ${c.tipo}</div>
                         </div>
                         <button class="btn-primary" onclick="atenderOrden(${c.id}, ${c.mascota_id})">Tomar Orden</button>
@@ -3769,33 +3768,33 @@ const mostrarResumenDia = (dateStr, allEvents) => {
     });
 
     if (eventosDia.length === 0) {
-        resumenCuerpo.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 2rem;">No hubo actividad este día.</p>';
+        resumenCuerpo.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">No hubo actividad este día.</p>';
     } else {
         resumenCuerpo.innerHTML = eventosDia.map(ev => {
             const type = ev.extendedProps?.type;
-            let icon = '📅';
-            let color = '#4F46E5';
+            let icon = ICONS.calendar;
+            let color = 'var(--info)';
             let label = 'Cita';
             let detail = ev.extendedProps?.motivo || ev.extendedProps?.tipo || 'Sin motivo';
 
-            if (type === 'consulta') { icon = '🩺'; color = '#10b981'; label = 'Consulta'; }
-            if (type === 'cirugia') { icon = '🔪'; color = '#ef4444'; label = 'Cirugía'; detail = ev.extendedProps?.tipo_procedimiento; }
-            if (type === 'prueba') { icon = '🧪'; color = '#8b5cf6'; label = 'Prueba/Lab'; detail = ev.extendedProps?.tipo; }
+            if (type === 'consulta') { icon = ICONS.stethoscope; color = 'var(--primary)'; label = 'Consulta'; }
+            if (type === 'cirugia') { icon = ICONS.scalpel; color = 'var(--accent)'; label = 'Cirugía'; detail = ev.extendedProps?.tipo_procedimiento; }
+            if (type === 'prueba') { icon = ICONS.flask; color = 'var(--warning-dark)'; label = 'Prueba/Lab'; detail = ev.extendedProps?.tipo; }
 
             return `
-                <div style="padding: 1rem; border-bottom: 1px solid #f3f4f6; border-left: 4px solid ${color}; margin-bottom: 0.8rem; background: #f8fafc; border-radius: 8px;">
+                <div style="padding: 1rem; border-bottom: 1px solid var(--border-light); border-left: 4px solid ${color}; margin-bottom: 0.8rem; background: var(--surface-hover); border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: 700; color: ${color}; font-size: 0.9rem; text-transform: uppercase;">
                             ${icon} ${label}
                         </span>
-                        <span style="font-size: 0.85rem; color: #6b7280;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">
                             ${new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     </div>
-                    <div style="margin-top: 0.5rem; font-size: 1.05rem; color: #1f2937; font-weight: 600;">
+                    <div style="margin-top: 0.5rem; font-size: 1.05rem; color: var(--text-primary); font-weight: 600;">
                         ${ev.extendedProps?.mascota_nombre || `Paciente ID #${ev.extendedProps?.mascota_id}`}
                     </div>
-                    <div style="font-size: 0.95rem; color: #4b5563; margin-top: 0.25rem;">
+                    <div style="font-size: 0.95rem; color: var(--text-secondary); margin-top: 0.25rem;">
                         ${detail}
                     </div>
                     <div style="margin-top: 0.8rem;">
@@ -3840,7 +3839,7 @@ window.facturarConsulta = async (consultaId) => {
     document.getElementById('facturaConsultaIdTxt').textContent = `(Consulta #${consultaId})`;
     
     const itemsList = document.getElementById('facturaItemsList');
-    itemsList.innerHTML = '<p style="text-align: center; color: #9ca3af; padding: 1rem;">Calculando items y validando precios...</p>';
+    itemsList.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 1rem;">Calculando items y validando precios...</p>';
     
     try {
         // Primero intentamos abrir el modal para que el usuario vea que algo ocurre
@@ -3850,8 +3849,8 @@ window.facturarConsulta = async (consultaId) => {
         window.loadingFactura = false;
         
         if (!dataContext || !dataContext.items || dataContext.items.length === 0) {
-            itemsList.innerHTML = `<div style="text-align:center; padding: 2.5rem; color: #6b7280;">
-                <div style="font-size: 2rem; margin-bottom: 1rem;">📝</div>
+            itemsList.innerHTML = `<div style="text-align:center; padding: 2.5rem; color: var(--text-secondary);">
+                <div style="font-size: 2rem; margin-bottom: 1rem;">${ICONS.notePencil}</div>
                 No hay cargos pendientes para facturar en esta consulta.<br>
                 <small>Agregue servicios o medicamentos en el expediente clínico primero.</small>
             </div>`;
@@ -4115,26 +4114,26 @@ window.abrirPreviewFactura = async (facturaId) => {
         abonosSection.style.cssText = 'padding: 0 2.5rem 1.5rem;';
 
         const abonosHTML = Array.isArray(abonos) && abonos.length > 0
-            ? `<div style="overflow-x:auto; border-radius:8px; border:1px solid #e5e7eb;">
+            ? `<div style="overflow-x:auto; border-radius:8px; border:1px solid var(--border);">
                 <table style="width:100%; border-collapse:collapse; font-size:0.875rem;">
-                    <thead style="background:#f8fafc;">
+                    <thead style="background:var(--surface-hover);">
                         <tr>
-                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">#</th>
-                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">Fecha</th>
-                            <th style="padding:0.6rem 0.75rem; text-align:right; color:#64748b; font-weight:600;">Monto</th>
-                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">Método</th>
-                            <th style="padding:0.6rem 0.75rem; text-align:left; color:#64748b; font-weight:600;">Notas</th>
-                            <th style="padding:0.6rem 0.75rem; text-align:center; color:#64748b; font-weight:600;">Comprobante</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:var(--text-secondary); font-weight:600;">#</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:var(--text-secondary); font-weight:600;">Fecha</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:right; color:var(--text-secondary); font-weight:600;">Monto</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:var(--text-secondary); font-weight:600;">Método</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:left; color:var(--text-secondary); font-weight:600;">Notas</th>
+                            <th style="padding:0.6rem 0.75rem; text-align:center; color:var(--text-secondary); font-weight:600;">Comprobante</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${abonos.map((a, i) => `
-                        <tr style="border-top:1px solid #f1f5f9;">
+                        <tr style="border-top:1px solid var(--border-light);">
                             <td style="padding:0.6rem 0.75rem;">${i + 1}</td>
                             <td style="padding:0.6rem 0.75rem;">${a.fecha ? new Date(a.fecha).toLocaleDateString() : '-'}</td>
-                            <td style="padding:0.6rem 0.75rem; text-align:right; font-weight:600; color:#059669;">$${parseFloat(a.monto).toFixed(2)}</td>
+                            <td class="num" style="padding:0.6rem 0.75rem; font-weight:600; color:var(--secondary);">$${parseFloat(a.monto).toFixed(2)}</td>
                             <td style="padding:0.6rem 0.75rem;">${a.metodo_pago || '-'}</td>
-                            <td style="padding:0.6rem 0.75rem; color:#6b7280; font-size:0.8rem;">${a.notas || '-'}</td>
+                            <td style="padding:0.6rem 0.75rem; color:var(--text-secondary); font-size:0.8rem;">${a.notas || '-'}</td>
                             <td style="padding:0.6rem 0.75rem; text-align:center;">
                                 <button onclick="exportarAbonoPDF(${facturaId}, ${a.id})" class="btn-secondary btn-sm" style="padding:0.2rem 0.5rem; font-size:0.78rem;">PDF</button>
                             </td>
@@ -4142,17 +4141,17 @@ window.abrirPreviewFactura = async (facturaId) => {
                     </tbody>
                 </table>
                </div>`
-            : '<p style="color:#9ca3af; font-size:0.875rem; margin:0.5rem 0;">No hay abonos registrados.</p>';
+            : '<p style="color:var(--text-muted); font-size:0.875rem; margin:0.5rem 0;">No hay abonos registrados.</p>';
 
         abonosSection.innerHTML = `
-            <h3 style="font-size:0.95rem; font-weight:700; color:#374151; margin-bottom:0.75rem;">Pagos registrados</h3>
+            <h3 style="font-size:0.95rem; font-weight:700; color:var(--text-primary); margin-bottom:0.75rem;">Pagos registrados</h3>
             ${abonosHTML}
-            <div style="display:flex; gap:2rem; margin-top:1rem; padding:1rem; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; font-size:0.9rem;">
-                <div><span style="color:#64748b;">Total:</span> <strong>$${totalFactura.toFixed(2)}</strong></div>
-                <div><span style="color:#64748b;">Pagado:</span> <strong style="color:#059669;">$${totalAbonado.toFixed(2)}</strong></div>
-                <div><span style="color:#64748b;">Saldo:</span> <strong style="color:${saldo > 0 ? '#d97706' : '#059669'};">$${saldo.toFixed(2)}</strong></div>
+            <div style="display:flex; gap:2rem; margin-top:1rem; padding:1rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border); font-size:0.9rem;">
+                <div><span style="color:var(--text-secondary);">Total:</span> <strong>$${totalFactura.toFixed(2)}</strong></div>
+                <div><span style="color:var(--text-secondary);">Pagado:</span> <strong style="color:var(--secondary);">$${totalAbonado.toFixed(2)}</strong></div>
+                <div><span style="color:var(--text-secondary);">Saldo:</span> <strong style="color:${saldo > 0 ? 'var(--warning-dark)' : 'var(--secondary)'};">$${saldo.toFixed(2)}</strong></div>
             </div>
-            ${saldo > 0 ? `<div style="margin-top:0.75rem; text-align:right;"><button onclick="abrirModalAbono(${facturaId}, ${saldo})" class="btn-primary" style="background:#10b981; border-color:#059669;">+ Registrar Abono</button></div>` : ''}
+            ${saldo > 0 ? `<div style="margin-top:0.75rem; text-align:right;"><button onclick="abrirModalAbono(${facturaId}, ${saldo})" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);">+ Registrar Abono</button></div>` : ''}
         `;
 
         modalContent.insertBefore(abonosSection, modalFooter);
@@ -4165,10 +4164,10 @@ window.abrirPreviewFactura = async (facturaId) => {
 };
 
 const ESTADO_FACTURA_COLORS = {
-    PAGADA: { bg: '#d1fae5', fg: '#065f46' },
-    ANULADA: { bg: '#fee2e2', fg: '#991b1b' },
-    PARCIAL: { bg: '#dbeafe', fg: '#1e40af' },
-    PENDIENTE: { bg: '#fef3c7', fg: '#92400e' }
+    PAGADA: { bg: 'var(--secondary-subtle)', fg: 'var(--secondary-dark)' },
+    ANULADA: { bg: 'var(--accent-subtle)', fg: 'var(--accent-dark)' },
+    PARCIAL: { bg: 'var(--info-subtle)', fg: 'var(--info-dark)' },
+    PENDIENTE: { bg: 'var(--warning-subtle)', fg: 'var(--warning-dark)' }
 };
 
 const cargarHistorialFacturas = async () => {
@@ -4202,15 +4201,15 @@ const cargarHistorialFacturas = async () => {
             <tr>
                 <td><b>#${numero}</b></td>
                 <td>${fecha}</td>
-                <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background: ${colors.bg}; color: ${colors.fg};">${estado}</span></td>
-                <td><b style="color: #1e293b;">$${parseFloat(total).toFixed(2)}</b></td>
-                <td>$${parseFloat(pagado).toFixed(2)}</td>
-                <td><b style="color: ${saldo > 0 ? '#b45309' : '#1e293b'};">$${parseFloat(saldo).toFixed(2)}</b></td>
-                <td><span style="font-size: 0.85rem; color: #64748b;">${metodo}</span></td>
+                <td><span class="status-pill" style="padding: 2px 6px; border-radius: 4px; background: ${colors.bg}; color: ${colors.fg};">${estado}</span></td>
+                <td class="num"><b>$${parseFloat(total).toFixed(2)}</b></td>
+                <td class="num">$${parseFloat(pagado).toFixed(2)}</td>
+                <td class="num"><b style="color: ${saldo > 0 ? 'var(--warning-dark)' : 'var(--text-primary)'};">$${parseFloat(saldo).toFixed(2)}</b></td>
+                <td><span style="font-size: 0.85rem; color: var(--text-secondary);">${metodo}</span></td>
                 <td style="text-align: right;">
-                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #10b981; border-color: #059669; border-radius: 6px;">💰 Abonar</button>` : ''}
-                        <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: #6366f1; border: none; border-radius: 6px;">📄 Ver PDF</button>
+                    <div class="row-actions">
+                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--secondary); border-color: var(--secondary-dark); border-radius: 6px;">${ICONS.dollar} Abonar</button>` : ''}
+                        <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); border: none; border-radius: 6px;">${ICONS.fileText} Ver PDF</button>
                         ${f.consulta_id ? `<button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${f.consulta_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Consulta</button>` : ''}
                     </div>
                 </td>
@@ -4218,7 +4217,7 @@ const cargarHistorialFacturas = async () => {
         }).join('');
     } catch (e) {
         console.error("Error cargando historial de facturacion:", e);
-        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: red;">Error loading.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--accent);">Error loading.</td></tr>';
     }
 };
 
@@ -4229,7 +4228,7 @@ const cargarFacturasMascota = async (mascotaId) => {
     try {
         const facturas = await fetchAPI(`/facturas/mascota/${mascotaId}`);
         if (!facturas || facturas.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: #9ca3af;">No hay facturas registradas para esta mascota.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 2rem; color: var(--text-muted);">No hay facturas registradas para esta mascota.</td></tr>';
             return;
         }
 
@@ -4243,16 +4242,16 @@ const cargarFacturasMascota = async (mascotaId) => {
             <tr>
                 <td><b>#${numero}</b></td>
                 <td>${fecha}</td>
-                <td><span style="padding: 2px 6px; border-radius: 4px; font-size: 0.8rem; background: ${estado==='PAGADA'?'#d1fae5':(estado==='ANULADA'?'#fee2e2':'#fef3c7')}; color: ${estado==='PAGADA'?'#065f46':(estado==='ANULADA'?'#991b1b':'#92400e')};">${estado}</span></td>
-                <td><b>$${parseFloat(total).toFixed(2)}</b></td>
+                <td><span class="status-pill" style="padding: 2px 6px; border-radius: 4px; background: ${estado==='PAGADA'?'var(--secondary-subtle)':(estado==='ANULADA'?'var(--accent-subtle)':'var(--warning-subtle)')}; color: ${estado==='PAGADA'?'var(--secondary-dark)':(estado==='ANULADA'?'var(--accent-dark)':'var(--warning-dark)')};">${estado}</span></td>
+                <td class="num"><b>$${parseFloat(total).toFixed(2)}</b></td>
                 <td>
-                    <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: #6366f1; border: none;">📄 PDF</button>
+                    <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--primary); border: none;">${ICONS.fileText} PDF</button>
                 </td>
             </tr>`;
         }).join('');
     } catch (e) {
         console.error("Error cargando facturas de mascota:", e);
-        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Error cargando datos.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--accent);">Error cargando datos.</td></tr>';
     }
 };
 

@@ -1567,6 +1567,32 @@ button:active:not(:disabled) {
 .notification-toast--warning { background: var(--warning-dark); }
 .notification-toast--info    { background: var(--primary-dark); }
 
+/* Inline clinical sub-forms (vacunación, desparasitación, hospitalización,
+   cirugía, prueba) toggled via toggleForm(). `display` stays an inline
+   style — toggleForm() reads/writes el.style.display directly. */
+.clinico-inline-form {
+    background: var(--surface-hover);
+    padding: 1.5rem;
+    border-radius: var(--radius-lg);
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border);
+}
+.clinico-inline-form h4 {
+    margin-top: 0;
+    color: var(--primary);
+}
+
+/* Repeatable medication row in the receta modal (renderMedicamentoRow) */
+.receta-item-row {
+    align-items: end;
+    background: var(--surface-hover);
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    margin-bottom: 1rem;
+    position: relative;
+    border: 1px solid var(--border);
+}
+
 /* ============================================================
    SKELETON LOADERS
    ============================================================ */
