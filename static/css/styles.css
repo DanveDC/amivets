@@ -1329,55 +1329,59 @@ button:active:not(:disabled) {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
-    background: linear-gradient(135deg, #EEF2FF 0%, var(--bg) 60%);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100dvh;
+    background: var(--bg);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    padding: 1.5rem;
 }
 
 .login-card {
     background: var(--surface);
     width: 100%;
-    max-width: 420px;
+    max-width: 400px;
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-light);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
     overflow: hidden;
-    animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .login-card-header {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-    padding: 2.5rem 2.5rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 2.25rem 2.25rem 1.75rem;
     text-align: center;
 }
 
 .login-brand {
-    font-size: 2rem;
-    font-weight: 800;
-    color: white;
-    letter-spacing: -0.04em;
-    margin: 0 0 0.4rem;
+    font-family: var(--font-serif);
+    font-size: 1.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    margin: 0 0 0.35rem;
 }
 
 .login-subtitle {
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
     margin: 0;
     font-weight: 400;
 }
 
 .login-form {
-    padding: 2rem 2.5rem 2.5rem;
+    padding: 1.75rem 2.25rem 2.25rem;
 }
 
 .login-error {
     display: none;
-    background: rgba(244, 63, 94, 0.06);
-    border: 1px solid rgba(244, 63, 94, 0.25);
+    background: var(--accent-subtle);
+    border: 1px solid var(--accent);
     color: var(--accent);
-    border-radius: var(--radius-md);
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
+    border-radius: var(--radius-sm);
+    padding: 0.7rem 1rem;
+    font-size: 0.85rem;
     text-align: center;
     margin-bottom: 1.25rem;
 }
@@ -1388,38 +1392,38 @@ button:active:not(:disabled) {
     color: var(--accent);
     margin-bottom: 1rem;
     text-align: center;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
 }
 
 .login-field {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.1rem;
 }
 
 .login-field label {
     display: block;
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: 0.85rem;
+    font-weight: 500;
     color: var(--text-primary);
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
 }
 
 .login-field input {
     width: 100%;
-    padding: 0.8rem 1rem;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--bg);
-    font-size: 0.95rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    font-size: 0.9rem;
     font-family: inherit;
     color: var(--text-primary);
-    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .login-field input:focus {
     outline: none;
     background: var(--surface);
     border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
+    box-shadow: var(--focus-ring);
 }
 
 .login-field input::placeholder {
@@ -1429,18 +1433,16 @@ button:active:not(:disabled) {
 .btn-login {
     width: 100%;
     margin-top: 0.5rem;
-    padding: 0.875rem;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    padding: 0.8rem;
+    background: var(--text-primary);
     color: white;
     border: none;
-    border-radius: var(--radius-md);
-    font-size: 0.95rem;
-    font-weight: 700;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
     cursor: pointer;
     font-family: inherit;
-    letter-spacing: 0.01em;
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: background 0.18s ease, transform 0.1s ease;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1449,14 +1451,11 @@ button:active:not(:disabled) {
 }
 
 .btn-login:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(99, 102, 241, 0.45);
-    filter: brightness(1.06);
+    background: #1F2325;
 }
 
 .btn-login:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+    transform: scale(0.98);
 }
 
 .btn-login:focus-visible {
@@ -1541,206 +1540,6 @@ button:active:not(:disabled) {
 }
 
 /* ============================================================
-   BOOKING PAGE (root /index.html — direct Supabase QR booking form)
-   Scoped under body.cita-booking-page. Migrated out of a local
-   <style> block that duplicated the design system with its own
-   --color-* variable names; now consumes the shared tokens.
-   ============================================================ */
-body.cita-booking-page {
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px 16px 48px;
-}
-
-.cita-booking-page .header {
-    text-align: center;
-    margin-bottom: 24px;
-    max-width: 480px;
-    width: 100%;
-}
-
-.cita-booking-page .header .logo {
-    width: 64px;
-    height: 64px;
-    background: var(--primary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 12px;
-    font-size: 30px;
-}
-
-.cita-booking-page .header h1 { font-size: 1.6rem; font-weight: 700; color: var(--text-primary); }
-.cita-booking-page .header p { font-size: .9rem; color: var(--text-secondary); margin-top: 4px; }
-
-.cita-booking-page .card {
-    background: var(--surface);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    padding: 24px 20px;
-    max-width: 480px;
-    width: 100%;
-}
-
-.cita-booking-page .form-group { margin-bottom: 18px; }
-
-.cita-booking-page .form-group label {
-    display: block;
-    font-size: .8rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    margin-bottom: 6px;
-}
-
-.cita-booking-page .form-group input,
-.cita-booking-page .form-group select {
-    width: 100%;
-    padding: 12px 14px;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: 1rem;
-    color: var(--text-primary);
-    background: var(--surface);
-    transition: border-color .2s, box-shadow .2s;
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-.cita-booking-page .form-group input:focus,
-.cita-booking-page .form-group select:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
-}
-
-.cita-booking-page .select-wrap { position: relative; }
-.cita-booking-page .select-wrap::after {
-    content: '▾';
-    position: absolute;
-    right: 14px;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    color: var(--text-secondary);
-    font-size: 1.1rem;
-}
-
-.cita-booking-page #horas-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-    margin-top: 4px;
-}
-
-.cita-booking-page .hora-btn {
-    padding: 10px 4px;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    font-size: .85rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    cursor: pointer;
-    text-align: center;
-    transition: all .15s;
-}
-
-.cita-booking-page .hora-btn:hover { border-color: var(--primary); color: var(--primary); }
-.cita-booking-page .hora-btn.selected {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-}
-.cita-booking-page .hora-btn.ocupada {
-    background: var(--bg);
-    color: var(--border);
-    cursor: not-allowed;
-    text-decoration: line-through;
-}
-
-.cita-booking-page #horas-placeholder {
-    font-size: .85rem;
-    color: var(--text-secondary);
-    padding: 12px 0;
-    text-align: center;
-}
-
-.cita-booking-page .btn-submit {
-    width: 100%;
-    padding: 14px;
-    background: var(--primary);
-    color: white;
-    font-size: 1.05rem;
-    font-weight: 700;
-    border: none;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background .2s, transform .1s;
-    margin-top: 6px;
-}
-.cita-booking-page .btn-submit:hover { background: var(--primary-dark); }
-.cita-booking-page .btn-submit:active { transform: scale(.98); }
-.cita-booking-page .btn-submit:disabled {
-    background: var(--border);
-    cursor: not-allowed;
-    transform: none;
-}
-
-.cita-booking-page .alert {
-    padding: 14px 16px;
-    border-radius: var(--radius-md);
-    font-size: .9rem;
-    margin-bottom: 18px;
-    display: none;
-}
-.cita-booking-page .alert.error { background: rgba(244, 63, 94, 0.06); color: var(--accent); border: 1px solid rgba(244, 63, 94, 0.25); }
-.cita-booking-page .alert.success { background: rgba(16, 185, 129, 0.08); color: var(--secondary-dark); border: 1px solid rgba(16, 185, 129, 0.25); }
-.cita-booking-page .alert.show { display: block; }
-
-/* Loading spinner — reuses the global @keyframes spin defined above */
-.cita-booking-page .spinner {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, .4);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin .6s linear infinite;
-    vertical-align: middle;
-    margin-right: 6px;
-}
-
-.cita-booking-page #success-screen {
-    display: none;
-    text-align: center;
-    padding: 32px 16px;
-}
-.cita-booking-page #success-screen .check { font-size: 3.5rem; margin-bottom: 12px; }
-.cita-booking-page #success-screen h2 { font-size: 1.4rem; margin-bottom: 8px; }
-.cita-booking-page #success-screen p { color: var(--text-secondary); font-size: .9rem; line-height: 1.5; }
-
-.cita-booking-page .detail-box {
-    background: var(--bg);
-    border-radius: var(--radius-md);
-    padding: 16px;
-    margin-top: 16px;
-    text-align: left;
-}
-.cita-booking-page .detail-box p { font-size: .85rem; color: var(--text-primary); margin-bottom: 6px; }
-.cita-booking-page .detail-box p:last-child { margin-bottom: 0; }
-.cita-booking-page .detail-box strong { color: var(--primary); }
-
-@media (min-width: 520px) {
-    .cita-booking-page .card { padding: 32px 28px; }
-    .cita-booking-page #horas-grid { grid-template-columns: repeat(5, 1fr); }
-}
-
-/* ============================================================
    QR BOOKING PAGE (static/agendar.html — backend-API booking form)
    Scoped under body.qr-booking-page. Migrated out of a local
    <style> block; hardcoded hex values mapped to design tokens.
@@ -1756,6 +1555,7 @@ body.qr-booking-page {
 .qr-booking-page .card {
     background: var(--surface);
     border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
     max-width: 480px;
     width: 100%;
@@ -1763,14 +1563,22 @@ body.qr-booking-page {
 }
 
 .qr-booking-page .card-header {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
     padding: 2rem 1.5rem 1.5rem;
     text-align: center;
-    color: white;
+    color: var(--text-primary);
 }
-.qr-booking-page .card-header .logo { font-size: 2rem; margin-bottom: .5rem; }
-.qr-booking-page .card-header h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
-.qr-booking-page .card-header p { font-size: .9rem; opacity: .85; }
+.qr-booking-page .card-header .logo { margin-bottom: .5rem; color: var(--primary); }
+.qr-booking-page .card-header .logo svg { width: 32px; height: 32px; }
+.qr-booking-page .card-header h1 {
+    font-family: var(--font-serif);
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    margin-bottom: .25rem;
+}
+.qr-booking-page .card-header p { font-size: .875rem; color: var(--text-secondary); }
 
 .qr-booking-page .card-body { padding: 1.75rem 1.5rem; }
 
@@ -1778,25 +1586,25 @@ body.qr-booking-page {
 
 .qr-booking-page .form-group label {
     display: block;
-    font-size: .82rem;
-    font-weight: 600;
+    font-size: .78rem;
+    font-weight: 500;
     color: var(--text-secondary);
     margin-bottom: .4rem;
     text-transform: uppercase;
-    letter-spacing: .03em;
+    letter-spacing: .04em;
 }
 
 .qr-booking-page .form-group input,
 .qr-booking-page .form-group select,
 .qr-booking-page .form-group textarea {
     width: 100%;
-    padding: .7rem 1rem;
-    border: 1.5px solid var(--border);
-    border-radius: var(--radius-md);
-    font-size: .95rem;
+    padding: .7rem .9rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: .9rem;
     color: var(--text-primary);
-    background: var(--surface-hover);
-    transition: border-color .15s, box-shadow .15s;
+    background: var(--surface);
+    transition: border-color .18s ease, box-shadow .18s ease;
     appearance: none;
     -webkit-appearance: none;
 }
@@ -1805,15 +1613,15 @@ body.qr-booking-page {
 .qr-booking-page .form-group select:focus,
 .qr-booking-page .form-group textarea:focus {
     outline: none;
-    border-color: var(--primary-dark);
-    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);
     background: var(--surface);
 }
 
 /* Select arrow — declared after the shared form-control rule above so its
    background-image longhand isn't cleared by that rule's background shorthand */
 .qr-booking-page .form-group select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239B9A97' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right .75rem center;
     padding-right: 2.5rem;
@@ -1829,75 +1637,71 @@ body.qr-booking-page {
 }
 
 .qr-booking-page .slot-btn {
-    padding: .65rem .25rem;
-    border: 2px solid var(--primary-subtle);
-    border-radius: var(--radius-md);
+    padding: .6rem .25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     background: var(--surface);
-    font-size: .88rem;
-    font-weight: 600;
-    color: var(--primary-dark);
+    font-size: .85rem;
+    font-weight: 500;
+    color: var(--text-primary);
     cursor: pointer;
     text-align: center;
-    transition: all .15s ease;
-    box-shadow: var(--shadow-sm);
+    transition: border-color .18s ease, background .18s ease, color .18s ease;
 }
 .qr-booking-page .slot-btn:hover {
     border-color: var(--primary);
-    background: var(--primary-dark);
-    color: white;
-    box-shadow: 0 3px 10px rgba(79, 70, 229, 0.30);
-    transform: translateY(-1px);
+    background: var(--surface-hover);
+    color: var(--text-primary);
 }
 .qr-booking-page .slot-btn.selected {
-    border-color: transparent;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-color: var(--primary);
+    background: var(--primary);
     color: white;
-    box-shadow: 0 3px 12px rgba(79, 70, 229, 0.40);
 }
 
 .qr-booking-page .section-divider {
     border: none;
-    border-top: 1.5px solid var(--border-light);
+    border-top: 1px solid var(--border);
     margin: 1.5rem 0;
 }
 
 .qr-booking-page .section-title {
-    font-size: .78rem;
-    font-weight: 700;
+    font-size: .74rem;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: .06em;
+    letter-spacing: .07em;
     color: var(--text-muted);
     margin-bottom: 1rem;
 }
 
 .qr-booking-page .btn-submit {
     width: 100%;
-    padding: .9rem;
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    padding: .85rem;
+    background: var(--text-primary);
     color: white;
     border: none;
-    border-radius: var(--radius-lg);
-    font-size: 1rem;
-    font-weight: 700;
+    border-radius: var(--radius-sm);
+    font-size: .95rem;
+    font-weight: 500;
     cursor: pointer;
-    transition: opacity .15s, transform .1s;
+    transition: background .18s ease, transform .1s ease;
     margin-top: .5rem;
 }
-.qr-booking-page .btn-submit:hover { opacity: .92; }
+.qr-booking-page .btn-submit:hover { background: #1F2325; }
 .qr-booking-page .btn-submit:active { transform: scale(.98); }
-.qr-booking-page .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+.qr-booking-page .btn-submit:disabled { background: var(--text-muted); cursor: not-allowed; }
 
 .qr-booking-page .alert {
-    padding: .9rem 1rem;
-    border-radius: var(--radius-md);
-    font-size: .9rem;
-    font-weight: 500;
+    padding: .85rem 1rem;
+    border-radius: var(--radius-sm);
+    font-size: .88rem;
+    font-weight: 400;
     margin-bottom: 1rem;
     display: none;
 }
-.qr-booking-page .alert-error { background: rgba(244, 63, 94, 0.06); color: var(--accent); border: 1px solid rgba(244, 63, 94, 0.25); }
-.qr-booking-page .alert-success { background: rgba(16, 185, 129, 0.08); color: var(--secondary-dark); border: 1px solid rgba(16, 185, 129, 0.25); }
-.qr-booking-page .alert-info { background: var(--info-subtle); color: var(--info-dark); border: 1px solid rgba(59, 130, 246, 0.3); }
+.qr-booking-page .alert-error { background: var(--accent-subtle); color: var(--accent); border: 1px solid var(--accent); }
+.qr-booking-page .alert-success { background: var(--secondary-subtle); color: var(--secondary); border: 1px solid var(--secondary); }
+.qr-booking-page .alert-info { background: var(--info-subtle); color: var(--info); border: 1px solid var(--info); }
 .qr-booking-page .alert-retry-btn {
     display: block;
     margin-top: .5rem;
@@ -1906,7 +1710,7 @@ body.qr-booking-page {
     padding: 0;
     color: inherit;
     font: inherit;
-    font-weight: 700;
+    font-weight: 600;
     text-decoration: underline;
     cursor: pointer;
 }
@@ -1923,7 +1727,14 @@ body.qr-booking-page {
     text-align: center;
     padding: 2rem 1.5rem;
 }
-.qr-booking-page .success-icon { font-size: 4rem; margin-bottom: 1rem; }
-.qr-booking-page .success-view h2 { font-size: 1.4rem; color: var(--text-primary); margin-bottom: .5rem; }
+.qr-booking-page .success-icon { margin-bottom: 1rem; color: var(--primary); }
+.qr-booking-page .success-icon svg { width: 48px; height: 48px; }
+.qr-booking-page .success-view h2 {
+    font-family: var(--font-serif);
+    font-size: 1.35rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: .5rem;
+}
 .qr-booking-page .success-view p { color: var(--text-secondary); font-size: .95rem; line-height: 1.5; }
 .qr-booking-page .success-note { margin-top: 1rem; color: var(--text-muted); font-size: .85rem; }
