@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AmiVets - Sistema de Gestión Veterinaria</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=25">
+    <link rel="stylesheet" href="/static/css/styles.css?v=26">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -290,7 +290,7 @@
                     </div>
                     <div id="adminConsultaMsg"
                         style="display: none; background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); color: var(--info-dark); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 0.9rem;">
-                        <span class="icon">ℹ️</span> <strong>Modo Administrador:</strong> Usted está generando una orden
+                        <span class="icon"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span> <strong>Modo Administrador:</strong> Usted está generando una orden
                         de consulta. El médico asignado completará los detalles clínicos posteriormente.
                     </div>
 
@@ -389,22 +389,22 @@
                                 style="font-size: 0.75rem; color: var(--text-secondary); width: 100%; margin-bottom: 0.25rem; font-weight: bold; text-transform: uppercase;">Ir
                                 al registro especializado:</span>
                             <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);">💉
+                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/></svg>
                                 Vacuna</button>
                             <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);">💊
+                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
                                 Fármaco</button>
                             <button type="button" class="btn-secondary btn-sm"
                                 onclick="setQuickAction('LABORATORIO', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);">🔬
+                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
                                 Lab</button>
                             <button type="button" class="btn-secondary btn-sm"
                                 onclick="setQuickAction('CIRUGIA', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);">🔪
+                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 4 6 6-9 9H5v-6z"/><path d="m9 9 6 6"/></svg>
                                 Cirugía</button>
                             <button type="button" class="btn-secondary btn-sm"
                                 onclick="setQuickAction('HOSPITALIZACION', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);">🏥
+                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z"/></svg>
                                 Hosp.</button>
                         </div>
 
@@ -412,7 +412,7 @@
                             style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1.25rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
                             <h4
                                 style="font-size: 0.9rem; color: var(--info-dark); margin-bottom: 0.75rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.025em; display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="icon">➕</span> Registrar Acción Clínica o Nota
+                                <span class="icon"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span> Registrar Acción Clínica o Nota
                             </h4>
                             <form id="formAgregarServicio" style="display: flex; gap: 0.75rem; flex-direction: column;">
                                 <input type="hidden" id="addServicioConsultaId">
@@ -425,14 +425,14 @@
                                         <select id="addServicioTipo" required
                                             style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); background: var(--surface); font-size:0.9rem;">
                                             <option value="">— Seleccione —</option>
-                                            <option value="INSUMO">💊 Insumo / Medicina</option>
-                                            <option value="VACUNACION">💉 Vacunación</option>
-                                            <option value="LABORATORIO">🔬 Lab / Estudio</option>
-                                            <option value="CIRUGIA">🔪 Cirugía / Proc.</option>
-                                            <option value="HOSPITALIZACION">🏥 Hospitalización</option>
-                                            <option value="ESTETICA">✂️ Estética / Peluquería</option>
-                                            <option value="CONSULTA">🩺 Consulta / Honorarios</option>
-                                            <option value="OTRO">📁 Otros Hallazgos</option>
+                                            <option value="INSUMO">Insumo / Medicina</option>
+                                            <option value="VACUNACION">Vacunación</option>
+                                            <option value="LABORATORIO">Lab / Estudio</option>
+                                            <option value="CIRUGIA">Cirugía / Proc.</option>
+                                            <option value="HOSPITALIZACION">Hospitalización</option>
+                                            <option value="ESTETICA">Estética / Peluquería</option>
+                                            <option value="CONSULTA">Consulta / Honorarios</option>
+                                            <option value="OTRO">Otros Hallazgos</option>
                                         </select>
                                     </div>
                                     <div style="display: flex; flex-direction: column; gap: 0.25rem; position:relative;">
@@ -473,7 +473,7 @@
 
                                 <!-- Notas clínicas -->
                                 <div style="padding: 0.75rem; background: var(--info-subtle); border: 1.5px solid var(--primary-subtle); border-radius: var(--radius-md);">
-                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; display: block; margin-bottom: 0.4rem; text-transform:uppercase;">📒 Notas Clínicas (dosis, lote, observaciones)</label>
+                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; display: block; margin-bottom: 0.4rem; text-transform:uppercase;"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Notas Clínicas (dosis, lote, observaciones)</label>
                                     <textarea id="addServicioDetalles"
                                         placeholder="Ej: Lote: XX123, Vía SC, dosis 0.5ml. Paciente tolera bien..."
                                         rows="2"
@@ -482,7 +482,7 @@
 
                                 <button type="submit" class="btn-primary"
                                     style="background: var(--primary); border-color: var(--primary-dark); padding: 0.75rem; font-weight: bold; font-size: 0.95rem;">
-                                    🩺 Registrar Acción Clínica
+                                    <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg> Registrar Acción Clínica
                                 </button>
                             </form>
                         </div>
@@ -723,8 +723,8 @@
                         <div class="form-group">
                             <label>Tipo de Movimiento *</label>
                             <select id="movStockTipo" required>
-                                <option value="ENTRADA">📦 Entrada (Compra)</option>
-                                <option value="SALIDA">📤 Salida (Consumo/Baja)</option>
+                                <option value="ENTRADA">Entrada (Compra)</option>
+                                <option value="SALIDA">Salida (Consumo/Baja)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -953,7 +953,7 @@
                             <button class="btn-add btn-sm" id="btnRegistrarMascota"
                                 style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">+ Nuevo</button>
                         </div>
-                        <input type="text" id="consultorioSearchMascota" placeholder="🔍 Buscar por nombre o código..."
+                        <input type="text" id="consultorioSearchMascota" placeholder="Buscar por nombre o código..."
                             class="search-input" style="width: 100%; margin-bottom: 1rem;">
 
                         <div id="consultorioMascotasList"
@@ -1090,7 +1090,7 @@
                                             style="background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); padding: 2rem; min-height: 400px;">
                                             <!-- Dynamic content based on tab -->
                                             <div class="empty-state">
-                                                <div class="icon">📋</div>
+                                                <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></div>
                                                 <p>Seleccione una categoría para ver el registro.</p>
                                             </div>
                                         </div>
@@ -1147,7 +1147,7 @@
                     <h2>Listado de Propietarios</h2>
                     <div style="display: flex; gap: 1rem; align-items: center;">
                         <input type="text" id="searchPropietario"
-                            placeholder="🔍 Buscar por nombre, apellido o cédula..." class="search-input"
+                            placeholder="Buscar por nombre, apellido o cédula..." class="search-input"
                             style="width: 300px; margin: 0;">
                         <button class="btn-primary" id="btnRegistrarPropietarioAlt">+ Nuevo Propietario</button>
                     </div>
@@ -1202,14 +1202,14 @@
                         <p style="color:var(--text-secondary); font-size:0.875rem; margin:0;">Gestión de productos, medicamentos y materiales.</p>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        <button class="btn-secondary btn-sm" id="btnAlertasStock" style="color:var(--warning-dark); border-color:rgba(245, 158, 11, 0.3); background:var(--warning-subtle);">⚠️ Bajo Stock</button>
+                        <button class="btn-secondary btn-sm" id="btnAlertasStock" style="color:var(--warning-dark); border-color:var(--warning); background:var(--warning-subtle);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Bajo Stock</button>
                         <button class="btn-primary" id="btnNuevoProducto">+ Nuevo Producto</button>
                     </div>
                 </div>
 
                 <!-- Barra de búsqueda y filtro -->
                 <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap;">
-                    <input type="text" id="searchInventario" placeholder="🔍 Buscar por nombre, código o categoría..."
+                    <input type="text" id="searchInventario" placeholder="Buscar por nombre, código o categoría..."
                         class="search-input" style="flex:1; min-width:200px; margin:0;">
                     <select id="filtroInventarioCategoria"
                         style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); background:white; font-size:0.875rem; min-width:160px;">
@@ -1312,7 +1312,7 @@
 
                     <div class="modal-footer" style="gap: 0.5rem;">
                         <button type="button" class="btn-secondary" data-close="modalPreviewFactura">Cerrar</button>
-                        <button type="button" class="btn-primary" id="btnDescargarPreviewFactura" style="background:var(--secondary); border-color:var(--secondary-dark);" onclick="">⬇ Descargar PDF</button>
+                        <button type="button" class="btn-primary" id="btnDescargarPreviewFactura" style="background:var(--secondary); border-color:var(--secondary-dark);" onclick=""><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Descargar PDF</button>
                     </div>
                 </div>
             </div>
@@ -1326,7 +1326,7 @@
                         <p style="color: var(--text-secondary); font-size: 0.9rem;">Gestione y consulte los comprobantes de pago emitidos.</p>
                     </div>
                     <div style="display: flex; gap: 0.75rem; align-items: center;">
-                        <input type="text" id="searchFactura" placeholder="🔍 Buscar por # o cliente..." class="search-input" style="width: 280px; margin: 0;">
+                        <input type="text" id="searchFactura" placeholder="Buscar por # o cliente..." class="search-input" style="width: 280px; margin: 0;">
                         <select id="filterEstadoFactura" class="search-input" style="width: 150px; margin: 0; padding-left: 1rem;">
                             <option value="">Todos los estados</option>
                             <option value="PAGADA">Pagada</option>
@@ -1583,7 +1583,7 @@
                         style="padding: 2rem; background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
                         <h3
                             style="margin-top: 0; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
-                            <span>🔐</span> Seguridad
+                            <span><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> Seguridad
                         </h3>
                         <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
                             Utilice este formulario para actualizar su contraseña de acceso.
@@ -1852,7 +1852,7 @@
 
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary" data-close="modalFactura">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);">✔️ Emitir y Guardar</button>
+                    <button type="submit" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Emitir y Guardar</button>
                 </div>
             </form>
         </div>
@@ -1974,7 +1974,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary" data-close="modal-abono">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background: var(--secondary); border-color: var(--secondary-dark);">✔ Registrar Abono</button>
+                    <button type="submit" class="btn-primary" style="background: var(--secondary); border-color: var(--secondary-dark);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Registrar Abono</button>
                 </div>
             </form>
         </div>
