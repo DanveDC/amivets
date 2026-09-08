@@ -54,6 +54,7 @@ def servicios_mas_solicitados(
             func.sum(DetalleFactura.cantidad).label("total_vendido")
         )
         .join(DetalleFactura, DetalleFactura.producto_id == Inventario.id)
+        .filter(Inventario.activo.is_(True))
     )
 
     if dt_inicio or dt_fin:
