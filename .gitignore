@@ -27,6 +27,12 @@ ENV/
 *.db
 *.sqlite3
 
+# Real client registry — personal data, never versioned.
+# Provided at runtime via REAL_DATA_SQL_PATH (Render Secret File) or a local copy.
+backend/scripts/data/
+import-pacientes*.sql
+veterinarios.sql
+
 # Logs
 *.log
 logs/

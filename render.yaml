@@ -16,6 +16,13 @@ services:
         value: production
       - key: PORT
         value: 8000
+      # Path to the real client-registry SQL. Upload the file as a Render
+      # Secret File (Dashboard → service → Environment → Secret Files) named
+      # "import-pacientes-v2.sql". Render mounts Secret Files under /etc/secrets.
+      # The importer only runs when 'propietarios' is empty, so it is safe to
+      # keep set across redeploys. Remove this var to boot with an empty registry.
+      - key: REAL_DATA_SQL_PATH
+        value: /etc/secrets/import-pacientes-v2.sql
       - key: CORS_ORIGINS
         value: "https://amivets-backend.onrender.com"
     healthCheckPath: /health

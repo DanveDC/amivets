@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scripts.reset_db import reset_database, create_initial_admin
-from scripts.seed_data import seed_data
+from scripts.import_real_data import import_real_data
 from app.core.database import engine, Base
 from sqlalchemy import inspect
 
@@ -55,18 +55,26 @@ def init_production_db():
         reset_database()
         print("\n[Paso 2/3] Creando usuario admin...")
         create_initial_admin()
-        print("\n[Paso 3/3] Insertando datos de prueba...")
-        seed_data()
+        print("\n[Paso 3/3] Importando el padrón real (veterinarios, propietarios, mascotas)...")
+        # Ya NO se llama scripts/seed_data.py acá: el seed de demo (consultas,
+        # facturas y clientes ficticios) dejó de ser un efecto del arranque.
+        # Es una herramienta explícita de dev — invocar a mano:
+        #   python scripts/seed_data.py
+        import_real_data()
     elif "usuarios" not in tables:
         # Base genuinamente nueva (el inspector sí respondió). Solo se crea el
         # esquema — operación no destructiva, segura de repetir en cada arranque.
-        # Nunca se llama reset_database() ni seed_data() por este camino.
+        # Nunca se llama reset_database() por este camino.
         print("\nEsquema no encontrado. Creando tablas (create_all, no destructivo)...")
         Base.metadata.create_all(bind=engine)
         create_initial_admin()
+        # Carga idempotente del padrón real: solo inserta si 'propietarios' está
+        # vacía y si hay un SQL disponible (Secret File en Render / dev local).
+        import_real_data()
     else:
         print("\nLa base de datos ya está inicializada. Conservando datos existentes.")
         create_initial_admin()
+        import_real_data()
 
     print("\n=== CONFIGURACIÓN DE BASE DE DATOS FINALIZADA ===")
 
