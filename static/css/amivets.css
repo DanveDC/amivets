@@ -1,0 +1,378 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   AmiVets layer — composed patterns for proposal 1A on top of Nocturne.
+   Loaded AFTER nocturne.css. This file only ADDS: it never restyles a
+   Nocturne primitive (.btn, .input, .card, .tag, .table, .dialog*).
+   Every value comes from a Nocturne token. Source of truth: docs/diseno/1A-tokens.md
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Semantic tokens Nocturne does not define (see 1A-tokens.md → Semántica).
+     Used as text/icon colour only, never as an area fill. */
+  --color-warning: #e0b062;
+  --color-danger: #d98a8a;
+  --color-success: #8fae8f;
+
+  --av-topbar-h: 52px;
+  --av-tabs-h: 39px;
+  --av-rail-w: 264px;
+  --av-budget-w: 320px;
+}
+
+/* Tinted state grounds — the only sanctioned semantic fills, all < 16% */
+.av-fill-warning { background: color-mix(in srgb, var(--color-warning) 14%, transparent); }
+.av-fill-danger  { background: color-mix(in srgb, var(--color-danger)  14%, transparent); }
+.av-fill-success { background: color-mix(in srgb, var(--color-success) 14%, transparent); }
+.av-text-warning { color: var(--color-warning); }
+.av-text-danger  { color: var(--color-danger); }
+.av-text-success { color: var(--color-success); }
+
+/* ── shared utilities ────────────────────────────────────────────────────── */
+.av-num      { font-variant-numeric: tabular-nums; }
+.av-muted    { color: var(--color-neutral-500); }
+.av-faint    { color: var(--color-neutral-600); }
+.av-eyebrow {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+.av-row      { display: flex; align-items: center; gap: var(--space-4); }
+.av-row-actions { display: flex; align-items: center; gap: 8px; }
+.av-spacer   { margin-left: auto; }
+.av-scroll-x { overflow-x: auto; }
+
+/* Phosphor icon sizing helpers (the set is loaded once in the page head) */
+.av-i    { font-size: 15px; line-height: 1; }
+.av-i-sm { font-size: 13px; line-height: 1; }
+.av-i-lg { font-size: 20px; line-height: 1; }
+
+/* ── app shell ───────────────────────────────────────────────────────────── */
+.av-app {
+  min-height: 100vh; display: flex; flex-direction: column;
+  background: var(--color-bg);
+}
+
+.av-topbar {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: 0 var(--space-6); height: var(--av-topbar-h); flex: none;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+.av-brand {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-heading); font-weight: 600;
+  font-size: 15px; letter-spacing: -0.01em; color: var(--color-text);
+  text-decoration: none;
+}
+.av-brand .ph { color: var(--color-accent); font-size: 20px; }
+
+/* command-palette trigger in the top bar */
+.av-search {
+  flex: 1; max-width: 420px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 13px; color: var(--color-neutral-500);
+  background: var(--color-neutral-900);
+  border: 1px solid var(--color-neutral-800);
+  border-radius: var(--radius-md); cursor: text;
+}
+.av-search:hover { border-color: var(--color-neutral-700); }
+.av-search .ph { font-size: 15px; }
+.av-kbd {
+  margin-left: auto; font-size: 11px; color: var(--color-neutral-600);
+  border: 1px solid var(--color-neutral-800); border-radius: var(--radius-sm);
+  padding: 1px 5px; font-family: var(--font-body);
+}
+.av-user { font-size: 13px; color: var(--color-neutral-400); }
+
+/* explicit tab navigation — replaces the 11-item sidebar */
+.av-tabs {
+  display: flex; gap: 2px; padding: 0 var(--space-6); flex: none;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+  overflow-x: auto; scrollbar-width: none;
+}
+.av-tabs::-webkit-scrollbar { display: none; }
+.av-tab {
+  padding: 9px 14px; font-size: 13px; white-space: nowrap;
+  color: var(--color-neutral-500); background: transparent;
+  border: 0; cursor: pointer; font-family: var(--font-body);
+  box-shadow: inset 0 0 0 var(--color-accent);
+  transition: color .12s ease, box-shadow .12s ease;
+}
+.av-tab:hover { color: var(--color-neutral-300); }
+.av-tab[aria-current='page'] {
+  color: var(--color-text); font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--color-accent);
+}
+
+/* main region below the chrome */
+.av-main { flex: 1; min-height: 0; min-width: 0; }
+
+/* generic section page (non-consultorio sections) */
+.av-page { padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); }
+.av-page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.av-page-title { margin: 0; font-size: 20px; }
+.av-page-count { font-size: 12px; color: var(--color-neutral-500); }
+
+/* ── consultorio: rail + patient panel ───────────────────────────────────── */
+.av-consultorio {
+  display: grid; grid-template-columns: var(--av-rail-w) minmax(0, 1fr);
+  min-height: 100%;
+}
+
+.av-rail {
+  border-right: 1px solid var(--color-divider);
+  padding: var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-4);
+  background: color-mix(in srgb, var(--color-surface) 45%, var(--color-bg));
+}
+.av-rail-head { display: flex; align-items: center; justify-content: space-between; }
+.av-rail-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.av-rail-list { display: flex; flex-direction: column; gap: 2px; margin-top: var(--space-2); }
+
+.av-rail-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: var(--radius-md);
+  background: transparent; border: 0; width: 100%; text-align: left;
+  cursor: pointer; color: var(--color-text); font-family: var(--font-body);
+}
+.av-rail-item:hover { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+.av-rail-item[aria-current='true'] {
+  background: var(--color-accent-900);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+.av-rail-item-name {
+  font-size: 13px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.av-rail-item[aria-current='true'] .av-rail-item-name { font-weight: 600; }
+.av-rail-item-sub { font-size: 11px; color: var(--color-neutral-600); }
+.av-rail-item[aria-current='true'] .av-rail-item-sub { color: var(--color-neutral-500); }
+.av-rail-item-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--color-accent);
+}
+
+.av-avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  background: var(--color-neutral-900); color: var(--color-neutral-400);
+}
+.av-rail-item[aria-current='true'] .av-avatar {
+  background: var(--color-accent-800); color: var(--color-accent-200);
+}
+
+/* patient panel */
+.av-patient { display: flex; flex-direction: column; min-width: 0; }
+.av-patient-header {
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--color-divider);
+}
+.av-patient-titlerow { display: flex; align-items: flex-start; gap: var(--space-6); flex-wrap: wrap; }
+.av-patient-name { margin: 0; font-size: 26px; letter-spacing: -0.02em; }
+.av-patient-idrow { display: flex; align-items: center; gap: 10px; }
+.av-patient-meta { font-size: 13px; color: var(--color-neutral-400); margin-top: 4px; }
+.av-patient-owner { font-size: 13px; color: var(--color-neutral-500); margin-top: 2px; }
+.av-patient-owner a { color: var(--color-accent-300); }
+.av-iconbtn {
+  background: transparent; border: 0; cursor: pointer; padding: 2px;
+  color: var(--color-neutral-500); font-size: 15px; line-height: 1;
+}
+.av-iconbtn:hover { color: var(--color-neutral-300); }
+.av-iconbtn--danger { color: var(--color-neutral-600); }
+.av-iconbtn--danger:hover { color: var(--color-danger); }
+
+/* vitals / constants strip */
+.av-vitals {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px; margin-top: var(--space-6);
+  background: var(--color-divider);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md); overflow: hidden;
+}
+.av-vital { background: var(--color-bg); padding: 10px 12px; }
+.av-vital-label {
+  font-size: 11px; color: var(--color-neutral-500);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.av-vital-value { font-size: 18px; font-weight: 600; margin-top: 2px; }
+.av-vital-value small { font-size: 12px; color: var(--color-neutral-500); font-weight: 400; }
+.av-vital-note { font-size: 11px; color: var(--color-neutral-500); }
+.av-vital-note--up { color: var(--color-accent-300); }
+.av-vital-note--warn { color: var(--color-warning); }
+
+/* ── workspace: live consulta + budget ───────────────────────────────────── */
+.av-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--av-budget-w);
+  gap: var(--space-8); padding: var(--space-8); align-items: start;
+}
+.av-consulta { display: flex; flex-direction: column; gap: var(--space-6); min-width: 0; }
+.av-consulta-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.av-consulta-head h2 { margin: 0; font-size: 16px; }
+.av-form-grid { display: grid; gap: var(--space-4); }
+.av-form-grid--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.av-form-grid--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* budget card (uses .card from Nocturne + these additions) */
+.av-budget { position: sticky; top: var(--space-6); gap: var(--space-4); padding: var(--space-6); }
+.av-budget-lines { display: flex; flex-direction: column; gap: 2px; }
+.av-budget-line {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--color-divider);
+}
+.av-budget-line-name { font-size: 13px; }
+.av-budget-line-detail { font-size: 11px; color: var(--color-neutral-600); }
+.av-budget-line-price { font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.av-budget-subtotals {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px; color: var(--color-neutral-400);
+}
+.av-budget-subtotals > div { display: flex; justify-content: space-between; }
+.av-budget-total {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding-top: 10px; border-top: 1px solid var(--color-divider);
+}
+.av-budget-total-label { font-size: 13px; color: var(--color-neutral-400); }
+.av-budget-total-value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.av-budget-actions { display: flex; flex-direction: column; gap: 8px; }
+.av-budget-hint { font-size: 11px; color: var(--color-neutral-600); }
+
+/* ── history timeline (replaces the ~12 expediente tabs) ─────────────────── */
+.av-timeline { display: flex; flex-direction: column; }
+.av-timeline-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.av-timeline-row {
+  display: grid; grid-template-columns: 74px 26px minmax(0, 1fr) auto;
+  gap: 12px; align-items: start;
+  padding: 12px 0; border-top: 1px solid var(--color-divider);
+}
+.av-timeline-date { font-size: 12px; color: var(--color-neutral-500); padding-top: 2px; }
+.av-timeline-icon {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  background: var(--color-neutral-900); color: var(--color-neutral-400);
+}
+.av-timeline-title { font-size: 13px; font-weight: 500; }
+.av-timeline-detail { font-size: 12px; color: var(--color-neutral-500); text-wrap: pretty; }
+.av-timeline-amount {
+  font-size: 12px; color: var(--color-neutral-400);
+  text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+
+/* ── stat card (Informes / ex dashboard-veterinaria.html) ────────────────── */
+.av-stat-grid {
+  display: grid; gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.av-stat { gap: 10px; }
+.av-stat-label {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--color-neutral-500);
+}
+.av-stat-value { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.av-stat-change { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; }
+.av-stat-change--up { color: var(--color-success); }
+.av-stat-change--down { color: var(--color-danger); }
+.av-stat-change .av-muted { font-weight: 500; }
+.av-chart-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, 1fr); }
+.av-chart-card { padding: var(--space-6); gap: var(--space-4); }
+.av-chart-card--wide { grid-column: span 2; }
+.av-chart-body { position: relative; height: 260px; }
+.av-chart-body--tall { height: 320px; }
+
+/* ── empty / no-permission / loading states ─────────────────────────────── */
+.av-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: var(--space-3); padding: var(--space-8);
+  color: var(--color-neutral-500);
+}
+.av-empty-icon { font-size: 32px; color: var(--color-neutral-600); }
+.av-empty-title { font-size: 16px; color: var(--color-text); }
+.av-empty-text { font-size: 13px; max-width: 42ch; }
+
+.av-skeleton {
+  background: var(--color-neutral-900); border-radius: var(--radius-sm);
+  animation: av-skeleton-pulse 1.2s ease-in-out infinite;
+}
+@keyframes av-skeleton-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+.av-spin { animation: av-spin 0.8s linear infinite; }
+@keyframes av-spin { to { transform: rotate(360deg); } }
+
+/* ── toast ───────────────────────────────────────────────────────────────── */
+.av-toast-stack {
+  position: fixed; right: var(--space-6); bottom: var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  z-index: 60; max-width: min(360px, calc(100vw - var(--space-8)));
+}
+.av-toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface); box-shadow: var(--shadow-md);
+  border-radius: var(--radius-md);
+  border-left: 2px solid var(--color-accent);
+  font-size: 13px;
+  animation: av-toast-in 0.16s ease-out;
+}
+.av-toast--ok     { border-left-color: var(--color-success); }
+.av-toast--warn   { border-left-color: var(--color-warning); }
+.av-toast--danger { border-left-color: var(--color-danger); }
+@keyframes av-toast-in { from { opacity: 0; transform: translateY(6px); } }
+
+/* ── command palette (open state) ────────────────────────────────────────── */
+.av-cmdk-backdrop {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 12vh;
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+}
+.av-cmdk {
+  width: min(560px, 100%);
+  background: var(--color-surface); box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.av-cmdk-input {
+  border: 0; border-bottom: 1px solid var(--color-divider);
+  border-radius: 0; background: transparent;
+  min-height: 46px; font-size: 15px;
+}
+.av-cmdk-input:focus-visible { outline: none; border-bottom-color: var(--color-accent); }
+.av-cmdk-list { max-height: 46vh; overflow-y: auto; padding: var(--space-2); }
+.av-cmdk-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: var(--radius-md);
+  font-size: 13px; cursor: pointer; color: var(--color-text);
+}
+.av-cmdk-item[aria-selected='true'],
+.av-cmdk-item:hover { background: var(--color-accent-900); }
+.av-cmdk-item .ph { color: var(--color-neutral-500); }
+.av-cmdk-empty { padding: var(--space-6); text-align: center; color: var(--color-neutral-500); font-size: 13px; }
+
+/* ── tablet / laptop — collapse the desktop grids ───────────────────────── */
+@media (max-width: 1024px) {
+  .av-consultorio { grid-template-columns: 1fr; }
+  .av-rail { display: none; }
+  .av-rail.is-open {
+    display: flex; position: fixed; inset: var(--av-topbar-h) auto 0 0;
+    z-index: 50; width: min(300px, 82vw);
+    background: var(--color-surface); box-shadow: var(--shadow-lg);
+  }
+  .av-workspace { grid-template-columns: 1fr; }
+  .av-budget { position: static; }
+  .av-vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .av-chart-grid { grid-template-columns: 1fr; }
+  .av-chart-card--wide { grid-column: span 1; }
+}
+@media (max-width: 640px) {
+  .av-form-grid--4, .av-form-grid--3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .av-vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .av-page, .av-workspace, .av-patient-header { padding: var(--space-6); }
+  .av-topbar { gap: var(--space-4); }
+  .av-search { max-width: none; }
+}
+
+/* respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .av-skeleton, .av-spin, .av-toast { animation: none; }
+  .av-tab { transition: none; }
+}
