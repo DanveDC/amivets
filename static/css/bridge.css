@@ -105,12 +105,10 @@ select option { background: var(--color-surface); color: var(--color-text); }
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.75); }
 
-/* user-menu dropdown (still inline-styled in index.html until etapa 3) — the
-   inline rules can't carry :hover, so add it here */
-.av-usermenu > summary { list-style: none; }
-.av-usermenu > summary::-webkit-details-marker { display: none; }
-.av-usermenu > summary:hover { color: var(--color-text) !important; }
-.av-usermenu > div button:hover,
-.av-usermenu > div button:focus-visible {
-  background: var(--color-accent-900) !important;
-}
+/* FullCalendar (Agenda) — the legacy layout gave .calendar-wrapper / #calendar /
+   .fc a definite height via .container{height:100vh}. The 1A shell is
+   content-height, so height:100% collapsed the grid to just its header ("se ve
+   cortado"). agenda.js now inits with height:'auto'; unclamp the wrappers too. */
+.calendar-wrapper { height: auto !important; overflow: visible !important; }
+#calendar { height: auto !important; min-height: 520px; }
+.fc { height: auto !important; }

@@ -1,0 +1,82 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   themes.css — light theme for the 1A / Nocturne system.
+
+   Nocturne ships dark-only. AmiVets adds an opt-in light mode: the ground
+   roles flip and the neutral / accent ramps are MIRRORED (100 <-> 900,
+   200 <-> 800, …). Because every component picks a ramp *step* by its role
+   ("dark fill on dark" = step 800/900, "light text on that tint" = 100/200),
+   mirroring the ramp flips all of them at once with no per-component CSS.
+
+   Load order: styles.css -> nocturne.css -> themes.css -> amivets.css -> bridge.css
+   Resolution:
+     - no data-theme attr + system prefers light  -> light  (the media block)
+     - data-theme="light"                          -> light  (explicit)
+     - data-theme="dark"                           -> dark   (explicit, wins media)
+   The no-FOUC script in <head> stamps data-theme from localStorage before paint.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-bg: #f6f7fb;
+    --color-surface: #ffffff;
+    --color-text: #1b1d29;
+    --color-accent: #5d5294;
+    --color-accent-2: #5c5783;
+    --color-divider: color-mix(in srgb, #1b1d29 14%, transparent);
+
+    --color-neutral-100: #292b31; --color-neutral-200: #3f424d; --color-neutral-300: #595d6c;
+    --color-neutral-400: #75798c; --color-neutral-500: #9397ab; --color-neutral-600: #b2b6ca;
+    --color-neutral-700: #cfd3e5; --color-neutral-800: #e4e7f5; --color-neutral-900: #f3f5fe;
+
+    --color-accent-100: #2b2741; --color-accent-200: #423a6a; --color-accent-300: #5d5294;
+    --color-accent-400: #796cbf; --color-accent-500: #968ae0; --color-accent-600: #b5abfc;
+    --color-accent-700: #d2cefd; --color-accent-800: #e7e5fe; --color-accent-900: #f5f4ff;
+
+    --color-accent-2-100: #2b293a; --color-accent-2-200: #423e5d; --color-accent-2-300: #5c5783;
+    --color-accent-2-400: #7972a9; --color-accent-2-500: #9690c9; --color-accent-2-600: #b5afe8;
+    --color-accent-2-700: #d2cefd; --color-accent-2-800: #e7e5fe; --color-accent-2-900: #f5f4ff;
+
+    --shadow-sm: 0 1px 2px rgba(20, 22, 40, 0.08);
+    --shadow-md: 0 1px 3px rgba(20, 22, 40, 0.10), 0 8px 24px rgba(20, 22, 40, 0.07);
+    --shadow-lg: 0 2px 8px rgba(20, 22, 40, 0.12), 0 24px 48px rgba(20, 22, 40, 0.12);
+  }
+}
+
+:root[data-theme="light"] {
+  --color-bg: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-text: #1b1d29;
+  --color-accent: #5d5294;
+  --color-accent-2: #5c5783;
+  --color-divider: color-mix(in srgb, #1b1d29 14%, transparent);
+
+  --color-neutral-100: #292b31; --color-neutral-200: #3f424d; --color-neutral-300: #595d6c;
+  --color-neutral-400: #75798c; --color-neutral-500: #9397ab; --color-neutral-600: #b2b6ca;
+  --color-neutral-700: #cfd3e5; --color-neutral-800: #e4e7f5; --color-neutral-900: #f3f5fe;
+
+  --color-accent-100: #2b2741; --color-accent-200: #423a6a; --color-accent-300: #5d5294;
+  --color-accent-400: #796cbf; --color-accent-500: #968ae0; --color-accent-600: #b5abfc;
+  --color-accent-700: #d2cefd; --color-accent-800: #e7e5fe; --color-accent-900: #f5f4ff;
+
+  --color-accent-2-100: #2b293a; --color-accent-2-200: #423e5d; --color-accent-2-300: #5c5783;
+  --color-accent-2-400: #7972a9; --color-accent-2-500: #9690c9; --color-accent-2-600: #b5afe8;
+  --color-accent-2-700: #d2cefd; --color-accent-2-800: #e7e5fe; --color-accent-2-900: #f5f4ff;
+
+  --shadow-sm: 0 1px 2px rgba(20, 22, 40, 0.08);
+  --shadow-md: 0 1px 3px rgba(20, 22, 40, 0.10), 0 8px 24px rgba(20, 22, 40, 0.07);
+  --shadow-lg: 0 2px 8px rgba(20, 22, 40, 0.12), 0 24px 48px rgba(20, 22, 40, 0.12);
+}
+
+/* semantic tokens (defined in amivets.css) — darkened for AA text on white */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --color-warning: #8a5a12;
+    --color-danger:  #b0413f;
+    --color-success: #3f7a4c;
+  }
+}
+:root[data-theme="light"] {
+  --color-warning: #8a5a12;
+  --color-danger:  #b0413f;
+  --color-success: #3f7a4c;
+}

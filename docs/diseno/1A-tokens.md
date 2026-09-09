@@ -21,13 +21,24 @@ actualizan en la etapa de limpieza.
   valores**; lo que el diseño no define está en la sección *Decisiones propias* y
   marcado como tal.
 
-## Decisión: tema único oscuro
+## Decisión: oscuro por defecto + claro opcional
 
-`03-rediseno-frontend.md` pedía tema claro y oscuro desde el principio. **1A lo
-contradice**: Nocturne es oscuro y punto. El rediseño es **dark-only**. No hay
-toggle de tema, no hay paleta clara. Decisión propia derivada de que 1A no
-contempla modo claro y de que agregar uno dobla el costo de todas las etapas
-siguientes sin que nadie lo haya pedido.
+Nocturne ships dark-only y 1A está dibujado en oscuro, así que **el default es el
+tema oscuro**. Daniel pidió después sumar modo claro, así que hay un toggle
+(menú de usuario) con tres estados: `oscuro` explícito, `claro` explícito, o sin
+elegir = seguir el `prefers-color-scheme` del sistema. Persistido en
+`localStorage['amivets-theme']`; un script inline en `<head>` estampa
+`data-theme` antes del primer paint (no FOUC).
+
+**Cómo se implementa** (`static/css/themes.css`): el tema claro **espeja las
+rampas** neutral y de acento (100 ↔ 900, 200 ↔ 800, …) y da vuelta los roles de
+fondo. Como cada componente elige un *paso* de rampa por su rol ("relleno oscuro
+sobre oscuro" = 800/900, "texto claro sobre ese tinte" = 100/200), espejar la
+rampa invierte todos los componentes de una sin CSS por componente. `--color-bg`
+`#f6f7fb`, `--color-surface` `#fff`, `--color-text` `#1b1d29`, `--color-accent`
+`#5d5294` (accent-700, para AA sobre blanco). Tokens semánticos oscurecidos para
+AA. `bridge.css` mapea los tokens legacy a los de Nocturne, así que las secciones
+sin migrar siguen el tema solas.
 
 ---
 

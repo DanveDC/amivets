@@ -137,7 +137,7 @@ export const loadAgenda = async () => {
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 },
                 locale: 'es',
-                height: '100%',
+                height: 'auto',
                 events: allEvents,
                 eventClick: function (info) {
                     mostrarResumenDia(info.event.startStr.split('T')[0], calendarInstance.getEvents());

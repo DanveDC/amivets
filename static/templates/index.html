@@ -5,6 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AmiVets - Sistema de Gestión Veterinaria</title>
+    <script>
+        /* no-FOUC theme: stamp data-theme before the first paint.
+           "system" (or unset) leaves the attribute off so themes.css's
+           prefers-color-scheme block decides. */
+        (function () {
+            try {
+                var t = localStorage.getItem('amivets-theme');
+                if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+            } catch (e) { }
+        })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,13 +26,15 @@
          1. styles.css   — legacy sheet, still styles the un-migrated section
             bodies (and .modal). Token-driven; deleted in etapa 5.
          2. nocturne.css — design-system primitives (wins shared tokens).
-         3. amivets.css  — the 1A shell + composed patterns.
-         4. bridge.css   — remaps styles.css's legacy tokens onto Nocturne so
-            un-migrated sections render dark/blurple/Inter. Transitional. -->
+         3. themes.css   — light-theme token overrides ([data-theme] + system).
+         4. amivets.css  — the 1A shell + composed patterns.
+         5. bridge.css   — remaps styles.css's legacy tokens onto Nocturne so
+            un-migrated sections render in-theme. Transitional. -->
     <link rel="stylesheet" href="/static/css/styles.css?v=28">
     <link rel="stylesheet" href="/static/css/nocturne.css">
+    <link rel="stylesheet" href="/static/css/themes.css?v=1">
     <link rel="stylesheet" href="/static/css/amivets.css">
-    <link rel="stylesheet" href="/static/css/bridge.css?v=1">
+    <link rel="stylesheet" href="/static/css/bridge.css?v=2">
 </head>
 
 <body>
@@ -42,17 +55,21 @@
                 <button class="btn btn-primary" id="btnRegistrarPropietario">
                     <i class="ph ph-plus" aria-hidden="true"></i>Nuevo
                 </button>
-                <details class="av-usermenu" style="position:relative">
-                    <summary style="list-style:none;cursor:pointer;color:var(--color-neutral-400);font-size:18px;display:flex;align-items:center"
-                             aria-label="Menú de usuario">
+                <details class="av-usermenu">
+                    <summary class="av-usermenu-trigger" aria-label="Menú de usuario">
                         <i class="ph ph-list" aria-hidden="true"></i>
                     </summary>
-                    <div style="position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:flex;flex-direction:column;min-width:190px;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md);padding:var(--space-2)">
-                        <button type="button" data-target="sec-catalogo" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Catálogo de servicios</button>
-                        <button type="button" data-target="sec-citas-web" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Citas web / QR</button>
-                        <button type="button" data-target="sec-usuarios" data-role="admin" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Usuarios</button>
-                        <button type="button" data-target="sec-perfil" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Mi perfil</button>
-                        <button type="button" onclick="logout()" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Cerrar sesión</button>
+                    <div class="av-usermenu-panel" role="menu">
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-catalogo">Catálogo de servicios</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-citas-web">Citas web / QR</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-usuarios" data-role="admin">Usuarios</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-perfil">Mi perfil</button>
+                        <div class="av-usermenu-sep" role="separator"></div>
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="themeToggle" aria-pressed="false">
+                            <i class="ph ph-moon" aria-hidden="true" data-theme-icon></i>
+                            <span data-theme-label>Tema oscuro</span>
+                        </button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" onclick="logout()">Cerrar sesión</button>
                     </div>
                 </details>
             </div>

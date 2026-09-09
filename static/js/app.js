@@ -18,6 +18,7 @@ import { initSearchableSelect } from './core/select.js';
 import { initSession } from './core/session.js';
 import * as router from './core/router.js';
 import * as cmdk from './core/cmdk.js';
+import * as theme from './core/theme.js';
 
 import * as consultorio from './sections/consultorio.js';
 import * as agenda from './sections/agenda.js';
@@ -110,6 +111,7 @@ window.currentMascotaId = consultorio.currentMascotaId;
 document.addEventListener('DOMContentLoaded', () => {
     router.init();
     cmdk.init();
+    theme.init();
     initSession();
     consultorio.setupRazasPerro();
     consultorio.setupSearch();
