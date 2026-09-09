@@ -6,8 +6,8 @@
 //      inline (en index.html y en el HTML que generan los renderers),
 //   3. corre el arranque existente en DOMContentLoaded, sin cambiar su lógica.
 //
-// La navegación SPA actual (setupNavigation / showSection) vive tal cual en
-// core/legacy-nav.js; el router por pestañas del shell 1A es la etapa 2b.
+// La navegación por pestañas del shell 1A vive en core/router.js (reemplaza al
+// viejo core/legacy-nav.js); el command palette en core/cmdk.js.
 //
 // Se carga como <script type="module">; auth.js sigue siendo un script clásico
 // cargado antes (expone window.logout, usado por core/api.js).
@@ -16,7 +16,8 @@ import { fetchAPI } from './core/api.js';
 import { ICONS, openModal, closeModal, debounce, showNotification } from './core/ui.js';
 import { initSearchableSelect } from './core/select.js';
 import { initSession } from './core/session.js';
-import { setupNavigation, showSection } from './core/legacy-nav.js';
+import * as router from './core/router.js';
+import * as cmdk from './core/cmdk.js';
 
 import * as consultorio from './sections/consultorio.js';
 import * as agenda from './sections/agenda.js';
@@ -38,8 +39,8 @@ import * as perfil from './sections/perfil.js';
 Object.assign(window, {
     // core/ui
     showNotification,
-    // core/legacy-nav (eran globales del script clásico)
-    showSection,
+    // core/router (eran globales del script clásico)
+    showSection: router.showSection,
     // agenda
     checkInCita: agenda.checkInCita,
     atenderDesdeOrden: agenda.atenderDesdeOrden,
@@ -107,7 +108,8 @@ window.currentMascotaId = consultorio.currentMascotaId;
 
 // ============ INITIALIZATION ============
 document.addEventListener('DOMContentLoaded', () => {
-    setupNavigation();
+    router.init();
+    cmdk.init();
     initSession();
     consultorio.setupRazasPerro();
     consultorio.setupSearch();
@@ -142,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnGenerarOrden')?.addEventListener('click', () => {
         if (!consultorio.currentMascotaId) {
             alert('Para generar una orden, primero busque y seleccione el paciente en el Módulo de Consultorio.');
-            showSection('sec-consultorio');
+            router.showSection('sec-consultorio');
             return;
         }
         consultorio.abrirFormularioConsulta();
@@ -251,7 +253,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (formPerfil) {
         formPerfil.addEventListener('submit', perfil.handlePerfilPasswordSubmit);
     }
-
-    // Set default section
-    showSection('sec-consultorio');
+    // The initial section is chosen by router.init() (from the URL hash,
+    // default sec-consultorio) — no explicit showSection() needed here.
 });

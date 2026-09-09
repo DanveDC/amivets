@@ -5,8 +5,8 @@
 //
 // Criterio UI vs API (igual que flujo-clinico.spec.js): el alta y la edición
 // se manejan por la UI porque el modal de Catálogo (#modalCatalogoServicio) es
-// un formulario nativo estable, accesible como admin desde
-// `.menu-item[data-target="sec-catalogo"]` (setupNavigation -> cargarCatalogo).
+// un formulario nativo estable, accesible como admin vía
+// gotoSection(page, 'sec-catalogo') (router -> cargarCategoriasSelect + cargarCatalogo).
 // El resto (categorías, GET puntual, DELETE) va por API y se comenta.
 // Toda mutación se contrasta después con un GET a la API.
 //
@@ -20,6 +20,7 @@ const {
   testTag,
   createTestCatalogoServicio,
   deleteTestCatalogoServicio,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -63,7 +64,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     const nombre = testTag('catUI');
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-catalogo"]');
+    await gotoSection(page, 'sec-catalogo');
     await expect(page.locator('#sec-catalogo')).toBeVisible();
 
     await page.click('button:has-text("+ Nuevo Servicio")');
@@ -97,7 +98,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     const nuevoNombre = `${S.servicioUI.nombre}_edit`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-catalogo"]');
+    await gotoSection(page, 'sec-catalogo');
     await page.fill('#catalogoSearch', S.servicioUI.nombre);
     await expect(page.locator('#catalogoBody')).toContainText(S.servicioUI.nombre);
 

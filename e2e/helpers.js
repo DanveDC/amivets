@@ -500,6 +500,21 @@ async function deleteHorario(request, id) {
   }
 }
 
+/**
+ * Navigates the shell to a section by its id (e.g. "sec-inventario").
+ * The 1A shell (etapa 2b) replaced the `.menu-item` sidebar with a `.av-tab`
+ * bar for the 6 primary sections; the rest live in the `.av-usermenu`
+ * dropdown. This helper tries the tab first, then falls back to the menu.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} target section id
+ */
+async function gotoSection(page, target) {
+  const tab = page.locator(`.av-tab[data-target="${target}"]`);
+  if (await tab.count()) { await tab.click(); return; }
+  await page.locator('.av-usermenu > summary').click();
+  await page.locator(`.av-usermenu [data-target="${target}"]`).click();
+}
+
 module.exports = {
   BASE_URL,
   TEST_PREFIX,
@@ -514,6 +529,7 @@ module.exports = {
   deleteTestUser,
   cancelCitaQR,
   deleteHorario,
+  gotoSection,
   createTestPropietario,
   deleteTestPropietario,
   createTestMascota,

@@ -39,6 +39,7 @@ const {
   createTestFactura,
   anularTestFactura,
   pagarFacturaCompleta,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -234,7 +235,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
 
   test('UI: el dashboard de KPIs de sec-reportes renderiza y el rango "Hoy" fija la fecha', async ({ page }) => {
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-reportes"]');
+    await gotoSection(page, 'sec-reportes');
     await expect(page.locator('#sec-reportes')).toBeVisible();
 
     // initKpiRango aplica "este_mes" por defecto y cargarKpisPeriodo puebla las tarjetas.

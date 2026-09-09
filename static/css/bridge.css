@@ -1,0 +1,116 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   bridge.css — TRANSITIONAL. Loads LAST, after styles.css (legacy) + nocturne +
+   amivets. The legacy sheet is fully token-driven (280 var() uses, ~10 stray
+   colors), so remapping its custom properties to Nocturne equivalents re-skins
+   every un-migrated section to the 1A palette (dark ground, blurple accent,
+   Inter) with almost no new rules.
+
+   This file shrinks section by section during etapa 3 and is DELETED in etapa 5
+   once styles.css is gone. Do not build on it.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* fonts — kill the editorial serif + Geist; everything is Inter now */
+  --font-sans:  var(--font-body);
+  --font-serif: var(--font-body);
+  --font-mono:  ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  /* accent: clinical green -> product blurple */
+  --primary:         var(--color-accent);
+  --primary-light:   var(--color-accent-400);
+  --primary-dark:    var(--color-accent-600);
+  --primary-subtle:  color-mix(in srgb, var(--color-accent) 14%, transparent);
+
+  /* semantic status -> the 3 amivets.css semantic tokens */
+  --secondary:        var(--color-success);
+  --secondary-dark:   var(--color-success);
+  --secondary-subtle: color-mix(in srgb, var(--color-success) 14%, transparent);
+  --accent:           var(--color-danger);
+  --accent-dark:      var(--color-danger);
+  --accent-subtle:    color-mix(in srgb, var(--color-danger) 14%, transparent);
+  --warning:          var(--color-warning);
+  --warning-dark:     var(--color-warning);
+  --warning-subtle:   color-mix(in srgb, var(--color-warning) 16%, transparent);
+  --info:             var(--color-accent-300);
+  --info-dark:        var(--color-accent-400);
+  --info-subtle:      color-mix(in srgb, var(--color-accent) 12%, transparent);
+
+  /* surfaces: warm light monochrome -> Nocturne dark */
+  --bg:            var(--color-bg);
+  --surface:       var(--color-surface);
+  --surface-hover: color-mix(in srgb, var(--color-text) 6%, transparent);
+  --surface-glass: var(--color-surface);
+
+  --text-primary:   var(--color-text);
+  --text-secondary: var(--color-neutral-400);
+  --text-muted:     var(--color-neutral-500);
+  --border:         var(--color-divider);
+  --border-light:   var(--color-divider);
+
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 35%, transparent);
+}
+
+/* ── targeted neutralisers where a legacy rule sets a colour/prop directly ── */
+
+/* legacy .btn-primary uses `background: var(--text-primary)` (was charcoal, now
+   near-white after the bridge) — realign to the Nocturne outline button */
+.btn-primary {
+  background: transparent;
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+.btn-primary:hover  { background: color-mix(in srgb, var(--color-accent) 12%, transparent); }
+.btn-primary:active { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+
+.btn-secondary        { background: transparent; }
+.btn-secondary:hover  { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+
+/* legacy active nav pill (mostly gone, a couple of inner sub-navs remain) */
+.nav-link.active,
+.tab-btn.active,
+.qr-tab-btn.active {
+  background: var(--color-accent-900);
+  color: var(--color-text);
+}
+
+/* the two hard-coded dark button hovers in styles.css (#1F2325) land ~invisible
+   on the dark ground — give them a real hover */
+.qr-booking-page .btn-submit:hover { background: var(--color-accent-600) !important; }
+
+/* modal backdrop tint reads fine on dark; modal panels are still legacy-styled
+   surfaces until etapa 3 restyles each to .dialog */
+
+/* Chart.js canvases inherit no font here; the section modules set it in JS */
+
+/* ── bare native form controls ──────────────────────────────────────────────
+   un-migrated section toolbars use unclassed <select> / <input> / <textarea>
+   (the reportes date range, the consultorio filters, the inventario category
+   picker …). Legacy styles.css only skins `.form-group` + `.search-input`, so
+   everything else falls back to the browser's white control on the dark ground.
+   Give them a Nocturne skin until each section's form is redone in etapa 3.
+   Excludes toggles and the Nocturne `.input` class (higher specificity wins). */
+select,
+textarea,
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]) {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+select:focus-visible,
+textarea:focus-visible,
+input:focus-visible { border-color: var(--color-accent); }
+select option { background: var(--color-surface); color: var(--color-text); }
+::placeholder { color: var(--color-neutral-600); opacity: 1; }
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.75); }
+
+/* user-menu dropdown (still inline-styled in index.html until etapa 3) — the
+   inline rules can't carry :hover, so add it here */
+.av-usermenu > summary { list-style: none; }
+.av-usermenu > summary::-webkit-details-marker { display: none; }
+.av-usermenu > summary:hover { color: var(--color-text) !important; }
+.av-usermenu > div button:hover,
+.av-usermenu > div button:focus-visible {
+  background: var(--color-accent-900) !important;
+}

@@ -5,7 +5,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS } from '../core/ui.js';
-import { showSection } from '../core/legacy-nav.js';
+import { showSection } from '../core/router.js';
 import { seleccionarMascotaBasica, abrirFormularioConsulta } from './consultorio.js';
 
 export const cargarBadgeOrdenes = async () => {

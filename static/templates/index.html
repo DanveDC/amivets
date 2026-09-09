@@ -5,44 +5,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AmiVets - Sistema de Gestión Veterinaria</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=27">
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <!-- CSS cascade during the 1A migration:
+         1. styles.css   — legacy sheet, still styles the un-migrated section
+            bodies (and .modal). Token-driven; deleted in etapa 5.
+         2. nocturne.css — design-system primitives (wins shared tokens).
+         3. amivets.css  — the 1A shell + composed patterns.
+         4. bridge.css   — remaps styles.css's legacy tokens onto Nocturne so
+            un-migrated sections render dark/blurple/Inter. Transitional. -->
+    <link rel="stylesheet" href="/static/css/styles.css?v=28">
+    <link rel="stylesheet" href="/static/css/nocturne.css">
+    <link rel="stylesheet" href="/static/css/amivets.css">
+    <link rel="stylesheet" href="/static/css/bridge.css?v=1">
 </head>
 
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="logo">
-                <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
-                    <circle cx="20" cy="20" r="18" fill="url(#grad1)" />
-                    <defs>
-                        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:var(--primary);stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:var(--primary-dark);stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                    <path d="M20 10C15 10 12 13 12 18C12 22 15 25 20 30C25 25 28 22 28 18C28 13 25 10 20 10Z"
-                        fill="white" />
-                </svg>
-                <h1>AmiVets</h1>
-            </div>
-            <nav class="nav">
-                <a href="#" class="nav-link menu-item active" data-target="sec-agenda">Agenda</a>
-                <a href="#" class="nav-link menu-item" data-target="sec-consultorio">Consultorio</a>
-                <a href="#" class="nav-link menu-item" data-target="sec-reportes">Informes</a>
-            </nav>
-            <div class="user-menu">
-                <span id="userNameDisplay" style="margin-right: 1rem; font-weight: 500; color: var(--primary);"></span>
-                <button class="btn-primary" id="btnRegistrarPropietario">+ Registrar Propietario</button>
-                <button class="btn-secondary" onclick="logout()">Cerrar Sesión</button>
+    <div class="av-app">
+        <!-- Top bar -->
+        <header class="av-topbar">
+            <a class="av-brand" href="#sec-consultorio">
+                <i class="ph ph-paw-print" aria-hidden="true"></i>AmiVets
+            </a>
+            <button type="button" class="av-search" id="cmdkTrigger"
+                    aria-label="Buscar paciente, dueño o factura" aria-keyshortcuts="Control+K">
+                <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
+                <span>Buscar paciente, dueño o factura</span>
+                <span class="av-kbd" aria-hidden="true">⌘K</span>
+            </button>
+            <div class="av-user av-row av-spacer">
+                <span id="userNameDisplay"></span>
+                <button class="btn btn-primary" id="btnRegistrarPropietario">
+                    <i class="ph ph-plus" aria-hidden="true"></i>Nuevo
+                </button>
+                <details class="av-usermenu" style="position:relative">
+                    <summary style="list-style:none;cursor:pointer;color:var(--color-neutral-400);font-size:18px;display:flex;align-items:center"
+                             aria-label="Menú de usuario">
+                        <i class="ph ph-list" aria-hidden="true"></i>
+                    </summary>
+                    <div style="position:absolute;right:0;top:calc(100% + 6px);z-index:50;display:flex;flex-direction:column;min-width:190px;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-md);padding:var(--space-2)">
+                        <button type="button" data-target="sec-catalogo" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Catálogo de servicios</button>
+                        <button type="button" data-target="sec-citas-web" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Citas web / QR</button>
+                        <button type="button" data-target="sec-usuarios" data-role="admin" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Usuarios</button>
+                        <button type="button" data-target="sec-perfil" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Mi perfil</button>
+                        <button type="button" onclick="logout()" style="text-align:left;background:transparent;border:0;color:var(--color-text);font:inherit;font-size:13px;padding:7px 10px;border-radius:var(--radius-sm);cursor:pointer">Cerrar sesión</button>
+                    </div>
+                </details>
             </div>
         </header>
+        <nav class="av-tabs" id="avTabs" role="tablist" aria-label="Secciones"></nav>
 
         <!-- Modal Registrar Propietario -->
         <div id="modalPropietario" class="modal">
@@ -852,94 +867,10 @@
         </div>
 
         <!-- Main Content -->
-        <main class="main-content">
-            <!-- Sidebar -->
-            <aside class="sidebar">
-                <div class="search-box">
-                    <input type="text" placeholder="Buscar paciente..." class="search-input" id="sidebarSearch">
-                    <div id="search-results" class="search-results-dropdown"></div>
-                </div>
-
-                <div class="tabs">
-                    <div class="tab-header">Módulos</div>
-                </div>
-
-                <div class="menu-list">
-                    <a href="#" class="menu-item active" data-target="sec-consultorio">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 12.5-5 5"/><path d="m16 11-5 5"/><path d="M7 16.5c-1.35 0-2-1.35-2-2 0-2.5 4-2.5 4-2.5s0-4 2.5-4c.65 0 2 .65 2 2 0 2.5-6.5 6.5-6.5 6.5Z"/><path d="m8.5 8 2.5 2.5"/><path d="m10.5 10 5 5"/><path d="m12 11.5 5 5"/></svg>
-                        </span>
-                        <span>Consultorio</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-agenda">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        </span>
-                        <span>Agenda</span>
-                        <span class="badge" id="badgeCitas">0</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-propietarios">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                        </span>
-                        <span>Propietarios</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-inventario">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                        </span>
-                        <span>Inventario</span>
-                        <span class="badge" id="badgeStock">!</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-facturacion">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        </span>
-                        <span>Facturación</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-reportes">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                        </span>
-                        <span>Reportes y KPIs</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-ordenes-medico">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.82 2.96 0"/><path d="m14 10 2 2"/><path d="m18 10-2 2"/></svg>
-                        </span>
-                        <span>Órdenes (Médico)</span>
-                        <span class="badge" id="badgeOrdenesMedico">0</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-citas-web">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
-                        </span>
-                        <span>Citas Web / QR</span>
-                        <span class="badge" id="badgeCitasQR">0</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-catalogo">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-                        </span>
-                        <span>Catálogo de Servicios</span>
-                    </a>
-                    <a href="#" class="menu-item admin-only" data-target="sec-usuarios" style="display: none;">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </span>
-                        <span>Usuarios (Admin)</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-perfil">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <span>Mi Perfil</span>
-                    </a>
-                </div>
-            </aside>
+        <main class="av-main">
 
             <!-- Content Area: Consultorio -->
-            <section id="sec-consultorio" class="content-area spa-section">
+            <section id="sec-consultorio" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-consultorio">
                 <div class="content-header">
                     <h2>Consultorio Clínico</h2>
                 </div>
@@ -1117,7 +1048,7 @@
             </section>
 
             <!-- Content Area: Agenda -->
-            <section id="sec-agenda" class="content-area spa-section" style="display: none;">
+            <section id="sec-agenda" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-agenda">
                 <div class="content-header">
                     <h2>Agenda y Calendario Médico</h2>
                     <div style="display: flex; gap: 0.75rem;">
@@ -1141,7 +1072,7 @@
             </section>
 
             <!-- Content Area: Propietarios -->
-            <section id="sec-propietarios" class="content-area spa-section" style="display: none;">
+            <section id="sec-propietarios" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-propietarios">
                 <div class="content-header"
                     style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 1.5rem;">
                     <h2>Listado de Propietarios</h2>
@@ -1170,7 +1101,7 @@
             </section>
 
             <!-- Content Area: Usuarios (Admin) -->
-            <section id="sec-usuarios" class="content-area spa-section" style="display: none;">
+            <section id="sec-usuarios" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-usuarios">
                 <div class="content-header">
                     <h2>Gestión de Usuarios</h2>
                     <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
@@ -1195,7 +1126,7 @@
             </section>
 
             <!-- Content Area: Inventario -->
-            <section id="sec-inventario" class="content-area spa-section" style="display: none;">
+            <section id="sec-inventario" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-inventario">
                 <div class="content-header" style="flex-wrap:wrap; gap:0.75rem;">
                     <div>
                         <h2 style="margin:0;">Inventario y Farmacia</h2>
@@ -1319,7 +1250,7 @@
 
 
             <!-- Content Area: Facturación -->
-            <section id="sec-facturacion" class="content-area spa-section" style="display: none;">
+            <section id="sec-facturacion" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-facturacion">
                 <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 2rem;">
                     <div>
                         <h2 style="margin:0;">Historial de Facturación</h2>
@@ -1359,7 +1290,7 @@
             </section>
 
             <!-- Content Area: Reportes -->
-            <section id="sec-reportes" class="content-area spa-section" style="display: none;">
+            <section id="sec-reportes" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-reportes">
                 <div class="content-header">
                     <h2>Reportes y KPIs</h2>
                 </div>
@@ -1520,7 +1451,7 @@
             </section>
 
             <!-- Content Area: Órdenes Médico -->
-            <section id="sec-ordenes-medico" class="content-area spa-section" style="display: none;">
+            <section id="sec-ordenes-medico" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-ordenes-medico">
                 <div class="content-header">
                     <h2>Órdenes de Consulta Asignadas</h2>
                 </div>
@@ -1537,7 +1468,7 @@
             </section>
 
             <!-- Content Area: Mi Perfil -->
-            <section id="sec-perfil" class="content-area spa-section" style="display: none;">
+            <section id="sec-perfil" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-perfil">
                 <div class="content-header">
                     <h2>Mi Perfil</h2>
                 </div>
@@ -1616,7 +1547,7 @@
             </section>
 
             <!-- Content Area: Citas Web / QR -->
-            <section id="sec-citas-web" class="content-area spa-section" style="display: none;">
+            <section id="sec-citas-web" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-citas-web">
                 <div class="content-header" style="margin-bottom: 1.5rem;">
                     <h2>Citas Web / QR</h2>
                 </div>
@@ -1706,7 +1637,7 @@
             </section>
 
             <!-- Catalogo de Servicios -->
-            <section id="sec-catalogo" class="content-area spa-section" style="display:none;">
+            <section id="sec-catalogo" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-catalogo">
                 <div class="content-header">
                     <h2>Catálogo de Servicios</h2>
                 </div>
@@ -1980,8 +1911,20 @@
         </div>
     </div>
 
+    <div class="av-toast-stack" id="avToastStack" hidden></div>
+
+    <!-- Badge counters that lived on the old sidebar links. The tab bar has no
+         badges yet (etapa 3); these hidden stubs keep the existing JS writers
+         (loadInventario, cargarBadgeOrdenes, actualizarBadgeCitasQR) working
+         without a DOM null-check regression. -->
+    <div class="av-badge-stubs" hidden>
+        <span id="badgeStock"></span>
+        <span id="badgeOrdenesMedico"></span>
+        <span id="badgeCitasQR"></span>
+    </div>
+
     <script src="/static/js/auth.js?v=3"></script>
-    <script type="module" src="/static/js/app.js?v=32"></script>
+    <script type="module" src="/static/js/app.js?v=33"></script>
 </body>
 
 </html>

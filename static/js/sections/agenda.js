@@ -5,7 +5,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS, openModal, closeModal } from '../core/ui.js';
-import { showSection } from '../core/legacy-nav.js';
+import { showSection } from '../core/router.js';
 import { seleccionarMascotaBasica, switchPetTab } from './consultorio.js';
 import { cargarBadgeOrdenes } from './ordenes.js';
 

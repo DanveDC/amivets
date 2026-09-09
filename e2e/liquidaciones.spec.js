@@ -36,6 +36,7 @@ const {
   anularTestFactura,
   pagarFacturaCompleta,
   setTarifaConsulta,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -209,7 +210,7 @@ test.describe.serial('Liquidaciones a veterinarios — /api/liquidaciones', () =
     const hoy = todayUTC();
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-reportes"]');
+    await gotoSection(page, 'sec-reportes');
     // liqSeccion es admin-only: checkAdminAccess la muestra e initLiquidaciones la puebla.
     await expect(page.locator('#liqSeccion')).toBeVisible();
 

@@ -20,6 +20,7 @@ const {
   testTag,
   createTestUser,
   deleteTestUser,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -52,7 +53,7 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
     const email = `${username}@example.com`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     await page.click('#btnShowModalUser');
     await expect(page.locator('#modalNuevoUsuario')).toBeVisible();
 
@@ -77,7 +78,7 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
 
   test('activar/desactivar por UI: el botón alterna is_active, contrastado por API', async ({ page, request }) => {
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     const row = page.locator('#usuariosTableBody tr', { hasText: S.uiUser.username });
     await expect(row).toContainText('Activo');
 
@@ -99,7 +100,7 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
   test('eliminar por UI: deleteUsuario borra el usuario y desaparece de la API', async ({ page, request }) => {
     page.on('dialog', (d) => d.accept()); // deleteUsuario pide confirm()
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     const row = page.locator('#usuariosTableBody tr', { hasText: S.uiUser.username });
     await expect(row).toBeVisible();
     await row.getByRole('button', { name: 'Eliminar' }).click();

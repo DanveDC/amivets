@@ -17,6 +17,7 @@ const {
   testTag,
   createTestProduct,
   deleteTestProduct,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -44,7 +45,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     const nombre = testTag('prodUI');
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-inventario"]');
+    await gotoSection(page, 'sec-inventario');
     await page.click('#btnNuevoProducto');
     await expect(page.locator('#modalProducto')).toBeVisible();
 
@@ -87,7 +88,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     const nuevoNombre = `${S.uiProd.nombre}_edit`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-inventario"]');
+    await gotoSection(page, 'sec-inventario');
     await page.fill('#searchInventario', S.codigo);
     await expect(page.locator('#inventarioTableBody')).toContainText(S.uiProd.nombre);
 
@@ -145,7 +146,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     page.on('dialog', (d) => d.accept()); // confirmarEliminarProducto pide confirm()
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-inventario"]');
+    await gotoSection(page, 'sec-inventario');
     await page.fill('#searchInventario', S.codigo);
     const row = page.locator(`#inventarioTableBody tr:has-text("${S.codigo}")`);
     await expect(row).toBeVisible();

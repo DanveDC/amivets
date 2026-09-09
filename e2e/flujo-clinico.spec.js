@@ -37,6 +37,7 @@ const {
   deleteTestConsulta,
   createTestFactura,
   anularTestFactura,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -92,7 +93,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     const cedula = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-propietarios"]');
+    await gotoSection(page, 'sec-propietarios');
 
     // --- Alta por el modal ---
     await page.click('#btnRegistrarPropietarioAlt');
@@ -150,7 +151,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
 
     // Verificación por UI: el paciente aparece en el listado de Consultorio.
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-consultorio"]');
+    await gotoSection(page, 'sec-consultorio');
     // El nombre en la respuesta viene con el apellido del dueño pegado
     // (MascotaResponse.append_apellido); el prefijo PWTEST_ del alta es estable.
     const nombreBase = S.mascota.nombre.split(' ')[0];

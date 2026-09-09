@@ -49,7 +49,9 @@ test.describe('Autenticación', () => {
     await page.click('#btnLogin');
     await page.waitForURL('**/');
 
-    const adminNav = page.locator('.nav-link.admin-only[data-target="sec-usuarios"], .menu-item.admin-only[data-target="sec-usuarios"]');
+    // The admin-only entry now lives inside the user-menu dropdown.
+    await page.locator('.av-usermenu > summary').click();
+    const adminNav = page.locator('.av-usermenu [data-target="sec-usuarios"]');
     await expect(adminNav).toBeVisible();
   });
 
@@ -66,9 +68,9 @@ test.describe('Autenticación', () => {
       await page.click('#btnLogin');
       await page.waitForURL('**/');
 
-      const adminNav = page.locator('.menu-item.admin-only[data-target="sec-usuarios"]');
-      // Element exists in the DOM but must stay hidden (display:none) for non-admins.
-      await expect(adminNav).toBeHidden();
+      const adminNav = page.locator('.av-usermenu [data-target="sec-usuarios"]');
+      // The router prunes the admin-only entry from the DOM for non-admins.
+      await expect(adminNav).toHaveCount(0);
     } finally {
       await deleteTestUser(request, token, doctor.id);
     }

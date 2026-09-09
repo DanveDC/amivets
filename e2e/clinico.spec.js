@@ -43,6 +43,7 @@ const {
   createTestCirugia,
   createTestPrueba,
   deleteTestPrueba,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -55,7 +56,7 @@ async function loginAsAdmin(page) {
 
 async function seleccionarPacientePorUI(page, mascota) {
   const nombreBase = mascota.nombre.split(' ')[0];
-  await page.click('.menu-item[data-target="sec-consultorio"]');
+  await gotoSection(page, 'sec-consultorio');
   await page.fill('#consultorioSearchMascota', nombreBase);
   const item = page.locator('#consultorioMascotasList .pet-list-item', { hasText: nombreBase }).first();
   await expect(item).toBeVisible();
