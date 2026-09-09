@@ -155,7 +155,11 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     // El nombre en la respuesta viene con el apellido del dueño pegado
     // (MascotaResponse.append_apellido); el prefijo PWTEST_ del alta es estable.
     const nombreBase = S.mascota.nombre.split(' ')[0];
-    await expect(page.locator('#consultorioMascotasList')).toContainText(nombreBase);
+    // El padrón real tiene 318 mascotas y la lista muestra las primeras 50; se
+    // filtra por el buscador (input -> debounce 400ms -> /mascotas/?search=),
+    // igual que haría un usuario, antes de comprobar que la mascota aparece.
+    await page.fill('#consultorioSearchMascota', nombreBase);
+    await expect(page.locator('#consultorioMascotasList')).toContainText(nombreBase, { timeout: 10000 });
 
     // --- Edición por API + contraste ---
     const putRes = await request.put(`/api/mascotas/${S.mascota.id}`, {
