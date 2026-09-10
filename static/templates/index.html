@@ -33,7 +33,7 @@
     <link rel="stylesheet" href="/static/css/styles.css?v=28">
     <link rel="stylesheet" href="/static/css/nocturne.css">
     <link rel="stylesheet" href="/static/css/themes.css?v=1">
-    <link rel="stylesheet" href="/static/css/amivets.css">
+    <link rel="stylesheet" href="/static/css/amivets.css?v=2">
     <link rel="stylesheet" href="/static/css/bridge.css?v=2">
 </head>
 
@@ -386,152 +386,11 @@
             </div>
         </div>
 
-        <!-- Modal Detalle y Carrito de Consulta -->
-        <div id="modalDetalleConsulta" class="modal">
-            <div class="modal-content modal-xl">
-                <div class="modal-header">
-                    <h2 id="detalleConsultaTitle">Expediente Clínico</h2>
-                    <span class="close" data-modal="modalDetalleConsulta" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
-                </div>
-                <div class="split-layout">
-                    <!-- Lado Izquierdo: Data Clínica -->
-                    <div class="clinical-summary">
-                        <h3>Resumen Médico</h3>
-                        <div id="detalleConsultaMedica" class="clinical-details-text">
-                            Cargando...
-                        </div>
-                    </div>
-
-                    <!-- Lado Derecho: Nodos / Carrito de Servicios -->
-                    <div class="services-container">
-                        <div class="services-header">
-                            <h3>Servicios y Cargos</h3>
-                            <span class="badge" id="detalleConsultaTotal">$0.00</span>
-                        </div>
-
-                        <div id="detalleConsultaServiciosList"
-                            style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
-                            <!-- Listado iterativo -->
-                        </div>
-
-                        <!-- Clinical Shortcuts Toolbar -->
-                        <div
-                            style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; background: var(--surface-hover); border: 1px dashed var(--border); border-radius: var(--radius-md);">
-                            <span
-                                style="font-size: 0.75rem; color: var(--text-secondary); width: 100%; margin-bottom: 0.25rem; font-weight: bold; text-transform: uppercase;">Ir
-                                al registro especializado:</span>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/></svg>
-                                Vacuna</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
-                                Fármaco</button>
-                            <button type="button" class="btn-secondary btn-sm"
-                                onclick="setQuickAction('LABORATORIO', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
-                                Lab</button>
-                            <button type="button" class="btn-secondary btn-sm"
-                                onclick="setQuickAction('CIRUGIA', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 4 6 6-9 9H5v-6z"/><path d="m9 9 6 6"/></svg>
-                                Cirugía</button>
-                            <button type="button" class="btn-secondary btn-sm"
-                                onclick="setQuickAction('HOSPITALIZACION', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z"/></svg>
-                                Hosp.</button>
-                        </div>
-
-                        <div
-                            style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1.25rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
-                            <h4
-                                style="font-size: 0.9rem; color: var(--info-dark); margin-bottom: 0.75rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.025em; display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="icon"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span> Registrar Acción Clínica o Nota
-                            </h4>
-                            <form id="formAgregarServicio" style="display: flex; gap: 0.75rem; flex-direction: column;">
-                                <input type="hidden" id="addServicioConsultaId">
-                                <input type="hidden" id="addServicioReferenciaId">
-                                <input type="hidden" id="addServicioCatalogoId">
-
-                                <!-- Fila 1: Categoría + Búsqueda -->
-                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem;">
-                                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                        <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Categoría *</label>
-                                        <select id="addServicioTipo" required
-                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); background: var(--surface); font-size:0.9rem;">
-                                            <option value="">— Seleccione —</option>
-                                            <option value="INSUMO">Insumo / Medicina</option>
-                                            <option value="VACUNACION">Vacunación</option>
-                                            <option value="LABORATORIO">Lab / Estudio</option>
-                                            <option value="CIRUGIA">Cirugía / Proc.</option>
-                                            <option value="HOSPITALIZACION">Hospitalización</option>
-                                            <option value="ESTETICA">Estética / Peluquería</option>
-                                            <option value="CONSULTA">Consulta / Honorarios</option>
-                                            <option value="OTRO">Otros Hallazgos</option>
-                                        </select>
-                                    </div>
-                                    <div style="display: flex; flex-direction: column; gap: 0.25rem; position:relative;">
-                                        <label id="labelSeleccionDinamica" style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Buscar Item / Producto</label>
-                                        <input type="text" id="addServicioItemSearch" list="listadoInventario"
-                                            placeholder="Escriba nombre o código..."
-                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); font-size:0.9rem;">
-                                        <datalist id="listadoInventario"></datalist>
-                                    </div>
-                                </div>
-
-                                <!-- Fila 2: Descripción -->
-                                <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Descripción del Acto Médico *</label>
-                                    <input type="text" id="addServicioNombre" placeholder="Ej: Amoxicilina 500mg, Triple Canina, Hemograma..."
-                                        required
-                                        style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); font-size:0.9rem;">
-                                </div>
-
-                                <!-- Fila 3: Cantidad + Precio (VISIBLE) -->
-                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
-                                    <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                        <label style="font-size:0.7rem; color:var(--info-dark); font-weight:bold; text-transform:uppercase;">Cantidad *</label>
-                                        <input type="number" id="addServicioCantidad" value="1" min="0.1" step="0.1" required
-                                            style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
-                                    </div>
-                                    <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                        <label style="font-size:0.7rem; color:var(--info-dark); font-weight:bold; text-transform:uppercase;">Precio Unitario ($) *</label>
-                                        <input type="number" id="addServicioPrecio" value="0" min="0" step="0.01" required
-                                            style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
-                                    </div>
-                                </div>
-
-                                <!-- Materiales de la receta del servicio de catálogo (Tarea 07, slice D) -->
-                                <div id="addServicioRecetaBlock" hidden
-                                    style="margin-top: 0.25rem; background: var(--info-subtle); border: 1.5px solid var(--primary-subtle); border-radius: var(--radius-md); padding: 0.75rem;">
-                                    <div style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform: uppercase; margin-bottom: 0.5rem;">
-                                        Materiales que consume (ajustá si usaste otra cantidad)
-                                    </div>
-                                    <div id="addServicioRecetaLista" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
-                                </div>
-
-                                <!-- Campos dinámicos por tipo -->
-                                <div id="containerCamposDinamicos"
-                                    style="margin-top: 0.25rem; display: none; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; background:var(--primary-subtle); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--primary-light);">
-                                </div>
-
-                                <!-- Notas clínicas -->
-                                <div style="padding: 0.75rem; background: var(--info-subtle); border: 1.5px solid var(--primary-subtle); border-radius: var(--radius-md);">
-                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; display: block; margin-bottom: 0.4rem; text-transform:uppercase;"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Notas Clínicas (dosis, lote, observaciones)</label>
-                                    <textarea id="addServicioDetalles"
-                                        placeholder="Ej: Lote: XX123, Vía SC, dosis 0.5ml. Paciente tolera bien..."
-                                        rows="2"
-                                        style="width: 100%; border: none; background: transparent; outline: none; font-size: 0.875rem; font-family: inherit; resize: vertical; color: var(--info-dark);"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn-primary"
-                                    style="background: var(--primary); border-color: var(--primary-dark); padding: 0.75rem; font-weight: bold; font-size: 0.95rem;">
-                                    <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg> Registrar Acción Clínica
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Tarea 09, etapa 3: la pantalla de consulta abierta (antes el modal
+             #modalDetalleConsulta) vive ahora dentro de <main class="av-main">
+             como <section id="sec-consulta-abierta">. El carrito de servicios,
+             su formulario #formAgregarServicio y todos sus IDs se movieron ahí
+             sin cambiar de nombre. -->
 
         <!-- Modal Registrar Cita -->
         <div id="modalCita" class="modal">
@@ -790,11 +649,16 @@
                         <div class="form-group">
                             <label>Precio Unitario ($) *</label>
                             <input type="number" id="editProdPrecio" step="0.01" min="0" required>
+                            <small id="editProdPrecioHint" class="hist-precios-hint" hidden>Solo un administrador puede cambiar precios.</small>
                         </div>
                         <div class="form-group">
                             <label>Fecha Vencimiento</label>
                             <input type="date" id="editProdVencimiento">
                         </div>
+                    </div>
+                    <div class="form-group" id="editProdMotivoGroup" hidden>
+                        <label for="editProdMotivo">Motivo (opcional)</label>
+                        <input type="text" id="editProdMotivo" maxlength="200" placeholder="Ej: ajuste por inflación, cambio de proveedor…">
                     </div>
                     <div class="form-group">
                         <label>Proveedor</label>
@@ -843,6 +707,44 @@
                 </form>
             </div>
         </div>
+
+        <!-- Modal Historial de Precios (Tarea 08) -->
+        <div id="modalHistorialPrecios" class="modal" role="dialog" aria-modal="true" aria-labelledby="histPreciosTitulo">
+            <div class="modal-content" style="max-width:720px;">
+                <div class="modal-header">
+                    <h2 id="histPreciosTitulo">Historial de precios</h2>
+                    <span class="close" id="histPreciosClose" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <div style="padding:1.5rem 2rem;">
+                    <div class="hist-precios-toolbar">
+                        <p id="histPreciosSubtitulo" style="margin:0; font-weight:600; color:var(--text-primary);"></p>
+                        <label class="hist-precios-toggle">
+                            <input type="checkbox" id="histPreciosOcultarCorrecciones">
+                            Ocultar correcciones
+                        </label>
+                    </div>
+                    <p id="histPreciosNota" class="hist-precios-nota" hidden></p>
+                    <div class="hist-precios-chart-wrap" id="histPreciosChartWrap">
+                        <canvas id="histPreciosChart"></canvas>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="hist-precios-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Precio</th>
+                                    <th>Variación</th>
+                                    <th>Motivo</th>
+                                    <th>Quién</th>
+                                </tr>
+                            </thead>
+                            <tbody id="histPreciosBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal Nuevo Usuario (Admin) -->
         <div id="modalNuevoUsuario" class="modal">
             <div class="modal-content">
@@ -957,6 +859,173 @@
 
         <!-- Main Content -->
         <main class="av-main">
+
+            <!-- Content Area: Consulta abierta (Tarea 09, etapa 3) -->
+            <section id="sec-consulta-abierta" class="av-ca" role="tabpanel"
+                     aria-labelledby="caHeading" hidden>
+                <div class="av-ca-topbar">
+                    <div class="av-ca-titlewrap">
+                        <h2 id="caHeading"><span id="detalleConsultaTitle">Consulta</span></h2>
+                        <span class="status-pill" id="consultaAbiertaEstado">ABIERTA</span>
+                    </div>
+                    <div class="av-row-actions">
+                        <button type="button" class="btn-secondary" id="btnConsultaGuardarSalir">Guardar y salir</button>
+                        <button type="button" class="btn-primary" id="btnConsultaCerrarFacturar">Cerrar y facturar</button>
+                    </div>
+                </div>
+
+                <!-- Cabecera del paciente (la completa consulta-abierta.js) -->
+                <div class="av-ca-patient" id="consultaAbiertaPaciente" aria-live="polite">
+                    <p class="av-muted">Cargando datos del paciente…</p>
+                </div>
+
+                <!-- Franja de vitales de la consulta -->
+                <form class="av-ca-vitals" id="formVitalesConsulta">
+                    <div class="av-ca-vital">
+                        <label for="vitalPeso">Peso (kg)</label>
+                        <input type="number" id="vitalPeso" step="0.01" min="0" inputmode="decimal">
+                    </div>
+                    <div class="av-ca-vital">
+                        <label for="vitalTemp">Temp (°C)</label>
+                        <input type="number" id="vitalTemp" step="0.1" min="0" inputmode="decimal">
+                    </div>
+                    <div class="av-ca-vital">
+                        <label for="vitalFC">FC (bpm)</label>
+                        <input type="number" id="vitalFC" step="1" min="0" inputmode="numeric">
+                    </div>
+                    <div class="av-ca-vital av-ca-vital--wide">
+                        <label for="caMotivo">Motivo</label>
+                        <input type="text" id="caMotivo" placeholder="Motivo de la consulta">
+                    </div>
+                    <button type="submit" class="btn-secondary btn-sm" id="btnGuardarVitales">Guardar vitales</button>
+                </form>
+
+                <!-- Servicios anexados -->
+                <div class="av-ca-services">
+                    <div class="av-ca-services-head">
+                        <h3>Servicios anexados</h3>
+                        <span class="av-ca-total">Total: <strong id="detalleConsultaTotal">$0.00</strong></span>
+                    </div>
+
+                    <div id="detalleConsultaServiciosList" class="av-ca-services-list">
+                        <!-- filas de servicio (consulta-abierta.js) -->
+                    </div>
+
+                    <!-- Anexar servicio = fila que se expande in situ -->
+                    <details class="av-ca-anexar" id="anexarServicioPanel">
+                        <summary class="av-ca-anexar-summary">
+                            <i class="ph ph-plus" aria-hidden="true"></i> Anexar servicio
+                        </summary>
+                        <div class="av-ca-anexar-body">
+                            <div class="av-ca-quickbar">
+                                <span class="av-eyebrow">Detalle clínico ampliado:</span>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')">Vacuna</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')">Fármaco</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('LABORATORIO', null, false)">Lab</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('CIRUGIA', null, true)">Cirugía</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('HOSPITALIZACION', null, true)">Hosp.</button>
+                            </div>
+
+                            <form id="formAgregarServicio" class="av-ca-form">
+                                <input type="hidden" id="addServicioConsultaId">
+                                <input type="hidden" id="addServicioReferenciaId">
+                                <input type="hidden" id="addServicioCatalogoId">
+
+                                <div class="av-ca-form-row av-ca-form-row--2">
+                                    <div class="av-ca-field">
+                                        <label for="addServicioTipo">Tipo *</label>
+                                        <select id="addServicioTipo" required>
+                                            <option value="">— Seleccione —</option>
+                                            <option value="INSUMO">Insumo / Medicina</option>
+                                            <option value="VACUNACION">Vacunación</option>
+                                            <option value="LABORATORIO">Lab / Estudio</option>
+                                            <option value="CIRUGIA">Cirugía / Proc.</option>
+                                            <option value="HOSPITALIZACION">Hospitalización</option>
+                                            <option value="ESTETICA">Estética / Peluquería</option>
+                                            <option value="CONSULTA">Consulta / Honorarios</option>
+                                            <option value="OTRO">Otros Hallazgos</option>
+                                        </select>
+                                    </div>
+                                    <div class="av-ca-field" style="position:relative;">
+                                        <label id="labelSeleccionDinamica" for="addServicioItemSearch">Buscar en catálogo</label>
+                                        <input type="text" id="addServicioItemSearch" list="listadoInventario"
+                                               placeholder="Escriba nombre o código..." autocomplete="off">
+                                        <datalist id="listadoInventario"></datalist>
+                                    </div>
+                                </div>
+
+                                <div class="av-ca-field">
+                                    <label for="addServicioNombre">Descripción del acto médico *</label>
+                                    <input type="text" id="addServicioNombre" required
+                                           placeholder="Ej: Amoxicilina 500mg, Triple Canina, Hemograma...">
+                                </div>
+
+                                <div class="av-ca-form-row av-ca-form-row--2">
+                                    <div class="av-ca-field">
+                                        <label for="addServicioCantidad">Cantidad *</label>
+                                        <input type="number" id="addServicioCantidad" value="1" min="0.1" step="0.1" required>
+                                    </div>
+                                    <div class="av-ca-field">
+                                        <label for="addServicioPrecio">Precio unitario ($) *</label>
+                                        <input type="number" id="addServicioPrecio" value="0" min="0" step="0.01" required>
+                                    </div>
+                                </div>
+
+                                <div id="addServicioRecetaBlock" class="av-ca-receta" hidden>
+                                    <div class="av-eyebrow">Materiales que consume (ajustá si usaste otra cantidad)</div>
+                                    <div id="addServicioRecetaLista"></div>
+                                </div>
+
+                                <div id="containerCamposDinamicos" class="av-ca-dyn" style="display:none;"></div>
+
+                                <div class="av-ca-field">
+                                    <label for="addServicioDetalles">Notas clínicas (dosis, lote, observaciones)</label>
+                                    <textarea id="addServicioDetalles" rows="2"
+                                              placeholder="Ej: Lote: XX123, Vía SC, dosis 0.5ml. Paciente tolera bien..."></textarea>
+                                </div>
+
+                                <button type="submit" class="btn-primary">Anexar servicio</button>
+                            </form>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Bloques colapsables -->
+                <details class="av-ca-block">
+                    <summary>Diagnóstico y tratamiento</summary>
+                    <form id="formDiagnosticoConsulta" class="av-ca-block-body">
+                        <div class="av-ca-field">
+                            <label for="caDiagnostico">Diagnóstico</label>
+                            <textarea id="caDiagnostico" rows="2"></textarea>
+                        </div>
+                        <div class="av-ca-field">
+                            <label for="caTratamiento">Tratamiento pautado</label>
+                            <textarea id="caTratamiento" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn-secondary btn-sm" id="btnGuardarDiagnostico">Guardar</button>
+                    </form>
+                </details>
+
+                <details class="av-ca-block">
+                    <summary>Recetas <span id="caRecetasCount" class="av-page-count"></span></summary>
+                    <div class="av-ca-block-body">
+                        <button type="button" class="btn-secondary btn-sm" id="btnNuevaRecetaCA">+ Nueva receta</button>
+                        <div id="caRecetasList" class="av-ca-mini-list"></div>
+                    </div>
+                </details>
+
+                <details class="av-ca-block">
+                    <summary>Notas clínicas</summary>
+                    <form id="formNotaConsultaAbierta" class="av-ca-block-body">
+                        <div class="av-ca-field">
+                            <label for="caNotaTexto">Nueva nota</label>
+                            <textarea id="caNotaTexto" rows="2" placeholder="Ej: la dueña llamó, el animal sigue sin comer..."></textarea>
+                        </div>
+                        <button type="submit" class="btn-secondary btn-sm" id="btnGuardarNotaCA">Guardar nota</button>
+                        <div id="caNotasList" class="av-ca-mini-list"></div>
+                    </form>
+                </details>
+            </section>
 
             <!-- Content Area: Consultorio -->
             <section id="sec-consultorio" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-consultorio">
@@ -1796,6 +1865,11 @@
                 <div class="form-group">
                     <label>Precio de Referencia ($)</label>
                     <input type="number" id="catalogoPrecioRef" min="0" step="0.01" value="0" style="width:100%;">
+                    <small id="catalogoPrecioRefHint" class="hist-precios-hint" hidden>Solo un administrador puede cambiar precios.</small>
+                </div>
+                <div class="form-group" id="catalogoMotivoGroup" hidden>
+                    <label for="catalogoMotivo">Motivo (opcional)</label>
+                    <input type="text" id="catalogoMotivo" maxlength="200" style="width:100%;" placeholder="Ej: ajuste por inflación, actualización de tarifa…">
                 </div>
                 <div class="form-group">
                     <label>Unidad</label>
@@ -2044,7 +2118,7 @@
     </div>
 
     <script src="/static/js/auth.js?v=3"></script>
-    <script type="module" src="/static/js/app.js?v=33"></script>
+    <script type="module" src="/static/js/app.js?v=34"></script>
 </body>
 
 </html>

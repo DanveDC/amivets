@@ -406,6 +406,172 @@
   .av-search { max-width: none; }
 }
 
+/* ── consulta abierta (Tarea 09, etapa 3) ───────────────────────────────────
+   Pantalla de pantalla completa que reemplaza el modal #modalDetalleConsulta.
+   Sólo AÑADE; todos los colores salen de tokens Nocturne. */
+.av-ca {
+  display: flex; flex-direction: column; gap: var(--space-6);
+  padding: var(--space-8);
+}
+.av-ca-topbar {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--space-4); flex-wrap: wrap;
+}
+.av-ca-titlewrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.av-ca-titlewrap h2 { margin: 0; font-size: 20px; }
+
+.av-ca-patient {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px);
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.av-ca-patient-name { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+.av-ca-patient-meta { margin: 0; font-size: 13px; color: var(--color-neutral-400); }
+.av-ca-patient-alert {
+  margin: var(--space-3) 0 0; font-size: 12px; color: var(--color-warning);
+  display: flex; align-items: center; gap: 6px;
+}
+.av-ca-patient-side p { margin: 0 0 var(--space-3); font-size: 13px; }
+
+.av-ca-vitals {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  background: color-mix(in srgb, var(--color-surface) 55%, var(--color-bg));
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+.av-ca-vital { display: flex; flex-direction: column; gap: 4px; }
+.av-ca-vital label {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+.av-ca-vital input { width: 96px; }
+.av-ca-vital--wide { flex: 1; min-width: 160px; }
+.av-ca-vital--wide input { width: 100%; }
+
+.av-ca-services {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-4);
+}
+.av-ca-services-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
+.av-ca-services-head h3 { margin: 0; font-size: 16px; }
+.av-ca-total { font-size: 13px; color: var(--color-neutral-400); }
+.av-ca-total strong { font-size: 18px; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.av-ca-services-list { display: flex; flex-direction: column; }
+
+.av-ca-srow {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--space-4); padding: 10px 0;
+  border-top: 1px solid var(--color-divider);
+  flex-wrap: wrap;
+}
+.av-ca-srow:first-child { border-top: 0; }
+.av-ca-srow-title { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.av-ca-srow-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+.av-ca-srow-det { font-size: 11px; color: var(--color-neutral-500); margin: 4px 0 0; }
+.av-ca-srow-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.av-ca-srow-amount { font-size: 13px; font-variant-numeric: tabular-nums; }
+.av-ca-srow-estado select { font-size: 12px; padding: 3px 6px; }
+.av-ca-srow-edit {
+  width: 100%; display: flex; gap: var(--space-4); align-items: flex-end;
+  flex-wrap: wrap; margin-top: 8px;
+  padding: 10px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+.av-ca-srow-edit label { display: flex; flex-direction: column; font-size: 11px; gap: 4px; color: var(--color-neutral-500); }
+.av-ca-srow-edit input { width: 110px; }
+
+.av-ca-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block;
+  border: 1.5px solid var(--color-neutral-500);
+}
+.av-ca-dot--on { background: var(--color-accent); border-color: var(--color-accent); }
+
+.av-ca-anexar { border-top: 1px solid var(--color-divider); padding-top: var(--space-4); }
+.av-ca-anexar-summary {
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.av-ca-anexar-body { margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.av-ca-quickbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.av-ca-form { display: flex; flex-direction: column; gap: var(--space-4); }
+.av-ca-form-row { display: grid; gap: var(--space-4); }
+.av-ca-form-row--2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.av-ca-field { display: flex; flex-direction: column; gap: 4px; }
+.av-ca-field label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-neutral-500); }
+.av-ca-field input, .av-ca-field select, .av-ca-field textarea { width: 100%; }
+.av-ca-receta, .av-ca-dyn {
+  padding: var(--space-4); border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+.av-ca-dyn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+
+.av-ca-block {
+  border: 1px solid var(--color-divider); border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-6);
+}
+.av-ca-block > summary { cursor: pointer; font-size: 14px; font-weight: 500; }
+.av-ca-block-body { margin-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+.av-ca-mini-list { display: flex; flex-direction: column; gap: 6px; }
+.av-ca-mini-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  font-size: 12px; color: var(--color-neutral-400);
+  padding: 8px 0; border-top: 1px solid var(--color-divider);
+}
+
+.av-visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ── Hoy (Tarea 09, etapa 4) ────────────────────────────────────────────── */
+.av-hoy { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8); }
+.av-hoy-actions { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.av-hoy-section h3 { margin: 0 0 var(--space-4); font-size: 16px; }
+.av-hoy-list { display: flex; flex-direction: column; border: 1px solid var(--color-divider); border-radius: var(--radius-md); overflow: hidden; }
+.av-hoy-row {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: var(--space-4); align-items: center;
+  padding: 12px var(--space-6); width: 100%; text-align: left;
+  background: transparent; border: 0; border-top: 1px solid var(--color-divider);
+  cursor: pointer; color: var(--color-text); font: inherit;
+}
+.av-hoy-row:first-child { border-top: 0; }
+.av-hoy-row:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.av-hoy-row-name { font-size: 13px; font-weight: 500; }
+.av-hoy-row-sub { font-size: 11px; color: var(--color-neutral-500); margin-top: 2px; }
+.av-hoy-row-meta { font-size: 12px; color: var(--color-neutral-400); text-align: right; white-space: nowrap; }
+.av-hoy-row-amount { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--color-text); }
+
+.av-newmenu { position: relative; }
+.av-newmenu > summary {
+  list-style: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.av-newmenu > summary::-webkit-details-marker { display: none; }
+.av-newmenu-panel {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 55;
+  display: flex; flex-direction: column; min-width: 220px;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 900px) {
+  .av-ca-patient { grid-template-columns: 1fr; }
+  .av-ca-form-row--2 { grid-template-columns: 1fr; }
+  .av-ca-dyn { grid-template-columns: 1fr; }
+  .av-hoy-row { grid-template-columns: 1fr auto; }
+  .av-hoy-row-meta { grid-column: 1 / -1; text-align: left; }
+}
+
 /* respect reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .av-skeleton, .av-spin, .av-toast { animation: none; }

@@ -31,6 +31,7 @@ import * as citasWeb from './sections/citas-web.js';
 import * as catalogo from './sections/catalogo.js';
 import * as usuarios from './sections/usuarios.js';
 import * as perfil from './sections/perfil.js';
+import * as historialPrecios from './sections/historial-precios.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // window.* — handlers referenciados por atributos on*= inline. En el monolito
@@ -52,6 +53,7 @@ Object.assign(window, {
     verConsultaCompleta: consultorio.verConsultaCompleta,
     cambiarEstadoServicio: consultorio.cambiarEstadoServicio,
     eliminarServicioConsulta: consultorio.eliminarServicioConsulta,
+    editarServicioConsulta: consultorio.editarServicioConsulta,
     toggleForm: consultorio.toggleForm,
     setQuickAction: consultorio.setQuickAction,
     exportarConsultaPDF: consultorio.exportarConsultaPDF,
@@ -73,6 +75,7 @@ Object.assign(window, {
     abrirEditarProducto: inventario.abrirEditarProducto,
     abrirMovimientoStock: inventario.abrirMovimientoStock,
     confirmarEliminarProducto: inventario.confirmarEliminarProducto,
+    abrirHistorialProducto: inventario.abrirHistorialProducto,
     // reportes
     guardarTarifaVeterinario: reportes.guardarTarifaVeterinario,
     // ordenes
@@ -96,6 +99,7 @@ Object.assign(window, {
     abrirModalServicio: catalogo.abrirModalServicio,
     guardarServicio: catalogo.guardarServicio,
     desactivarServicio: catalogo.desactivarServicio,
+    abrirHistorialServicio: catalogo.abrirHistorialServicio,
     // usuarios
     abrirEditarUsuario: usuarios.abrirEditarUsuario,
     toggleUsuarioActivo: usuarios.toggleUsuarioActivo,
@@ -113,10 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
     cmdk.init();
     theme.init();
     initSession();
+    historialPrecios.initHistorialPreciosModal();
     consultorio.setupRazasPerro();
     consultorio.setupSearch();
     consultorio.setupConsultorioSearch();
     consultorio.initConsultorio();
+    consultorio.initConsultaAbierta();
 
     // Initialize custom selects logic
     consultorio.initCustomSelects();

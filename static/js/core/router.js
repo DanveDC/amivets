@@ -36,6 +36,10 @@ const DEFAULT_SECTION = 'sec-consultorio';
 // Primary tab bar, in 1A order.
 const SECTIONS = [
     { id: 'sec-consultorio',     label: 'Consultorio',       tab: true,  init: initConsultorio },
+    // Tarea 09, etapa 3: pantalla de consulta abierta. No es pestaña; se abre
+    // desde "Hoy", desde el historial del paciente o al crear una consulta. Su
+    // carga la hace verConsultaCompleta() en sections/consultorio.js.
+    { id: 'sec-consulta-abierta', label: 'Consulta abierta',  tab: false, init: null },
     { id: 'sec-agenda',          label: 'Agenda',            tab: true,  init: loadAgenda },
     { id: 'sec-propietarios',    label: 'Propietarios',      tab: true,  init: loadPropietarios },
     { id: 'sec-facturacion',     label: 'Facturación',       tab: true,  init: cargarHistorialFacturas },

@@ -17,6 +17,10 @@ import { ICONS, showNotification, openModal, closeModal, debounce } from '../cor
 import { createPrettySelect, initSearchableSelect } from '../core/select.js';
 import { cargarFacturasMascota } from './facturacion.js';
 import { cargarBadgeOrdenes } from './ordenes.js';
+// Relación cíclica segura con core/router.js (router importa initConsultorio de
+// este módulo). showSection es una función exportada hoisted; sólo se usa dentro
+// de handlers, nunca en la evaluación del módulo.
+import { showSection } from '../core/router.js';
 
 // ============ STATE MANAGEMENT ============
 export let currentMascotaId = null;
@@ -402,11 +406,14 @@ export const handleConsultaSubmit = async (e) => {
             fecha_consulta: document.getElementById('consultaFecha')?.value || null,
             observaciones: `ICC: ${icc}, TLLC: ${tllc} | Pruebas: ${document.getElementById('consultaPruebas')?.value || 'N/A'}`
         };
-        await fetchAPI('/consultas/', { method: 'POST', body: JSON.stringify(data) });
-        showNotification('Consulta registrada y archivada correctamente.', 'success');
+        const creada = await fetchAPI('/consultas/', { method: 'POST', body: JSON.stringify(data) });
+        showNotification('Consulta abierta.', 'success');
         closeModal('modalConsulta');
         if (currentMascotaId) cargarConsultas(currentMascotaId);
         cargarBadgeOrdenes();
+        // Tarea 09, etapa 4: al crear la consulta se entra directo a la pantalla
+        // de consulta abierta.
+        if (creada && creada.id) verConsultaCompleta(creada.id, data.mascota_id);
     } catch (error) {
         alert('Error: ' + error.message);
     }
@@ -509,152 +516,315 @@ export const renderMascotasList = (mascotas, container) => {
     `).join('');
 };
 
+// Estado de la consulta abierta actualmente en pantalla (Tarea 09, etapa 3).
+let currentConsultaAbierta = null;
+
+// Abre la PANTALLA de consulta abierta (antes el modal #modalDetalleConsulta).
+// El nombre se conserva: lo referencian facturacion.js, ordenes/hoy y varios
+// onclick inline del HTML generado.
 export const verConsultaCompleta = async (consultaId, mascotaId) => {
     try {
         currentViewedConsultaId = consultaId;
-        const c = await fetchAPI(`/consultas/${consultaId}`);
-        document.getElementById('detalleConsultaTitle').textContent = `Expediente Clínico - C.${c.id}`;
+        if (mascotaId) setCurrentMascotaId(mascotaId);
+        showSection('sec-consulta-abierta');
 
-        let htmlMed = `
-            <p><strong>Fecha:</strong> ${new Date(c.fecha_consulta).toLocaleString()}</p>
-            <p><strong>Profesional:</strong> ${c.veterinario}</p>
-            <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
-            <p><strong>Motivo:</strong> ${c.motivo}</p>
-            <p><strong>Síntomas:</strong> ${c.sintomas || 'N/A'}</p>
-            <p><strong>Diagnóstico:</strong> ${c.diagnostico || 'N/A'}</p>
-            <hr style="margin: 0.5rem 0; border: none; border-top: 1px solid #e5e7eb;">
-            <div style="display:flex; gap: 1rem;">
-                <span><strong>Peso:</strong> ${c.peso ? parseFloat(c.peso).toFixed(2) : '-'} kg</span>
-                <span><strong>Temp:</strong> ${c.temperatura ? parseFloat(c.temperatura).toFixed(2) : '-'} °C</span>
-                <span><strong>FC:</strong> ${c.frecuencia_cardiaca || '-'} bpm</span>
-            </div>
-            <p><strong>Tratamiento Médico Pautado:</strong><br/> ${c.tratamiento ? c.tratamiento.replace(/\\n/g, '<br>') : 'N/A'}</p>
-        `;
-        document.getElementById('detalleConsultaMedica').innerHTML = htmlMed;
+        const c = await fetchAPI(`/consultas/${consultaId}`);
+        currentConsultaAbierta = c;
+        if (!mascotaId && c.mascota_id) setCurrentMascotaId(c.mascota_id);
+
+        document.getElementById('detalleConsultaTitle').textContent = `Consulta #${c.id}`;
+        const badge = document.getElementById('consultaAbiertaEstado');
+        if (badge) {
+            const estado = (c.estado || 'ABIERTA').toUpperCase();
+            badge.textContent = estado;
+            badge.className = 'status-pill ' + (estado === 'ABIERTA' ? 'status-pill--warn' : 'status-pill--muted');
+        }
+
+        // Cabecera del paciente: nombre, especie/raza/peso, dueño + teléfono,
+        // veterinario y alertas (observaciones de la mascota).
+        _renderPacienteConsultaAbierta(c);
+
+        // Franja de vitales editable + motivo.
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v ?? '') === '' ? '' : v; };
+        setVal('vitalPeso', c.peso ?? '');
+        setVal('vitalTemp', c.temperatura ?? '');
+        setVal('vitalFC', c.frecuencia_cardiaca ?? '');
+        setVal('caMotivo', c.motivo || '');
+        setVal('caDiagnostico', c.diagnostico || '');
+        setVal('caTratamiento', c.tratamiento || '');
 
         document.getElementById('addServicioConsultaId').value = c.id;
-
-        // Render Servicios Carrito
         renderDetalleServicios(c.servicios || []);
+        _cargarRecetasConsultaAbierta(c.id);
+        _cargarNotasConsultaAbierta(c.mascota_id);
 
-        openModal('modalDetalleConsulta');
+        // El botón "Cerrar y facturar" no aplica a una consulta ya cerrada.
+        const btnFact = document.getElementById('btnConsultaCerrarFacturar');
+        if (btnFact) btnFact.hidden = (c.estado || 'ABIERTA').toUpperCase() !== 'ABIERTA';
     } catch (e) {
-        alert("Error cargando expediente: " + e.message);
+        showNotification('Error cargando la consulta: ' + e.message, 'error');
+    }
+};
+
+const _renderPacienteConsultaAbierta = async (c) => {
+    const box = document.getElementById('consultaAbiertaPaciente');
+    if (!box) return;
+    try {
+        const m = await fetchAPI(`/mascotas/${c.mascota_id}`);
+        let tel = '';
+        let duenoNombre = '';
+        if (m.propietario_id) {
+            try {
+                const p = await fetchAPI(`/propietarios/${m.propietario_id}`);
+                duenoNombre = `${p.nombre || ''} ${p.apellido || ''}`.trim();
+                tel = p.telefono || '';
+            } catch (_) { /* opcional */ }
+        }
+        const alerta = m.observaciones
+            ? `<p class="av-ca-patient-alert"><i class="ph ph-warning" aria-hidden="true"></i> ${m.observaciones}</p>`
+            : '';
+        box.innerHTML = `
+            <div class="av-ca-patient-main">
+                <h3 class="av-ca-patient-name">${m.nombre || 'Paciente'}</h3>
+                <p class="av-ca-patient-meta">
+                    ${[m.especie, m.raza, m.peso ? parseFloat(m.peso).toFixed(1) + ' kg' : null]
+                        .filter(Boolean).join(' · ')}
+                </p>
+                ${alerta}
+            </div>
+            <div class="av-ca-patient-side">
+                <p><span class="av-eyebrow">Propietario</span><br>${duenoNombre || '—'}${tel ? ` · <a href="tel:${tel}">${tel}</a>` : ''}</p>
+                <p><span class="av-eyebrow">Veterinario</span><br>${c.veterinario || '—'}</p>
+            </div>`;
+    } catch (e) {
+        box.innerHTML = '<p class="av-text-danger">No se pudieron cargar los datos del paciente.</p>';
+    }
+};
+
+const _cargarRecetasConsultaAbierta = async (consultaId) => {
+    const list = document.getElementById('caRecetasList');
+    const count = document.getElementById('caRecetasCount');
+    if (!list) return;
+    try {
+        const recetas = await fetchAPI(`/consultas/${consultaId}/recetas`);
+        if (count) count.textContent = recetas.length ? `(${recetas.length})` : '';
+        if (!recetas.length) {
+            list.innerHTML = '<p class="av-muted">Sin recetas para esta consulta.</p>';
+            return;
+        }
+        list.innerHTML = recetas.map(r => `
+            <div class="av-ca-mini-item">
+                <span>Receta del ${new Date(r.fecha_emision).toLocaleDateString()} · ${r.detalles.length} ítem(s)</span>
+                <button type="button" class="btn-secondary btn-sm" onclick="exportarRecetaPDF(${r.consulta_id}, ${r.id})">${ICONS.printer} PDF</button>
+            </div>`).join('');
+    } catch (e) {
+        list.innerHTML = '<p class="av-text-danger">Error cargando recetas.</p>';
+    }
+};
+
+const _cargarNotasConsultaAbierta = async (mascotaId) => {
+    const list = document.getElementById('caNotasList');
+    if (!list || !mascotaId) return;
+    try {
+        const notas = await fetchAPI(`/notas/mascota/${mascotaId}`);
+        if (!notas.length) { list.innerHTML = '<p class="av-muted">Sin notas.</p>'; return; }
+        list.innerHTML = notas.slice().reverse().slice(0, 5).map(n => `
+            <div class="av-ca-mini-item">
+                <span><b>${NOTA_CATEGORIA_LABELS[n.categoria] || n.categoria}</b> · ${new Date(n.fecha_creacion).toLocaleDateString()} — ${n.texto}</span>
+            </div>`).join('');
+    } catch (e) {
+        list.innerHTML = '<p class="av-text-danger">Error cargando notas.</p>';
     }
 };
 
 const renderDetalleServicios = (servicios) => {
     const listDiv = document.getElementById('detalleConsultaServiciosList');
-    if (!servicios || servicios.length === 0) {
-        listDiv.innerHTML = '<p style="color: var(--text-secondary); font-style: italic; text-align: center; padding: 1rem;">No hay registros clínicos o cargos anexados.</p>';
+    if (!listDiv) return;
+    const activos = (servicios || []).filter(s => !s.is_deleted);
+
+    if (activos.length === 0) {
+        listDiv.innerHTML = '<p class="av-muted" style="padding:0.75rem 0;">No hay servicios anexados todavía.</p>';
         const el = document.getElementById('detalleConsultaTotal');
-        if (el) el.textContent = "$0.00";
+        if (el) el.textContent = '$0.00';
         return;
     }
 
     let total = 0;
-    const activos = servicios.filter(s => !s.is_deleted);
-
-    let html = activos.map(s => {
-        total += (s.cantidad * s.precio_unitario);
-
-        let statusIcon = s.estado === 'Aplicado' ? ICONS.checkCircle : ICONS.clock;
-        let badgeColor = s.estado === 'Aplicado' ? 'background: var(--surface-hover); border: 1px solid var(--border);' : 'background: var(--warning-subtle); border: 1px solid var(--warning);';
-        let accentLine = s.estado === 'Aplicado' ? 'var(--primary)' : 'var(--warning-dark)';
-
-        // Parse clinical details if they follow the "Key: Value | Key: Value" format
-        let detailsHtml = '';
-        if (s.detalles_clinicos) {
-            const parts = s.detalles_clinicos.split('|');
-            if (parts.length > 1) {
-                // If it looks like structured data, render as a grid of labels
-                detailsHtml = `
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--border);">
-                        ${parts.map(p => {
-                    const [k, v] = p.trim().split(':');
-                    if (v) return `<div style="font-size: 0.75rem; color: var(--text-secondary);"><span style="font-weight: 700; color: var(--text-primary); text-transform: uppercase; font-size: 0.65rem; opacity: 0.7;">${k}:</span> ${v}</div>`;
-                    return `<div style="grid-column: span 2; font-size: 0.75rem; color: var(--text-secondary); font-style: italic;">${p.trim()}</div>`;
-                }).join('')}
-                    </div>
-                `;
-            } else {
-                // Regular text block
-                detailsHtml = `
-                    <div style="margin-top: 0.6rem; padding: 0.6rem; background: var(--surface-hover); border-radius: 6px; font-size: 0.8rem; color: var(--text-primary); border-left: 3px solid var(--border);">
-                         ${ICONS.fileText} ${s.detalles_clinicos}
-                    </div>
-                `;
-            }
-        }
-
+    listDiv.innerHTML = activos.map(s => {
+        const sub = (s.cantidad || 0) * (s.precio_unitario || 0);
+        total += sub;
+        const aplicado = s.estado === 'Aplicado';
+        const dot = aplicado
+            ? '<span class="av-ca-dot av-ca-dot--on" aria-hidden="true"></span>'
+            : '<span class="av-ca-dot" aria-hidden="true"></span>';
+        const det = s.detalles_clinicos
+            ? `<p class="av-ca-srow-det">${s.detalles_clinicos}</p>` : '';
         return `
-            <div class="clinical-data-row" style="${badgeColor} margin-bottom: 1rem; border-radius: 12px; padding: 1rem; position: relative; overflow: hidden;">
-                <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: ${accentLine};"></div>
-
-                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                    <div style="font-weight: 800; color: var(--text-primary); font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.02em;">
-                        ${statusIcon} ${s.nombre_servicio || s.tipo_servicio}
-                    </div>
-                    <div style="display: flex; gap:0.5rem; align-items: center;">
-                        <button onclick="eliminarServicioConsulta(${s.id})" title="Eliminar registro" aria-label="Eliminar registro" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">${ICONS.close}</button>
-                    </div>
+            <div class="av-ca-srow" data-servicio-id="${s.id}">
+                <div class="av-ca-srow-main">
+                    <div class="av-ca-srow-title">${dot} ${s.nombre_servicio || s.tipo_servicio}</div>
+                    <div class="av-ca-srow-sub">${s.tipo_servicio} · ${(s.cantidad || 0)} × $${(s.precio_unitario || 0).toFixed(2)}</div>
+                    ${det}
                 </div>
-
-                <div style="display: flex; gap: 0.75rem; margin-top: 0.25rem;">
-                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">
-                         CATEGORÍA: <span style="color: var(--primary);">${s.tipo_servicio}</span>
-                    </div>
-                    <div style="font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;">
-                         VALOR: <span style="color: var(--secondary);">$${(s.cantidad * s.precio_unitario).toFixed(2)}</span>
-                    </div>
-                </div>
-
-                ${detailsHtml}
-
-                <div style="margin-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Estado:</span>
-                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.75rem; cursor: pointer; font-weight: 600; color: var(--text-secondary);">
-                            <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-                            <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>Aplicado</option>
+                <div class="av-ca-srow-right">
+                    <span class="av-ca-srow-amount">$${sub.toFixed(2)}</span>
+                    <label class="av-ca-srow-estado">
+                        <span class="av-visually-hidden">Estado del servicio ${s.nombre_servicio || s.tipo_servicio}</span>
+                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)">
+                            <option value="Pendiente" ${!aplicado ? 'selected' : ''}>Pendiente</option>
+                            <option value="Aplicado" ${aplicado ? 'selected' : ''}>Aplicado</option>
                         </select>
-                    </div>
-                    <span style="font-size: 0.6rem; color: var(--text-muted); font-style: italic;">Ref ID: #${s.id}</span>
+                    </label>
+                    <button type="button" class="av-iconbtn" aria-label="Editar servicio" title="Editar"
+                            onclick="editarServicioConsulta(${s.id})">${ICONS.edit}</button>
+                    <button type="button" class="av-iconbtn av-iconbtn--danger" aria-label="Quitar servicio" title="Quitar"
+                            onclick="eliminarServicioConsulta(${s.id})">${ICONS.trash}</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     }).join('');
 
-    listDiv.innerHTML = html;
     const el = document.getElementById('detalleConsultaTotal');
     if (el) el.textContent = `$${total.toFixed(2)}`;
 };
 
+const _refrescarConsultaAbierta = () => {
+    if (currentViewedConsultaId) verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
+};
+
 export const cambiarEstadoServicio = async (servicioId, newState) => {
     try {
-        const resp = await fetchAPI(`/consultas/servicios/${servicioId}`, {
+        const resp = await fetchAPI(`/servicios/${servicioId}`, {
             method: 'PATCH',
             body: JSON.stringify({ estado: newState })
         });
-        // Pendiente->Aplicado dispara el consumo de la receta backend-side; acá
-        // solo hace falta surfacear los faltantes (sin editor: usa la receta).
         _avisarFaltantesStock(resp);
-        // Refrescar
-        verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
+        _refrescarConsultaAbierta();
     } catch (e) {
-        alert("Error cambiando estado: " + e.message);
-        verConsultaCompleta(currentViewedConsultaId, currentMascotaId); // revert GUI
+        showNotification('No se pudo cambiar el estado: ' + e.message, 'error');
+        _refrescarConsultaAbierta(); // revierte la GUI al valor real
     }
 };
 
+export const editarServicioConsulta = (servicioId) => {
+    const row = document.querySelector(`.av-ca-srow[data-servicio-id="${servicioId}"]`);
+    if (!row || row.querySelector('.av-ca-srow-edit')) return;
+    const s = (currentConsultaAbierta?.servicios || []).find(x => x.id === servicioId) || {};
+    const edit = document.createElement('form');
+    edit.className = 'av-ca-srow-edit';
+    edit.innerHTML = `
+        <label>Cantidad <input type="number" step="0.1" min="0.1" value="${s.cantidad ?? 1}" name="cant"></label>
+        <label>Precio <input type="number" step="0.01" min="0" value="${s.precio_unitario ?? 0}" name="precio"></label>
+        <button type="submit" class="btn-primary btn-sm">Guardar</button>
+        <button type="button" class="btn-secondary btn-sm" data-cancel>Cancelar</button>`;
+    edit.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            await fetchAPI(`/servicios/${servicioId}`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                    cantidad: parseFloat(edit.cant.value) || 1,
+                    precio_unitario: parseFloat(edit.precio.value) || 0,
+                })
+            });
+            _refrescarConsultaAbierta();
+        } catch (err) {
+            showNotification('No se pudo editar el servicio: ' + err.message, 'error');
+        }
+    });
+    edit.querySelector('[data-cancel]').addEventListener('click', () => edit.remove());
+    row.appendChild(edit);
+};
+
 export const eliminarServicioConsulta = async (servicioId) => {
-    if (!confirm("¿Seguro que desea quitar este cargo? Se revertirá stock si estaba Aplicado.")) return;
+    if (!confirm('¿Quitar este servicio? Se revierte el stock si estaba Aplicado.')) return;
     try {
-        await fetchAPI(`/consultas/servicios/${servicioId}`, { method: 'DELETE' });
-        verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
+        await fetchAPI(`/servicios/${servicioId}`, { method: 'DELETE' });
+        _refrescarConsultaAbierta();
     } catch (e) {
-        alert("Error quitando servicio: " + e.message);
+        showNotification('No se pudo quitar el servicio: ' + e.message, 'error');
     }
+};
+
+// ── Handlers de la pantalla de consulta abierta ─────────────────────────────
+export const guardarVitalesConsulta = async (e) => {
+    if (e) e.preventDefault();
+    if (!currentViewedConsultaId) return;
+    const num = (id) => {
+        const v = document.getElementById(id)?.value;
+        return v === '' || v == null ? null : parseFloat(v);
+    };
+    const body = { motivo: document.getElementById('caMotivo')?.value || undefined };
+    const peso = num('vitalPeso'), temp = num('vitalTemp'), fc = num('vitalFC');
+    if (peso != null) body.peso = peso;
+    if (temp != null) body.temperatura = temp;
+    if (fc != null) body.frecuencia_cardiaca = fc;
+    try {
+        await fetchAPI(`/consultas/${currentViewedConsultaId}`, { method: 'PUT', body: JSON.stringify(body) });
+        showNotification('Vitales actualizados.', 'success');
+        _refrescarConsultaAbierta();
+    } catch (err) {
+        showNotification('No se pudieron guardar los vitales: ' + err.message, 'error');
+    }
+};
+
+export const guardarDiagnosticoConsulta = async (e) => {
+    if (e) e.preventDefault();
+    if (!currentViewedConsultaId) return;
+    const body = {
+        diagnostico: document.getElementById('caDiagnostico')?.value || null,
+        tratamiento: document.getElementById('caTratamiento')?.value || null,
+    };
+    try {
+        await fetchAPI(`/consultas/${currentViewedConsultaId}`, { method: 'PUT', body: JSON.stringify(body) });
+        showNotification('Diagnóstico y tratamiento guardados.', 'success');
+    } catch (err) {
+        showNotification('No se pudo guardar: ' + err.message, 'error');
+    }
+};
+
+export const guardarNotaConsultaAbierta = async (e) => {
+    if (e) e.preventDefault();
+    const texto = document.getElementById('caNotaTexto')?.value.trim();
+    if (!texto || !currentMascotaId) return;
+    try {
+        await fetchAPI('/notas/', {
+            method: 'POST',
+            body: JSON.stringify({ mascota_id: currentMascotaId, categoria: 'general', texto }),
+        });
+        document.getElementById('caNotaTexto').value = '';
+        _cargarNotasConsultaAbierta(currentMascotaId);
+        showNotification('Nota guardada.', 'success');
+    } catch (err) {
+        showNotification('No se pudo guardar la nota: ' + err.message, 'error');
+    }
+};
+
+export const cerrarYFacturarConsulta = async () => {
+    if (!currentViewedConsultaId) return;
+    if (!confirm('¿Emitir la factura de esta consulta y cerrarla?')) return;
+    const id = currentViewedConsultaId;
+    try {
+        // Un paso (Tarea 09, decisión 8): el servidor arma los detalles desde
+        // consulta.servicios + honorario y deja la consulta CERRADA.
+        await fetchAPI(`/facturas/from-consulta/${id}`, { method: 'POST', body: JSON.stringify({}) });
+        showNotification('Factura emitida. Consulta cerrada.', 'success');
+        showSection('sec-consultorio');
+        if (currentMascotaId) actualizarCountsPet(currentMascotaId);
+    } catch (err) {
+        showNotification('No se pudo facturar: ' + err.message, 'error');
+    }
+};
+
+// Enlaza los controles estáticos de la pantalla (una sola vez).
+export const initConsultaAbierta = () => {
+    document.getElementById('formVitalesConsulta')?.addEventListener('submit', guardarVitalesConsulta);
+    document.getElementById('formDiagnosticoConsulta')?.addEventListener('submit', guardarDiagnosticoConsulta);
+    document.getElementById('formNotaConsultaAbierta')?.addEventListener('submit', guardarNotaConsultaAbierta);
+    document.getElementById('btnConsultaCerrarFacturar')?.addEventListener('click', cerrarYFacturarConsulta);
+    document.getElementById('btnConsultaGuardarSalir')?.addEventListener('click', () => showSection('sec-consultorio'));
+    document.getElementById('btnNuevaRecetaCA')?.addEventListener('click', () => {
+        if (currentViewedConsultaId) abrirModalReceta(currentViewedConsultaId);
+    });
 };
 
 // SMART FORM LOGIC: Category Change
@@ -918,10 +1088,9 @@ export const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
     if (jump && complexModules[tipo]) {
         const config = complexModules[tipo];
 
-        // Cerramos el modal actual para permitir navegación en el fondo
-        closeModal('modalDetalleConsulta');
-
-        // Cambiar a la pestaña correspondiente en el perfil de paciente (abajo)
+        // El detalle clínico pesado (cirugía/hospitalización) vive en el perfil
+        // del paciente: volvemos a Consultorio y abrimos su pestaña.
+        showSection('sec-consultorio');
         switchPetTab(config.tab);
 
         // Scroll hacia abajo para que el usuario note que se abrió la sección
