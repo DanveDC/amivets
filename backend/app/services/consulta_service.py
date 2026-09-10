@@ -55,13 +55,16 @@ class ConsultaService:
         fecha_inicio: Optional[str] = None,
         fecha_fin: Optional[str] = None,
         estado_pago: Optional[str] = None,
-        estado: Optional[str] = None
+        estado: Optional[str] = None,
+        veterinario_id: Optional[int] = None
     ) -> List[Consulta]:
         """Lista consultas con filtros opcionales"""
         query = db.query(Consulta)
 
         if mascota_id:
             query = query.filter(Consulta.mascota_id == mascota_id)
+        if veterinario_id:
+            query = query.filter(Consulta.veterinario_id == veterinario_id)
         if veterinario:
             query = query.filter(Consulta.veterinario.ilike(f"%{veterinario}%"))
         if fecha_inicio:

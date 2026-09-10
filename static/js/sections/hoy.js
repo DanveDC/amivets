@@ -7,6 +7,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce } from '../core/ui.js';
+import { getRole, getUserId, whenReady } from '../core/session.js';
 import {
     verConsultaCompleta,
     seleccionarMascotaBasica,
@@ -48,12 +49,16 @@ const renderConsultasAbiertas = async () => {
     if (!box) return;
     box.innerHTML = '<p class="av-muted" style="padding:12px 16px;">Cargando…</p>';
     try {
+        // Un veterinario ve solo sus consultas abiertas; admin y recepción, todas.
+        await whenReady;
+        const soloMias = getRole() === 'veterinario' && getUserId();
+        const url = `/consultas/?estado=ABIERTA&limit=100${soloMias ? `&veterinario_id=${getUserId()}` : ''}`;
         const [consultas, mascotas] = await Promise.all([
-            fetchAPI('/consultas/?estado=ABIERTA&limit=100'),
+            fetchAPI(url),
             cargarMascotasMap(),
         ]);
         if (!consultas || consultas.length === 0) {
-            box.innerHTML = '<p class="av-muted" style="padding:12px 16px;">No hay consultas abiertas.</p>';
+            box.innerHTML = `<p class="av-muted" style="padding:12px 16px;">${soloMias ? 'No tenés consultas abiertas.' : 'No hay consultas abiertas.'}</p>`;
             return;
         }
         box.innerHTML = consultas.map(c => {

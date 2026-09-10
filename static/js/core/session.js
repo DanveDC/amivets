@@ -12,12 +12,15 @@
 import { fetchAPI } from './api.js';
 
 let currentRole = null;
+let currentUserId = null;
 try { currentRole = localStorage.getItem('role') || null; } catch (_) { /* private mode */ }
+try { currentUserId = Number(localStorage.getItem('userId')) || null; } catch (_) { /* private mode */ }
 
 let resolveReady;
 export const whenReady = new Promise((resolve) => { resolveReady = resolve; });
 
 export const getRole = () => currentRole;
+export const getUserId = () => currentUserId;
 
 export const initSession = async () => {
     try {
@@ -26,6 +29,10 @@ export const initSession = async () => {
             if (user.role) {
                 currentRole = user.role;
                 try { localStorage.setItem('role', currentRole); } catch (_) { /* ignore */ }
+            }
+            if (user.id) {
+                currentUserId = user.id;
+                try { localStorage.setItem('userId', String(user.id)); } catch (_) { /* ignore */ }
             }
 
             const display = document.getElementById('userNameDisplay');

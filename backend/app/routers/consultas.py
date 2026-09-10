@@ -54,6 +54,7 @@ def listar_consultas(
     limit: int = 100,
     mascota_id: Optional[int] = None,
     veterinario: Optional[str] = None,
+    veterinario_id: Optional[int] = None,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
     estado_pago: Optional[str] = None,
@@ -64,9 +65,12 @@ def listar_consultas(
 
     `estado` filtra por el ciclo de vida clínico (ABIERTA / CERRADA / ANULADA,
     Tarea 09, decisión 6); `estado_pago` sigue filtrando por el eje de cobro.
+    `veterinario_id` filtra por el profesional asignado (FK) — lo usa la bandeja
+    "Hoy" para que un veterinario vea solo sus consultas abiertas.
     """
     return ConsultaService.listar_consultas(
-        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin, estado_pago, estado
+        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin,
+        estado_pago, estado, veterinario_id
     )
 
 

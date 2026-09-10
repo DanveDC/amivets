@@ -322,6 +322,29 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     expect(factura2.total).toBe(factura.total);
   });
 
+  test('la bandeja "Hoy" se puede filtrar por veterinario: cada uno ve solo lo suyo', async ({ request }) => {
+    const otroVet = await createTestVeterinario(request, S.token);
+
+    const miConsulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id });
+    const suConsulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: otroVet.id });
+    S.consultaIds.push(miConsulta.id, suConsulta.id);
+
+    const mias = await (await request.get(
+      `/api/consultas/?estado=ABIERTA&limit=500&veterinario_id=${S.vet.id}`,
+      { headers: authHeaders(S.token) },
+    )).json();
+    expect(mias.every((c) => c.veterinario_id === S.vet.id)).toBe(true);
+    expect(mias.some((c) => c.id === miConsulta.id)).toBe(true);
+    expect(mias.some((c) => c.id === suConsulta.id)).toBe(false);
+
+    // Sin el filtro (lo que ven admin y recepción) están las dos.
+    const todas = await (await request.get('/api/consultas/?estado=ABIERTA&limit=500', { headers: authHeaders(S.token) })).json();
+    expect(todas.some((c) => c.id === miConsulta.id)).toBe(true);
+    expect(todas.some((c) => c.id === suConsulta.id)).toBe(true);
+
+    await deleteTestUser(request, S.token, otroVet.id);
+  });
+
   test('las consultas y servicios cargados antes de la migración siguen visibles', async ({ request }) => {
     // Ask literal de la tarea: GET /api/consultas/?limit=5 responde 200 con lista.
     const cinco = await request.get('/api/consultas/?limit=5', { headers: authHeaders(S.token) });
