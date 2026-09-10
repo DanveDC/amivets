@@ -154,6 +154,12 @@ class Consulta(Base):
     estado_pago = Column(String(50), default="POR_COBRAR") # POR_COBRAR, COBRADO
     precio_consulta = Column(Float, default=0.0)
 
+    # Ciclo de vida clinico de la consulta (Tarea 09, decision 6), separado del
+    # eje de cobro (estado_pago). ABIERTA = en curso; CERRADA = facturada o
+    # cerrada por el veterinario; ANULADA = error. La migracion d0e1f2a3b4c5
+    # deja las filas historicas en 'CERRADA' y el server_default en 'ABIERTA'.
+    estado = Column(String(20), server_default="ABIERTA", default="ABIERTA")
+
     # Relaciones
     mascota = relationship("Mascota", back_populates="consultas")
     veterinario_usuario = relationship("Usuario", foreign_keys=[veterinario_id])
@@ -196,7 +202,19 @@ class ServicioConsulta(Base):
     __tablename__ = "servicios_consulta"
 
     id = Column(Integer, primary_key=True, index=True)
-    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=False)
+    # nullable desde Tarea 09 (decision 1): un "servicio directo" (corte de unas,
+    # venta de mostrador) no cuelga de ninguna consulta. El CHECK
+    # ck_servicio_consulta_scope (migracion d0e1f2a3b4c5) exige que haya al menos
+    # un ancla: consulta_id IS NOT NULL OR mascota_id IS NOT NULL.
+    consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=True)
+    # Ancla a la historia del paciente. Se llena SIEMPRE de aca en adelante
+    # (tambien en servicios con consulta) para simplificar las queries de
+    # historia; backfill desde consulta.mascota_id en la migracion.
+    mascota_id = Column(Integer, ForeignKey("mascotas.id"), nullable=True, index=True)
+    # Marcador de reversibilidad del backfill de espejos (Tarea 09, decision 2).
+    # 'MIGRACION_09' = fila creada por la migracion d0e1f2a3b4c5; NULL = alta
+    # normal por API. El downgrade borra solo las 'MIGRACION_09'.
+    origen = Column(String(20), nullable=True)
     tipo_servicio = Column(String(50), nullable=False) # VACUNACION, CIRUGIA, HOSPITALIZACION, LABORATORIO, INSUMO, ESTETICA
     referencia_id = Column(Integer, nullable=True) # ID to specific clinical table or Inventory (Insumos)
     # Ancla (por fin) el servicio de la consulta a su definicion de catalogo.
@@ -211,6 +229,7 @@ class ServicioConsulta(Base):
     is_deleted = Column(Boolean, default=False) # Soft delete for auditing
 
     consulta = relationship("Consulta", back_populates="servicios")
+    mascota = relationship("Mascota")
     catalogo_servicio = relationship("CatalogoServicio", back_populates="servicios_consulta")
     # Movimientos de stock generados por aplicar este servicio (slice B lo escribe).
     movimientos = relationship("MovimientoInventario", back_populates="servicio_consulta")
