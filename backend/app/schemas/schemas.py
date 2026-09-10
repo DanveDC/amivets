@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, field_serializer, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -292,25 +292,60 @@ class PruebaComplementariaResponse(PruebaComplementariaBase):
 
 
 # ========== INVENTARIO SCHEMAS ==========
+# Conjuntos cerrados del inventario fraccionado (Tarea 07). Se validan aca en
+# vez de dejar texto libre como el `categoria` heredado.
+TIPOS_ITEM_VALIDOS = {"MATERIAL", "PRODUCTO"}
+UNIDADES_MEDIDA_VALIDAS = {"ml", "g", "unidad"}
+
+
 class InventarioBase(BaseModel):
     codigo: str = Field(..., min_length=1, max_length=50)
     nombre: str = Field(..., min_length=1, max_length=200)
     descripcion: Optional[str] = None
     categoria: Optional[str] = Field(None, max_length=50)
     precio_unitario: float = Field(..., ge=0)
-    stock_actual: int = Field(default=0, ge=0, description="El stock jamás puede ser negativo")
-    stock_minimo: int = Field(default=5, ge=0)
+    # Decimal (no int): el stock ya vive en unidad base y admite fracciones
+    # (Tarea 07, decision 2). ge=0 se mantiene como en el esquema heredado.
+    stock_actual: Decimal = Field(default=Decimal("0"), ge=0, description="El stock jamás puede ser negativo")
+    stock_minimo: Decimal = Field(default=Decimal("5"), ge=0)
     fecha_vencimiento: Optional[date] = None
     proveedor: Optional[str] = Field(None, max_length=200)
     ubicacion: Optional[str] = Field(None, max_length=100)
+    # --- Inventario fraccionado (Tarea 07, slice A) ---
+    tipo_item: Optional[str] = Field(default="PRODUCTO", max_length=12, description="MATERIAL | PRODUCTO")
+    unidad_medida: Optional[str] = Field(None, max_length=12, description="ml | g | unidad; NULL = unidad sin definir")
+    contenido_por_envase: Optional[Decimal] = Field(None, ge=0)
+    merma_al_abrir: Optional[bool] = False
     activo: bool = True
-    
+
     @field_validator('precio_unitario')
     @classmethod
     def validar_precio_positivo(cls, v):
         if v < 0:
             raise ValueError('El precio no puede ser negativo')
         return v
+
+    @field_validator('tipo_item')
+    @classmethod
+    def validar_tipo_item(cls, v):
+        if v is not None and v not in TIPOS_ITEM_VALIDOS:
+            raise ValueError(f"tipo_item invalido. Usar uno de: {', '.join(sorted(TIPOS_ITEM_VALIDOS))}")
+        return v
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v is not None and v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
+
+    # El stock se guarda y opera como Decimal, pero en el JSON de respuesta se
+    # emite como numero (no string) para no romper a los consumidores que
+    # esperan `stock_actual` numerico (e2e inventario / gestion-inventario).
+    # Solo afecta la serializacion JSON; model_dump() sigue devolviendo Decimal.
+    @field_serializer('stock_actual', 'stock_minimo', 'contenido_por_envase', when_used='json')
+    def _serializar_decimales(self, v):
+        return float(v) if v is not None else None
 
 
 class InventarioCreate(InventarioBase):
@@ -322,18 +357,53 @@ class InventarioUpdate(BaseModel):
     descripcion: Optional[str] = None
     categoria: Optional[str] = Field(None, max_length=50)
     precio_unitario: Optional[float] = Field(None, ge=0)
-    stock_actual: Optional[int] = Field(None, ge=0)
-    stock_minimo: Optional[int] = Field(None, ge=0)
+    stock_actual: Optional[Decimal] = Field(None, ge=0)
+    stock_minimo: Optional[Decimal] = Field(None, ge=0)
     fecha_vencimiento: Optional[date] = None
     proveedor: Optional[str] = Field(None, max_length=200)
     ubicacion: Optional[str] = Field(None, max_length=100)
+    tipo_item: Optional[str] = Field(None, max_length=12)
+    unidad_medida: Optional[str] = Field(None, max_length=12)
+    contenido_por_envase: Optional[Decimal] = Field(None, ge=0)
+    merma_al_abrir: Optional[bool] = None
     activo: Optional[bool] = None
+
+    @field_validator('tipo_item')
+    @classmethod
+    def validar_tipo_item(cls, v):
+        if v is not None and v not in TIPOS_ITEM_VALIDOS:
+            raise ValueError(f"tipo_item invalido. Usar uno de: {', '.join(sorted(TIPOS_ITEM_VALIDOS))}")
+        return v
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v is not None and v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
 
 
 class InventarioResponse(InventarioBase):
     id: int
     fecha_registro: datetime
-    
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MovimientoInventarioResponse(BaseModel):
+    """Lectura del ledger de inventario. Hoy nada lo consume; slice B lo usa
+    para el guard anti-doble-descuento y la trazabilidad movimiento -> consulta."""
+    id: int
+    producto_id: int
+    tipo_movimiento: str
+    cantidad: Decimal
+    costo_unitario: float
+    lote: Optional[str] = None
+    origen_destino: Optional[str] = None
+    fecha_registro: datetime
+    usuario_responsable_id: Optional[int] = None
+    servicio_consulta_id: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -539,6 +609,62 @@ class PlanSaludCreate(PlanSaludBase):
 
 class PlanSaludResponse(PlanSaludBase):
     id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== RECETA DE SERVICIO SCHEMAS (Tarea 07, slice A) ==========
+class RecetaServicioBase(BaseModel):
+    inventario_id: int = Field(..., gt=0)
+    cantidad: Decimal = Field(..., gt=0)
+    unidad_medida: str = Field(..., min_length=1, max_length=12, description="ml | g | unidad")
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
+
+
+class RecetaServicioCreate(RecetaServicioBase):
+    pass
+
+
+class RecetaServicioUpdate(BaseModel):
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    unidad_medida: Optional[str] = Field(None, min_length=1, max_length=12)
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v is not None and v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
+
+
+class RecetaServicioResponse(RecetaServicioBase):
+    id: int
+    catalogo_servicio_id: int
+    inventario_nombre: Optional[str] = None
+    created_at: datetime
+
+    @model_validator(mode='before')
+    def _adjuntar_nombre_inventario(cls, data):
+        # Mismo criterio que NotaClinicaResponse._adjuntar_nombres: si es un
+        # objeto ORM con la relacion cargada, resolvemos el nombre del material
+        # aca para que el frontend no pida /inventario aparte solo para eso.
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                if getattr(data, 'inventario', None):
+                    data.inventario_nombre = data.inventario.nombre
+            except Exception:
+                pass
+        return data
+
+    @field_serializer('cantidad', when_used='json')
+    def _serializar_cantidad(self, v):
+        return float(v) if v is not None else None
+
     model_config = ConfigDict(from_attributes=True)
 
 

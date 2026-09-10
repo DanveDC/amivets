@@ -1,5 +1,5 @@
 # AmiVets Models - Force Sync v2
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON, Numeric
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON, Numeric, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from typing import List, Optional
@@ -183,6 +183,9 @@ class ServicioConsulta(Base):
     consulta_id = Column(Integer, ForeignKey("consultas.id"), nullable=False)
     tipo_servicio = Column(String(50), nullable=False) # VACUNACION, CIRUGIA, HOSPITALIZACION, LABORATORIO, INSUMO, ESTETICA
     referencia_id = Column(Integer, nullable=True) # ID to specific clinical table or Inventory (Insumos)
+    # Ancla (por fin) el servicio de la consulta a su definicion de catalogo.
+    # Nullable y sin backfill: se llena de aca en adelante (Tarea 07, decision 8).
+    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=True)
     nombre_servicio = Column(String(255))
     cantidad = Column(Float, nullable=False, default=1.0)
     precio_unitario = Column(Float, nullable=False, default=0.0)
@@ -192,6 +195,10 @@ class ServicioConsulta(Base):
     is_deleted = Column(Boolean, default=False) # Soft delete for auditing
 
     consulta = relationship("Consulta", back_populates="servicios")
+    catalogo_servicio = relationship("CatalogoServicio", back_populates="servicios_consulta")
+    # Movimientos de stock generados por aplicar este servicio (slice B lo escribe).
+    movimientos = relationship("MovimientoInventario", back_populates="servicio_consulta")
+    consumos_material = relationship("ConsumoMaterial", back_populates="servicio_consulta")
 
     def subtotal(self):
         return self.cantidad * self.precio_unitario
@@ -260,17 +267,33 @@ class Inventario(Base):
     descripcion = Column(Text)
     categoria = Column(String(50))  # Medicina, Vacuna, Alimento, Accesorio, etc.
     precio_unitario = Column(Float, nullable=False)
-    stock_actual = Column(Integer, nullable=False, default=0)
-    stock_minimo = Column(Integer, nullable=False, default=5)
+    # Numeric(12, 3): el stock se suma y resta cientos de veces; Float acumula
+    # error de redondeo. DECIMAL es aritmetica exacta (Tarea 07, decision 2).
+    stock_actual = Column(Numeric(12, 3), nullable=False, default=0)
+    stock_minimo = Column(Numeric(12, 3), nullable=False, default=5)
     fecha_vencimiento = Column(Date)
     proveedor = Column(String(200))
     ubicacion = Column(String(100))  # Ubicación física en el almacén
+    # --- Inventario fraccionado (Tarea 07, slice A) ---
+    # Discriminador de uso de la fila. Conjunto cerrado: MATERIAL | PRODUCTO.
+    # MATERIAL se consume via servicios; PRODUCTO se vende directo. Sin Enum en
+    # este slice (la migracion fija el server_default 'PRODUCTO').
+    tipo_item = Column(String(12), nullable=False, server_default="PRODUCTO")
+    # Unidad base de stock: 'ml' | 'g' | 'unidad'. NULL en el padron existente;
+    # NULL se interpreta como 'unidad' con envase 1 para la aritmetica.
+    unidad_medida = Column(String(12), nullable=True)
+    # Contenido en unidad base por envase de compra (botella 1 L -> 1000).
+    contenido_por_envase = Column(Numeric(12, 3), nullable=True)
+    # Si True, consumir cualquier fraccion descarta el resto del envase (MERMA).
+    merma_al_abrir = Column(Boolean, nullable=False, server_default="false")
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
     activo = Column(Boolean, default=True)
-    
+
     # Relaciones
     detalles_factura = relationship("DetalleFactura", back_populates="producto")
-    
+    recetas = relationship("RecetaServicio", back_populates="inventario")
+    consumos_material = relationship("ConsumoMaterial", back_populates="inventario")
+
     def __repr__(self):
         return f"<Inventario {self.codigo} - {self.nombre}>"
 
@@ -427,18 +450,25 @@ class MovimientoInventario(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     producto_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
-    tipo_movimiento = Column(String(20), nullable=False) # ENTRADA, SALIDA, MERMA
-    cantidad = Column(Integer, nullable=False)
+    # Conjunto previsto: ENTRADA | SALIDA | MERMA | AJUSTE | REVERSA.
+    # Se mantiene String (sin Enum) en este slice; el enum se decide en slice B.
+    tipo_movimiento = Column(String(20), nullable=False)
+    # Numeric(12, 3): el ledger no debe arrastrar colas de redondeo (decision 2).
+    cantidad = Column(Numeric(12, 3), nullable=False)
     costo_unitario = Column(Float, nullable=False) # Para finanzas/Kardex
     lote = Column(String(50), nullable=True) # Para medicinas
     fecha_vencimiento = Column(Date, nullable=True)
     origen_destino = Column(String(255)) # ID de factura, Nombre proveedor, etc.
     fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
     usuario_responsable_id = Column(Integer, ForeignKey("usuarios.id"))
-    
+    # Ancla opcional al servicio que genero el movimiento. Slice A solo crea la
+    # columna; el guard anti-doble-descuento por ledger llega en slice B.
+    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=True)
+
     # Relaciones
     producto = relationship("Inventario")
     responsable = relationship("Usuario")
+    servicio_consulta = relationship("ServicioConsulta", back_populates="movimientos")
 
 
 class Hospitalizacion(Base):
@@ -640,4 +670,64 @@ class CatalogoServicio(Base):
     unidad = Column(String(100))
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Materiales que consume este servicio (receta / BOM). Tarea 07, slice A.
+    recetas = relationship(
+        "RecetaServicio",
+        back_populates="catalogo_servicio",
+        cascade="all, delete-orphan",
+    )
+    servicios_consulta = relationship("ServicioConsulta", back_populates="catalogo_servicio")
+
+
+class RecetaServicio(Base):
+    """Receta (BOM) de un servicio del catalogo: que materiales consume y cuanto.
+
+    Es una plantilla con la cantidad estandar. Al aplicar el servicio, el
+    veterinario ajusta la cantidad real; contra el stock va la real
+    (ver ConsumoMaterial). Nace vacia (Tarea 07, decision 6 y 8).
+    """
+    __tablename__ = "recetas_servicio"
+
+    id = Column(Integer, primary_key=True, index=True)
+    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=False)
+    inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    cantidad = Column(Numeric(12, 3), nullable=False)
+    unidad_medida = Column(String(12), nullable=False)  # 'ml' | 'g' | 'unidad'
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("catalogo_servicio_id", "inventario_id", name="uq_receta_servicio_material"),
+    )
+
+    catalogo_servicio = relationship("CatalogoServicio", back_populates="recetas")
+    inventario = relationship("Inventario", back_populates="recetas")
+
+    def __repr__(self):
+        return f"<RecetaServicio svc={self.catalogo_servicio_id} inv={self.inventario_id}>"
+
+
+class ConsumoMaterial(Base):
+    """Cantidad real de un material consumida en una aplicacion de servicio.
+
+    Una fila por material por aplicacion del servicio. Dispara el
+    MovimientoInventario (slice B) y es lo que se revierte al anular.
+    movimiento_id enlaza la trazabilidad consumo -> ledger.
+    """
+    __tablename__ = "consumo_material"
+
+    id = Column(Integer, primary_key=True, index=True)
+    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=False)
+    inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    cantidad = Column(Numeric(12, 3), nullable=False)
+    unidad_medida = Column(String(12), nullable=False)
+    movimiento_id = Column(Integer, ForeignKey("movimientos_inventario.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    servicio_consulta = relationship("ServicioConsulta", back_populates="consumos_material")
+    inventario = relationship("Inventario", back_populates="consumos_material")
+    movimiento = relationship("MovimientoInventario")
+
+    def __repr__(self):
+        return f"<ConsumoMaterial svc_consulta={self.servicio_consulta_id} inv={self.inventario_id}>"
 

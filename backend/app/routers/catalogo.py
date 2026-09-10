@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import CatalogoServicio
-from app.schemas.schemas import CatalogoServicioCreate, CatalogoServicioUpdate, CatalogoServicioResponse
+from app.models.models import CatalogoServicio, RecetaServicio, Inventario
+from app.schemas.schemas import (
+    CatalogoServicioCreate,
+    CatalogoServicioUpdate,
+    CatalogoServicioResponse,
+    RecetaServicioCreate,
+    RecetaServicioUpdate,
+    RecetaServicioResponse,
+)
 
 router = APIRouter(prefix="/api/catalogo", tags=["Catalogo de Servicios"])
 
@@ -96,5 +103,107 @@ def desactivar_servicio(servicio_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
     servicio.activo = False
+    db.commit()
+    return None
+
+
+# ========== ABM de receta de servicio (Tarea 07, slice A) ==========
+# La receta declara que materiales de inventario consume un servicio del
+# catalogo y en que cantidad estandar. Sin logica de consumo aca: descontar
+# stock al aplicar el servicio es slice B.
+
+
+@router.get("/{servicio_id}/recetas", response_model=List[RecetaServicioResponse])
+def listar_recetas_servicio(servicio_id: int, db: Session = Depends(get_db)):
+    """Lista los materiales declarados en la receta de un servicio del catalogo."""
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    return (
+        db.query(RecetaServicio)
+        .options(joinedload(RecetaServicio.inventario))
+        .filter(RecetaServicio.catalogo_servicio_id == servicio_id)
+        .order_by(RecetaServicio.id)
+        .all()
+    )
+
+
+@router.post(
+    "/{servicio_id}/recetas",
+    response_model=RecetaServicioResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def agregar_receta_servicio(
+    servicio_id: int,
+    data: RecetaServicioCreate,
+    db: Session = Depends(get_db),
+):
+    """Agrega una linea de material a la receta de un servicio.
+
+    404 si el servicio o el material no existen; 409 si ese material ya
+    figura en la receta de ese servicio (candado de la UNIQUE en DB).
+    """
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    material = db.query(Inventario).filter(Inventario.id == data.inventario_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material de inventario no encontrado")
+
+    ya_existe = (
+        db.query(RecetaServicio)
+        .filter(
+            RecetaServicio.catalogo_servicio_id == servicio_id,
+            RecetaServicio.inventario_id == data.inventario_id,
+        )
+        .first()
+    )
+    if ya_existe:
+        raise HTTPException(
+            status_code=409,
+            detail="Ese material ya esta en la receta de este servicio",
+        )
+
+    receta = RecetaServicio(
+        catalogo_servicio_id=servicio_id,
+        inventario_id=data.inventario_id,
+        cantidad=data.cantidad,
+        unidad_medida=data.unidad_medida,
+    )
+    db.add(receta)
+    db.commit()
+    db.refresh(receta)
+    return receta
+
+
+@router.put("/recetas/{receta_id}", response_model=RecetaServicioResponse)
+def actualizar_receta_servicio(
+    receta_id: int,
+    data: RecetaServicioUpdate,
+    db: Session = Depends(get_db),
+):
+    """Cambia la cantidad estandar o la unidad de una linea de receta."""
+    receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
+    if not receta:
+        raise HTTPException(status_code=404, detail="Linea de receta no encontrada")
+
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(receta, key, value)
+
+    db.commit()
+    db.refresh(receta)
+    return receta
+
+
+@router.delete("/recetas/{receta_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_receta_servicio(receta_id: int, db: Session = Depends(get_db)):
+    """Quita una linea de material de la receta."""
+    receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
+    if not receta:
+        raise HTTPException(status_code=404, detail="Linea de receta no encontrada")
+
+    db.delete(receta)
     db.commit()
     return None
