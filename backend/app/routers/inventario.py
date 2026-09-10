@@ -108,7 +108,11 @@ def registrar_movimiento(
     db: Session = Depends(get_db)
 ):
     """Registra entrada o salida de stock (Simplificado)"""
-    producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
+    # Row-lock antes de leer/mutar el stock: sin esto, dos movimientos manuales
+    # concurrentes sobre el mismo material pisan el saldo del otro (M5).
+    producto = db.query(Inventario).filter(
+        Inventario.id == producto_id
+    ).with_for_update().first()
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 

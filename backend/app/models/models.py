@@ -201,7 +201,7 @@ class ServicioConsulta(Base):
     referencia_id = Column(Integer, nullable=True) # ID to specific clinical table or Inventory (Insumos)
     # Ancla (por fin) el servicio de la consulta a su definicion de catalogo.
     # Nullable y sin backfill: se llena de aca en adelante (Tarea 07, decision 8).
-    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=True)
+    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=True, index=True)
     nombre_servicio = Column(String(255))
     cantidad = Column(Float, nullable=False, default=1.0)
     precio_unitario = Column(Float, nullable=False, default=0.0)
@@ -479,7 +479,7 @@ class MovimientoInventario(Base):
     usuario_responsable_id = Column(Integer, ForeignKey("usuarios.id"))
     # Ancla opcional al servicio que genero el movimiento. Slice A solo crea la
     # columna; el guard anti-doble-descuento por ledger llega en slice B.
-    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=True)
+    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=True, index=True)
 
     # Relaciones
     producto = relationship("Inventario")
@@ -705,8 +705,10 @@ class RecetaServicio(Base):
     """
     __tablename__ = "recetas_servicio"
 
-    id = Column(Integer, primary_key=True, index=True)
-    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=False)
+    # PK id sin index=True explicito: en Postgres el PRIMARY KEY ya crea su
+    # indice unico, agregar otro es redundante (M-NIT).
+    id = Column(Integer, primary_key=True)
+    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=False, index=True)
     inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
     cantidad = Column(Numeric(12, 3), nullable=False)
     unidad_medida = Column(String(12), nullable=False)  # 'ml' | 'g' | 'unidad'
@@ -732,8 +734,9 @@ class ConsumoMaterial(Base):
     """
     __tablename__ = "consumo_material"
 
-    id = Column(Integer, primary_key=True, index=True)
-    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=False)
+    # PK id sin index=True explicito (ver RecetaServicio): redundante en Postgres.
+    id = Column(Integer, primary_key=True)
+    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=False, index=True)
     inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
     cantidad = Column(Numeric(12, 3), nullable=False)
     unidad_medida = Column(String(12), nullable=False)
