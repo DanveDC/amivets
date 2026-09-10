@@ -1290,7 +1290,7 @@ const switchPetTab = (tabName) => {
         case 'peso':
             contentArea.innerHTML = `
                 <div style="background: var(--surface); border-radius: 8px; padding: 1.5rem;">
-                    <h3 style="margin-top: 0; color: #1f2937; text-align: center;">Evolución de Peso</h3>
+                    <h3 style="margin-top: 0; color: var(--text-primary); text-align: center;">Evolución de Peso</h3>
                     <div id="chartContainer" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
                         <canvas id="weightChart"></canvas>
                     </div>
