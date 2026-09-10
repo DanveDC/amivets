@@ -93,6 +93,23 @@ async function aplicarServicio(request, consultaId, catalogoServicioId, extra = 
   return res.json();
 }
 
+/** Crea un ServicioConsulta en estado "Pendiente" (no dispara consumo todavía). */
+async function crearServicioPendiente(request, consultaId, catalogoServicioId) {
+  const res = await request.post(`/api/consultas/${consultaId}/servicios`, {
+    data: {
+      consulta_id: consultaId,
+      tipo_servicio: 'LABORATORIO',
+      nombre_servicio: testTag('servPend'),
+      cantidad: 1,
+      precio_unitario: 100,
+      estado: 'Pendiente',
+      catalogo_servicio_id: catalogoServicioId,
+    },
+  });
+  expect(res.status(), await res.text()).toBe(201);
+  return res.json();
+}
+
 test.describe.serial('Inventario fraccionado — consumo de materiales por receta (Tarea 07)', () => {
   const S = {
     token: null,
@@ -254,5 +271,129 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     expect(movRes.ok(), await movRes.text()).toBeTruthy();
     const tras = await (await request.get(`/api/inventario/${prod.id}`)).json();
     expect(Number(tras.stock_actual)).toBe(7.5);
+  });
+
+  // ---- Casos agregados en la revisión adversaria de la Tarea 07 ----
+
+  test('8. aplicar por PATCH con override de consumos (regresión H1: no 500)', async ({ request }) => {
+    // Pendiente -> Aplicado vía PATCH, con `consumos` override. El PATCH hace
+    // model_dump(), así que consumo_service recibe dicts, no modelos pydantic.
+    const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
+    const pend = await crearServicioPendiente(request, S.consulta.id, servicio.id);
+    expect(Number(await stockOf(request, material.id))).toBe(2000); // Pendiente no consume
+
+    const res = await request.patch(`/api/consultas/servicios/${pend.id}`, {
+      data: { estado: 'Aplicado', consumos: [{ inventario_id: material.id, cantidad: 321.5 }] },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+    const body = await res.json();
+    expect(body.advertencias ?? null).toBeNull(); // 2000 alcanza para 321.5
+
+    expect(Number(await stockOf(request, material.id))).toBe(2000 - 321.5); // 1678.5, el override
+  });
+
+  test('9. re-aplicar después de revertir vuelve a descontar (regresión H3)', async ({ request }) => {
+    const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
+
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    expect(Number(await stockOf(request, material.id))).toBe(1500);
+
+    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Pendiente' } });
+    expect(revert.ok(), await revert.text()).toBeTruthy();
+    expect(Number(await stockOf(request, material.id))).toBe(2000);
+
+    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Aplicado' } });
+    expect(reapply.ok(), await reapply.text()).toBeTruthy();
+    // El guard cuenta SALIDA vs REVERSA: tras el ciclo el balance cierra y el
+    // re-aplicar NO es un no-op silencioso.
+    expect(Number(await stockOf(request, material.id))).toBe(1500);
+  });
+
+  test('10. merma_al_abrir: ciclo aplicar/revertir/re-aplicar deja 90 → 100 → 90', async ({ request }) => {
+    const material = await createTestMaterial(request, {
+      merma_al_abrir: true,
+      contenido_por_envase: 10,
+      stock_actual: 100,
+      stock_minimo: 0,
+    });
+    S.materiales.push(material.id);
+    const servicio = await createServicioConReceta(request, { inventarioId: material.id, cantidad: 3 });
+    S.servicios.push(servicio.id);
+
+    // Aplicar: SALIDA 3 + MERMA 7 → stock 90.
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    expect(Number(await stockOf(request, material.id))).toBe(90);
+
+    // Revertir: una REVERSA combinada de 10 → stock 100.
+    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Pendiente' } });
+    expect(revert.ok(), await revert.text()).toBeTruthy();
+    expect(Number(await stockOf(request, material.id))).toBe(100);
+
+    // Re-aplicar: SALIDA 3 + MERMA 7 otra vez → stock 90 (no no-op).
+    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Aplicado' } });
+    expect(reapply.ok(), await reapply.text()).toBeTruthy();
+    expect(Number(await stockOf(request, material.id))).toBe(90);
+  });
+
+  test('11. editar cantidad de un servicio ya Aplicado sin revertir → 409', async ({ request }) => {
+    const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    expect(Number(await stockOf(request, material.id))).toBe(1500);
+
+    const res = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { cantidad: 800 } });
+    expect(res.status()).toBe(409);
+    // El stock no se movió: la columna cantidad tampoco.
+    expect(Number(await stockOf(request, material.id))).toBe(1500);
+
+    // Pero sí se puede cambiar el precio (no toca stock).
+    const okRes = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { precio_unitario: 250 } });
+    expect(okRes.ok(), await okRes.text()).toBeTruthy();
+  });
+
+  test('12. guard real de doble-descuento al facturar (M6) + control negativo', async ({ request }) => {
+    // Servicio con receta que consumió al aplicarse (SALIDA anclada al servicio).
+    const { material, servicio } = await nuevoEscenario(request, { stock: 1000, receta: 400 });
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    expect(Number(await stockOf(request, material.id))).toBe(600);
+
+    // Factura (sin consulta_id, para no chocar con la factura del caso 5) con una
+    // línea que SÍ lleva producto_id + servicio_id de ese servicio. El guard por
+    // ledger debe evitar el segundo descuento.
+    const fGuardada = await createTestFactura(request, {
+      propietarioId: S.propietario.id,
+      detalles: [
+        {
+          descripcion: 'PWTEST doble-descuento guard',
+          cantidad: 1,
+          precio_unitario: 50,
+          producto_id: material.id,
+          servicio_id: serv.id,
+        },
+      ],
+    });
+    S.facturas.push(fGuardada.id);
+    expect(Number(await stockOf(request, material.id))).toBe(600); // NO se volvió a descontar
+
+    // Control negativo: producto suelto, sin consumo previo por servicio → SÍ descuenta.
+    const suelto = await createTestProduct(request, { stock_actual: 30, stock_minimo: 0 });
+    S.materiales.push(suelto.id);
+    const fSuelta = await createTestFactura(request, {
+      propietarioId: S.propietario.id,
+      detalles: [
+        { descripcion: 'PWTEST venta directa', cantidad: 5, precio_unitario: 10, producto_id: suelto.id },
+      ],
+    });
+    S.facturas.push(fSuelta.id);
+    expect(Number(await stockOf(request, suelto.id))).toBe(25);
+  });
+
+  // 13. STRICT_INVENTORY=true: bloquear el consumo con 400 cuando no alcanza el
+  // stock. Requiere levantar el backend con la env var seteada; el uvicorn que
+  // corre en el contenedor no se puede reconfigurar desde el test (docker
+  // compose exec -e no toca el proceso ya vivo). No se falsea: se skipea con
+  // justificación. Para ejercitarlo: `STRICT_INVENTORY=true` en el entorno del
+  // backend y correr este archivo.
+  test.skip('13. STRICT_INVENTORY=true bloquea el consumo sin stock con 400', async () => {
+    // Intencionalmente vacío: ver comentario arriba.
   });
 });
