@@ -1,5 +1,6 @@
 // sections/catalogo.js — catálogo de servicios.
-// Movido verbatim desde app.js (etapa 2a). Sin cambio de comportamiento.
+// Tarea 07 slice C: editor de receta de materiales por servicio (sección
+// "Materiales que consume" dentro del modal de edición).
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS, showNotification, openModal, closeModal } from '../core/ui.js';
@@ -67,10 +68,150 @@ export async function cargarCatalogo() {
     }
 }
 
+// ============================================================
+// RECETA DE MATERIALES POR SERVICIO (Tarea 07 slice C)
+// ============================================================
+
+let materialesCache = [];   // inventario filtrado a tipo_item === 'MATERIAL'
+let recetaWired = false;
+
+function showRecetaError(msg) {
+    const el = document.getElementById('recetaError');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.hidden = !msg;
+}
+
+async function cargarMaterialesSelect() {
+    const select = document.getElementById('recetaMaterialSelect');
+    if (!select) return;
+    try {
+        const items = await fetchAPI('/inventario/?limit=500');
+        materialesCache = (items || []).filter(p => p.tipo_item === 'MATERIAL');
+        select.innerHTML = '<option value="">Seleccionar…</option>' + materialesCache.map(m =>
+            `<option value="${m.id}" data-unidad="${m.unidad_medida || ''}">${m.nombre}</option>`
+        ).join('');
+    } catch (err) {
+        console.error('Error cargando materiales:', err);
+        select.innerHTML = '<option value="">No se pudo cargar el inventario</option>';
+    }
+}
+
+function renderRecetas(lineas) {
+    const cont = document.getElementById('catalogoRecetaLista');
+    if (!cont) return;
+    if (!lineas || !lineas.length) {
+        cont.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">Sin materiales en la receta.</p>';
+        return;
+    }
+    cont.innerHTML = lineas.map(l => `
+        <div class="receta-linea" data-receta-id="${l.id}" style="display:flex; gap:0.5rem; align-items:center; padding:0.4rem 0; border-bottom:1px solid var(--border);">
+            <span style="flex:2; min-width:120px; color:var(--text-primary);">${l.inventario_nombre || ('#' + l.inventario_id)}</span>
+            <input type="number" class="receta-cantidad" value="${Number(l.cantidad)}" step="0.001" min="0.001"
+                style="flex:1; max-width:90px;" aria-label="Cantidad">
+            <span style="flex:0 0 auto; min-width:48px; color:var(--text-secondary); font-size:0.85rem;">${l.unidad_medida}</span>
+            <button type="button" class="btn-secondary btn-sm btn-row-danger receta-quitar" style="font-size:0.75rem;">Quitar</button>
+        </div>
+    `).join('');
+}
+
+async function cargarRecetas(servicioId) {
+    const cont = document.getElementById('catalogoRecetaLista');
+    if (!cont) return;
+    cont.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">Cargando receta…</p>';
+    try {
+        const lineas = await fetchAPI(`/catalogo/${servicioId}/recetas`);
+        renderRecetas(lineas || []);
+    } catch (err) {
+        cont.innerHTML = `<p style="font-size:0.8rem; color:var(--accent); margin:0;">No se pudo cargar la receta: ${err.message}</p>`;
+    }
+}
+
+async function agregarReceta() {
+    const servicioId = document.getElementById('catalogoServicioId').value;
+    if (!servicioId) return;
+    const inventarioId = parseInt(document.getElementById('recetaMaterialSelect').value, 10);
+    const cantidad = parseFloat(document.getElementById('recetaMaterialCantidad').value);
+    const unidad = document.getElementById('recetaMaterialUnidad').value;
+    showRecetaError('');
+    if (!inventarioId) { showRecetaError('Elegí un material.'); return; }
+    if (!(cantidad > 0)) { showRecetaError('Ingresá una cantidad mayor a 0.'); return; }
+    try {
+        await fetchAPI(`/catalogo/${servicioId}/recetas`, {
+            method: 'POST',
+            body: JSON.stringify({ inventario_id: inventarioId, cantidad, unidad_medida: unidad }),
+        });
+        document.getElementById('recetaMaterialSelect').value = '';
+        document.getElementById('recetaMaterialCantidad').value = '';
+        await cargarRecetas(servicioId);
+    } catch (err) {
+        if (/ya está en la receta|ya esta en la receta|409/i.test(err.message)) {
+            showRecetaError('Ese material ya está en la receta');
+        } else {
+            showRecetaError('Error: ' + err.message);
+        }
+    }
+}
+
+async function quitarReceta(recetaId) {
+    try {
+        await fetchAPI(`/catalogo/recetas/${recetaId}`, { method: 'DELETE' });
+        const servicioId = document.getElementById('catalogoServicioId').value;
+        await cargarRecetas(servicioId);
+    } catch (err) {
+        showRecetaError('Error al quitar: ' + err.message);
+    }
+}
+
+async function actualizarRecetaCantidad(recetaId, valor) {
+    const cantidad = parseFloat(valor);
+    if (!(cantidad > 0)) { showRecetaError('La cantidad debe ser mayor a 0.'); return; }
+    try {
+        await fetchAPI(`/catalogo/recetas/${recetaId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ cantidad }),
+        });
+        showRecetaError('');
+    } catch (err) {
+        showRecetaError('Error al actualizar: ' + err.message);
+    }
+}
+
+function wireRecetaUI() {
+    if (recetaWired) return;
+    const section = document.getElementById('catalogoRecetaSection');
+    if (!section) return;
+    recetaWired = true;
+
+    document.getElementById('btnAgregarReceta')?.addEventListener('click', agregarReceta);
+
+    const lista = document.getElementById('catalogoRecetaLista');
+    lista?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.receta-quitar');
+        if (!btn) return;
+        const row = btn.closest('[data-receta-id]');
+        if (row) quitarReceta(row.dataset.recetaId);
+    });
+    lista?.addEventListener('change', (e) => {
+        const inp = e.target.closest('.receta-cantidad');
+        if (!inp) return;
+        const row = inp.closest('[data-receta-id]');
+        if (row) actualizarRecetaCantidad(row.dataset.recetaId, inp.value);
+    });
+
+    document.getElementById('recetaMaterialSelect')?.addEventListener('change', (e) => {
+        const unidad = e.target.selectedOptions[0]?.dataset.unidad;
+        if (unidad) document.getElementById('recetaMaterialUnidad').value = unidad;
+    });
+}
+
 export async function abrirModalServicio(id = null) {
     document.getElementById('catalogoServicioId').value = '';
     document.getElementById('formCatalogoServicio').reset();
     document.getElementById('modalCatalogoTitle').textContent = id ? 'Editar Servicio' : 'Nuevo Servicio';
+
+    const recetaSection = document.getElementById('catalogoRecetaSection');
+    showRecetaError('');
 
     if (id) {
         try {
@@ -85,6 +226,15 @@ export async function abrirModalServicio(id = null) {
             showNotification('Error cargando servicio: ' + err.message, 'error');
             return;
         }
+        // La receta solo existe para un servicio ya persistido.
+        wireRecetaUI();
+        if (recetaSection) recetaSection.hidden = false;
+        cargarMaterialesSelect();
+        cargarRecetas(id);
+    } else if (recetaSection) {
+        recetaSection.hidden = true;
+        const lista = document.getElementById('catalogoRecetaLista');
+        if (lista) lista.innerHTML = '';
     }
     openModal('modalCatalogoServicio');
 }

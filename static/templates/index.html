@@ -1795,6 +1795,37 @@
                     <input type="checkbox" id="catalogoPrecioVariable" style="width:auto;">
                     <label for="catalogoPrecioVariable" style="margin:0;">Precio Variable</label>
                 </div>
+
+                <div id="catalogoRecetaSection" hidden style="margin-top:1.5rem; border-top:1px solid var(--border); padding-top:1rem;">
+                    <label style="font-weight:600; color:var(--text-primary);">Materiales que consume</label>
+                    <p style="font-size:0.78rem; color:var(--text-muted); margin:0.25rem 0 0.75rem;">
+                        Cantidades estándar por aplicación; el veterinario las ajusta al aplicar el servicio.
+                    </p>
+                    <div id="catalogoRecetaLista"></div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end; margin-top:0.75rem;">
+                        <div class="form-group" style="flex:2; min-width:150px; margin:0;">
+                            <label for="recetaMaterialSelect">Material</label>
+                            <select id="recetaMaterialSelect">
+                                <option value="">Seleccionar…</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex:1; min-width:80px; margin:0;">
+                            <label for="recetaMaterialCantidad">Cantidad</label>
+                            <input type="number" id="recetaMaterialCantidad" step="0.001" min="0.001" placeholder="0">
+                        </div>
+                        <div class="form-group" style="flex:1; min-width:80px; margin:0;">
+                            <label for="recetaMaterialUnidad">Unidad</label>
+                            <select id="recetaMaterialUnidad">
+                                <option value="ml">ml</option>
+                                <option value="g">g</option>
+                                <option value="unidad">unidad</option>
+                            </select>
+                        </div>
+                        <button type="button" id="btnAgregarReceta" class="btn-secondary btn-sm">Agregar</button>
+                    </div>
+                    <p id="recetaError" hidden style="color:var(--accent); font-size:0.8rem; margin:0.5rem 0 0;"></p>
+                </div>
+
                 <div class="modal-footer" style="margin-top:1.5rem;">
                     <button type="button" class="btn-secondary" data-close="modalCatalogoServicio">Cancelar</button>
                     <button type="submit" class="btn-primary">Guardar</button>
