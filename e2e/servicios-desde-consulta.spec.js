@@ -272,6 +272,19 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     });
     expect(vacuna.status(), await vacuna.text()).toBe(403);
 
+    // Tampoco por la puerta de atrás de /api/clinico (require_roles corta antes
+    // de tocar la DB, por eso los ids pueden ser dummy).
+    const clinVac = await request.post('/api/clinico/vacunacion', {
+      headers: authHeaders(S.recep.token),
+      data: { consulta_id: consulta.id, vacuna_id: 1, lote: 'x' },
+    });
+    expect(clinVac.status(), await clinVac.text()).toBe(403);
+    const clinDesp = await request.post('/api/clinico/desparasitacion', {
+      headers: authHeaders(S.recep.token),
+      data: { consulta_id: consulta.id, producto_id: 1, tipo: 'Interna', dosis: '1' },
+    });
+    expect(clinDesp.status(), await clinDesp.text()).toBe(403);
+
     // Pero SÍ puede anexar un servicio NO clínico (ESTÉTICA) → 201.
     const estetica = await request.post(`/api/consultas/${consulta.id}/servicios`, {
       headers: authHeaders(S.recep.token),
@@ -279,6 +292,34 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     });
     expect(estetica.status(), await estetica.text()).toBe(201);
     expect((await estetica.json()).tipo_servicio).toBe('ESTETICA');
+  });
+
+  test('anular la factura de una consulta la reabre y se puede volver a facturar', async ({ request }) => {
+    const consulta = await createTestConsulta(request, {
+      mascotaId: S.mascota.id,
+      veterinarioId: S.vet.id,
+    });
+    S.consultaIds.push(consulta.id);
+    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'PROCEDIMIENTO', precio_unitario: 8000 });
+
+    const factura = await facturarDesdeConsulta(request, consulta.id);
+    const cerrada = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(S.token) })).json();
+    expect(cerrada.estado).toBe('CERRADA');
+    expect(cerrada.estado_pago).toBe('COBRADO');
+    expect(cerrada.servicios.every((s) => s.facturado)).toBe(true);
+
+    // Anular: la consulta vuelve a ABIERTA / POR_COBRAR y sus líneas a no facturadas.
+    const anular = await request.post(`/api/facturas/${factura.id}/anular`, { headers: authHeaders(S.token) });
+    expect(anular.status(), await anular.text()).toBe(200);
+    const reabierta = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(S.token) })).json();
+    expect(reabierta.estado).toBe('ABIERTA');
+    expect(reabierta.estado_pago).toBe('POR_COBRAR');
+    expect(reabierta.servicios.every((s) => !s.facturado)).toBe(true);
+
+    // Y se puede volver a facturar (antes quedaba trabada sin ítems pendientes).
+    const factura2 = await facturarDesdeConsulta(request, consulta.id);
+    S.facturaIds.push(factura2.id);
+    expect(factura2.total).toBe(factura.total);
   });
 
   test('las consultas y servicios cargados antes de la migración siguen visibles', async ({ request }) => {
