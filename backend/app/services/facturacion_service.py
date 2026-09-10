@@ -349,9 +349,32 @@ class FacturacionService:
                 ))
 
         factura.estado = "ANULADA"
+
+        # Anular deshace el cobro: la consulta y sus líneas vuelven a estar
+        # pendientes, si no obtener_items_pendientes_consulta no devuelve nada y
+        # la consulta no se puede volver a facturar nunca (Tarea 09). Se reabre
+        # también el ciclo clínico para que vuelva a la bandeja de trabajo.
+        servicio_ids = [d.servicio_id for d in factura.detalles if d.servicio_id]
+        if servicio_ids:
+            db.query(ServicioConsulta).filter(
+                ServicioConsulta.id.in_(servicio_ids)
+            ).update({ServicioConsulta.facturado: False}, synchronize_session=False)
+        if factura.consulta_id:
+            consulta = db.query(Consulta).filter(Consulta.id == factura.consulta_id).first()
+            if consulta:
+                consulta.estado_pago = "POR_COBRAR"
+                consulta.estado = "ABIERTA"
+                for s in consulta.servicios:
+                    s.facturado = False
+                for p in consulta.pruebas: p.facturado = False
+                for v in consulta.vacunaciones: v.facturado = False
+                for d in consulta.desparasitaciones: d.facturado = False
+                for c in consulta.cirugias: c.facturado = False
+                for h in consulta.hospitalizaciones: h.facturado = False
+
         db.commit()
         db.refresh(factura)
-        
+
         return factura
 
     @staticmethod

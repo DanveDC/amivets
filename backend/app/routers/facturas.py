@@ -42,11 +42,11 @@ def crear_factura_desde_consulta(
 
     El servidor arma los detalles desde consulta.servicios (no borrados, no
     facturados) + el honorario de consulta, crea la factura y cierra la consulta
-    (estado='CERRADA'). El flujo de dos pasos (GET /pendientes/{id} -> POST /)
-    sigue funcionando igual.
+    (crear_factura pone estado='CERRADA' por cualquier camino). El flujo de dos
+    pasos (GET /pendientes/{id} -> POST /) sigue funcionando igual.
 
-    Anular la factura después NO reabre la consulta: queda 'CERRADA'. Reabrirla
-    es una acción manual (PUT /api/consultas/{id} con estado='ABIERTA').
+    Anular la factura después revierte todo: la consulta vuelve a 'ABIERTA' /
+    'POR_COBRAR' y sus líneas a no facturadas (ver anular_factura).
     """
     body = body or FacturaDesdeConsulta()
 
@@ -81,15 +81,8 @@ def crear_factura_desde_consulta(
         detalles=detalles,
     )
 
-    factura = FacturacionService.crear_factura(db, factura_create)
-
-    consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
-    if consulta is not None:
-        consulta.estado = "CERRADA"
-        db.commit()
-        db.refresh(factura)
-
-    return factura
+    # crear_factura ya deja la consulta CERRADA + COBRADO cuando recibe consulta_id.
+    return FacturacionService.crear_factura(db, factura_create)
 
 
 @router.get("/{factura_id}", response_model=FacturaResponse)

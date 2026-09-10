@@ -29,7 +29,11 @@ def obtener_vacunaciones(mascota_id: int, db: Session = Depends(get_db)):
     return out
 
 @router.post("/vacunacion", response_model=schemas.VacunacionResponse)
-def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends(get_db)):
+def crear_vacunacion(
+    vacunacion: schemas.VacunacionCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     # Verify consulta exists
     consulta = db.query(models.Consulta).filter(models.Consulta.id == vacunacion.consulta_id).first()
     if not consulta:
@@ -113,7 +117,11 @@ def obtener_desparasitaciones(mascota_id: int, db: Session = Depends(get_db)):
     return out
 
 @router.post("/desparasitacion", response_model=schemas.DesparasitacionResponse)
-def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Depends(get_db)):
+def crear_desparasitacion(
+    desp: schemas.DesparasitacionCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     consulta = db.query(models.Consulta).filter(models.Consulta.id == desp.consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
@@ -298,7 +306,7 @@ def crear_prueba_complementaria(
         servicio = models.ServicioConsulta(
             consulta_id=prueba.consulta_id,
             mascota_id=consulta.mascota_id,
-            tipo_servicio="LABORATORIO" if "Lab" in prueba.tipo else "DIAGNOSTICO",
+            tipo_servicio="LABORATORIO" if "Lab" in (prueba.tipo or "") else "DIAGNOSTICO",
             referencia_id=db_prueba.id,
             nombre_servicio=f"ESTUDIO: {prueba.tipo}",
             cantidad=1.0,

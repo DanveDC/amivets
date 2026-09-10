@@ -8,9 +8,21 @@ PATCH/DELETE de un servicio individual viven aca; routers/consultas.py mantiene
 los paths /api/consultas/servicios/{id} como alias que delegan a estas mismas
 funciones (para no romper e2e/flujo-clinico.spec.js).
 """
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+
+
+def _parse_fecha(valor: Optional[str], campo: str) -> Optional[date]:
+    """YYYY-MM-DD → date, o 422. Evita el 500 por cast inválido de timestamp."""
+    if not valor:
+        return None
+    try:
+        return date.fromisoformat(valor)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{campo} debe tener formato YYYY-MM-DD")
 
 from app.core.database import get_db
 from app.schemas.schemas import (
@@ -237,11 +249,13 @@ def listar_servicios_mascota(
         q = q.filter(ServicioConsulta.estado == estado)
     if facturado is not None:
         q = q.filter(ServicioConsulta.facturado == facturado)
-    if fecha_desde:
-        q = q.filter(ServicioConsulta.created_at >= fecha_desde)
-    if fecha_hasta:
-        # inclusivo hasta el fin del día
-        q = q.filter(ServicioConsulta.created_at < f"{fecha_hasta} 23:59:59.999999")
+    d_desde = _parse_fecha(fecha_desde, "fecha_desde")
+    d_hasta = _parse_fecha(fecha_hasta, "fecha_hasta")
+    if d_desde:
+        q = q.filter(ServicioConsulta.created_at >= d_desde)
+    if d_hasta:
+        # inclusivo: hasta el fin de ese día (< día siguiente a medianoche)
+        q = q.filter(ServicioConsulta.created_at < d_hasta + timedelta(days=1))
 
     return q.order_by(ServicioConsulta.created_at.desc(), ServicioConsulta.id.desc()).all()
 

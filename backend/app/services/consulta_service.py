@@ -89,6 +89,13 @@ class ConsultaService:
 
         update_data = consulta_data.model_dump(exclude_unset=True)
 
+        # Ciclo de vida clínico (Tarea 09, decisión 6): conjunto cerrado.
+        if "estado" in update_data and update_data["estado"] not in {"ABIERTA", "CERRADA", "ANULADA"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="estado debe ser ABIERTA, CERRADA o ANULADA",
+            )
+
         # Mismo chequeo que crear_consulta: reasignar veterinario_id sin
         # validar permitiria colgar la consulta de un usuario que no es
         # veterinario, o de un id inexistente.

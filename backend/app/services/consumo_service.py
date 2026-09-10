@@ -156,7 +156,7 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
     if not necesidades:
         return []
 
-    consulta_id = servicio.consulta_id
+    ref = f"Consulta #{servicio.consulta_id}" if servicio.consulta_id else f"Servicio directo #{servicio.id}"
     advertencias = []
 
     for inv_id, necesita in necesidades.items():
@@ -186,7 +186,7 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
             tipo_movimiento=TipoMovimiento.SALIDA,
             cantidad=necesita,
             costo_unitario=inv.precio_unitario,
-            origen_destino=f"Consumo servicio - Consulta #{consulta_id}",
+            origen_destino=f"Consumo servicio - {ref}",
             servicio_consulta_id=servicio.id,
             usuario_responsable_id=usuario_id,
         )
@@ -215,7 +215,7 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
                         tipo_movimiento=TipoMovimiento.MERMA,
                         cantidad=sobrante,
                         costo_unitario=inv.precio_unitario,
-                        origen_destino=f"Merma al abrir - Consulta #{consulta_id}",
+                        origen_destino=f"Merma al abrir - {ref}",
                         servicio_consulta_id=servicio.id,
                         usuario_responsable_id=usuario_id,
                     ))
@@ -239,7 +239,7 @@ def revertir_para_servicio(db: Session, servicio: ServicioConsulta, *, usuario_i
         ServicioConsulta.id == servicio.id
     ).with_for_update().first()
 
-    consulta_id = servicio.consulta_id
+    ref = f"Consulta #{servicio.consulta_id}" if servicio.consulta_id else f"Servicio directo #{servicio.id}"
 
     ya_revertido = db.query(MovimientoInventario.id).filter(
         MovimientoInventario.servicio_consulta_id == servicio.id,
@@ -271,7 +271,7 @@ def revertir_para_servicio(db: Session, servicio: ServicioConsulta, *, usuario_i
                 tipo_movimiento=TipoMovimiento.REVERSA,
                 cantidad=delta,
                 costo_unitario=inv.precio_unitario,
-                origen_destino=f"Reversion consumo - Consulta #{consulta_id}",
+                origen_destino=f"Reversion consumo - {ref}",
                 servicio_consulta_id=servicio.id,
                 usuario_responsable_id=usuario_id,
             ))
@@ -299,7 +299,7 @@ def revertir_para_servicio(db: Session, servicio: ServicioConsulta, *, usuario_i
                 tipo_movimiento=TipoMovimiento.REVERSA,
                 cantidad=mag,
                 costo_unitario=inv.precio_unitario,
-                origen_destino=f"Reversion consumo - Consulta #{consulta_id}",
+                origen_destino=f"Reversion consumo - {ref}",
                 servicio_consulta_id=servicio.id,
                 usuario_responsable_id=usuario_id,
             ))
@@ -318,7 +318,7 @@ def revertir_para_servicio(db: Session, servicio: ServicioConsulta, *, usuario_i
                     tipo_movimiento=TipoMovimiento.ENTRADA,
                     cantidad=mag,
                     costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Reversion consumo - Consulta #{consulta_id}",
+                    origen_destino=f"Reversion consumo - {ref}",
                     servicio_consulta_id=servicio.id,
                     usuario_responsable_id=usuario_id,
                 ))
