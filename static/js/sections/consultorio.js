@@ -1730,11 +1730,12 @@ const _renderServicioRow = (s) => {
         : (aplicado ? '<span class="serv-dot serv-dot--on" aria-hidden="true"></span>'
                     : '<span class="serv-dot" aria-hidden="true"></span>');
     const sub = `${Number(s.cantidad || 0)} × ${_money(s.precio_unitario)}`;
+    const factTag = s.facturado ? ' <span class="serv-row-fact" title="Ya facturado">facturado</span>' : '';
     return `
         <button type="button" class="serv-row" data-id="${s.id}" aria-expanded="false" aria-controls="serv-detail-${s.id}">
             <span class="serv-row-date">${_fmtFecha(s.created_at)}</span>
             <span><span class="serv-badge serv-badge--${meta.cls}">${meta.label}</span></span>
-            <span class="serv-row-name">${s.nombre_servicio || meta.label}${s.consulta_id ? ' <span class="serv-row-origin">· Consulta</span>' : ''}</span>
+            <span class="serv-row-name">${s.nombre_servicio || meta.label}${s.consulta_id ? ' <span class="serv-row-origin">· Consulta</span>' : ''}${factTag}</span>
             <span class="serv-row-qty">${sub}</span>
             <span class="serv-row-estado">${estadoDot}${s.estado || 'Pendiente'}</span>
         </button>

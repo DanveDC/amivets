@@ -202,6 +202,9 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
     # Fecha del servicio para la historia unificada del paciente (Tarea 09).
     created_at: Optional[datetime] = None
+    # Ya facturado sí/no — para el timeline de la ficha (el endpoint ya filtra
+    # por ?facturado=, faltaba exponerlo por fila).
+    facturado: Optional[bool] = None
     # Advertencias de stock al aplicar (Decision 4): faltantes que se
     # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
     # que dispara el consumo.

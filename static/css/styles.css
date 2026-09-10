@@ -1254,6 +1254,11 @@ form {
 .serv-row-date { font-size: 0.8rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .serv-row-name { font-size: 0.88rem; font-weight: 500; min-width: 0; }
 .serv-row-origin { color: var(--text-muted); font-weight: 400; font-size: 0.8rem; }
+.serv-row-fact {
+    font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--secondary-dark); background: var(--secondary-subtle);
+    padding: 0.05rem 0.35rem; border-radius: 4px; vertical-align: middle;
+}
 .serv-row-qty { font-size: 0.82rem; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .serv-row-estado { font-size: 0.82rem; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 0.4rem; }
 
