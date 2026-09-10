@@ -326,9 +326,11 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     expect(S.factura.estado).toBe('PENDIENTE');
     expect(S.factura.consulta_id).toBe(S.consulta.id);
 
-    // Emitir factura de una consulta la marca COBRADO.
+    // Emitir factura de una consulta la marca COBRADO y la cierra (Tarea 09,
+    // decisión 6): facturar por cualquier camino deja la consulta CERRADA.
     const consultaCobrada = await (await request.get(`/api/consultas/${S.consulta.id}`, { headers: authHeaders(S.token) })).json();
     expect(consultaCobrada.estado_pago).toBe('COBRADO');
+    expect(consultaCobrada.estado).toBe('CERRADA');
 
     // Re-facturar la misma consulta sin anular antes debe dar 409.
     const dupRes = await request.post('/api/facturas/', {

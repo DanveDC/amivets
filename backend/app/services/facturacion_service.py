@@ -210,6 +210,10 @@ class FacturacionService:
                 consulta = db.query(Consulta).filter(Consulta.id == factura_data.consulta_id).first()
                 if consulta:
                     consulta.estado_pago = "COBRADO"
+                    # Facturar cierra la consulta por cualquier camino (Tarea 09,
+                    # decisión 6): el flujo legacy POST /api/facturas/ y el nuevo
+                    # from-consulta dejan la misma huella. Reabrir es manual.
+                    consulta.estado = "CERRADA"
 
                     # Marcar servicios como facturados (sin borrar el estado médico)
                     for s in consulta.servicios:
