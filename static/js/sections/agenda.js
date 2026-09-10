@@ -1,7 +1,7 @@
 // sections/agenda.js — Agenda: lista de espera del día + calendario FullCalendar.
 // Movido verbatim desde app.js (etapa 2a). Sin cambio de comportamiento.
-// `atenderDesdeOrden` y `verDetallesDesdeAgenda` conservan su manipulación
-// directa de la nav SPA exactamente como estaba.
+// `atenderDesdeOrden` y `verDetallesDesdeAgenda` navegan a Consultorio por el
+// router del shell 1A (showSection).
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS, openModal, closeModal } from '../core/ui.js';
@@ -191,13 +191,8 @@ export const checkInCita = async (id, nuevoEstado = 'EN_ESPERA') => {
 };
 
 export const atenderDesdeOrden = (mascotaId, citaId) => {
-    // Redirigir al consultorio
-    const menuItems = document.querySelectorAll('.menu-item[data-target]');
-    const sections = document.querySelectorAll('.spa-section');
-    menuItems.forEach(i => i.classList.remove('active'));
-    document.querySelector('.menu-item[data-target="sec-consultorio"]').classList.add('active');
-    sections.forEach(s => s.style.display = 'none');
-    document.getElementById('sec-consultorio').style.display = 'block';
+    // Redirigir al consultorio por el router del shell (oculta el resto con [hidden]).
+    showSection('sec-consultorio');
 
     // Seleccionar mascota y enfocar
     seleccionarMascotaBasica(mascotaId); // Carga la mascota, podemos optimizar si tuvieramos el endpoint

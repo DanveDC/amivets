@@ -246,9 +246,9 @@ export const handleMascotaSubmit = async (e) => {
         const result = await fetchAPI('/mascotas/', { method: 'POST', body: JSON.stringify(data) });
         alert(`Mascota registrada: ${result.nombre}`);
         closeModal('modalMascota');
-        // Refresh list if in consultorio
-        const currentTarget = document.querySelector('.menu-item.active')?.dataset.target;
-        if (currentTarget === 'sec-consultorio') initConsultorio();
+        // Refresh list if in consultorio (sección visible en el shell 1A).
+        const secConsultorio = document.getElementById('sec-consultorio');
+        if (secConsultorio && !secConsultorio.hidden) initConsultorio();
     } catch (error) {
         alert('Error: ' + error.message);
     }

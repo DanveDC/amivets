@@ -1,10 +1,10 @@
 // sections/propietarios.js — propietarios (tabla, alta, edición, baja lógica).
 // Movido verbatim desde app.js (etapa 2a). Sin cambio de comportamiento.
-// `verMascotasPropietario` conserva su manipulación directa de la nav SPA
-// (.menu-item / .spa-section) exactamente como estaba.
+// `verMascotasPropietario` navega a Consultorio por el router del shell 1A.
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS, openModal, closeModal } from '../core/ui.js';
+import { showSection } from '../core/router.js';
 import { renderMascotasList, seleccionarMascota } from './consultorio.js';
 
 // ============ PROPIETARIOS MODULE ============
@@ -88,13 +88,8 @@ export const verMascotasPropietario = async (propietarioId, nombre) => {
         const listContainer = document.getElementById('consultorioMascotasList');
         const searchInput = document.getElementById('consultorioSearchMascota');
 
-        // Switch section manually to avoid race conditions with DOM elements
-        const menuItems = document.querySelectorAll('.menu-item[data-target]');
-        const sections = document.querySelectorAll('.spa-section');
-        menuItems.forEach(i => i.classList.remove('active'));
-        document.querySelector('.menu-item[data-target="sec-consultorio"]').classList.add('active');
-        sections.forEach(s => s.style.display = 'none');
-        document.getElementById('sec-consultorio').style.display = 'block';
+        // Navegación por el router del shell (oculta el resto con [hidden]).
+        showSection('sec-consultorio');
 
         if (searchInput) {
             searchInput.value = `ID Propietario: ${propietarioId}`; // UI feedback

@@ -141,6 +141,13 @@
 /* main region below the chrome */
 .av-main { flex: 1; min-height: 0; min-width: 0; }
 
+/* El router de pestañas (core/router.js) muestra UNA sola <section> por vez y
+   oculta el resto con el atributo [hidden]. Las secciones que fijan su propio
+   `display` (.av-hoy, .av-ca) o que reciben un `display` inline de código legado
+   ignorarían ese atributo y quedarían apiladas. Esta regla hace que [hidden]
+   gane siempre — incluso contra un style="display:*" inline. */
+.av-main > section[hidden] { display: none !important; }
+
 /* generic section page (non-consultorio sections) */
 .av-page { padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-6); }
 .av-page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
