@@ -5,10 +5,27 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.models.models import (
-    Factura, DetalleFactura, Inventario, MovimientoInventario, 
-    Consulta, PruebaComplementaria, Vacunacion, Desparasitacion, 
-    Cirugia, Hospitalizacion, ServicioConsulta
+    Factura, DetalleFactura, Inventario, MovimientoInventario,
+    Consulta, PruebaComplementaria, Vacunacion, Desparasitacion,
+    Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento
 )
+
+
+def _consumo_en_ledger(db: Session, servicio_id) -> bool:
+    """True si el ServicioConsulta ya descontó materiales al aplicarse y esos
+    movimientos no fueron revertidos. Fuente de verdad: el ledger, no el
+    booleano estado == 'Aplicado' (Tarea 07, decisión 3)."""
+    if not servicio_id:
+        return False
+    salidas = db.query(MovimientoInventario.id).filter(
+        MovimientoInventario.servicio_consulta_id == servicio_id,
+        MovimientoInventario.tipo_movimiento.in_([TipoMovimiento.SALIDA, TipoMovimiento.MERMA]),
+    ).count()
+    reversas = db.query(MovimientoInventario.id).filter(
+        MovimientoInventario.servicio_consulta_id == servicio_id,
+        MovimientoInventario.tipo_movimiento == TipoMovimiento.REVERSA,
+    ).count()
+    return salidas > reversas
 from app.schemas.schemas import FacturaCreate, FacturaUpdate
 
 
@@ -76,29 +93,29 @@ class FacturacionService:
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto {detalle_data.producto_id} no encontrado")
                     
-                    # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
-                    ya_descontado = False
-                    servicio_id = getattr(detalle_data, 'servicio_id', None)
-                    if servicio_id:
-                        serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
-                        if serv and serv.estado == "Aplicado":
-                            ya_descontado = True
-                    
+                    # Evitar doble descuento: si esta línea proviene de un
+                    # servicio que ya consumió sus materiales al aplicarse
+                    # (evidencia en el ledger), no se vuelve a descontar.
+                    ya_descontado = _consumo_en_ledger(db, getattr(detalle_data, 'servicio_id', None))
+
                     if not ya_descontado:
                         if producto.stock_actual < detalle_data.cantidad:
                             raise HTTPException(
-                                status_code=400, 
+                                status_code=400,
                                 detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock_actual}"
                             )
-                        
+
                         # 1. Descontar del inventario
                         producto.stock_actual -= detalle_data.cantidad
-                        
-                        # 2. Preparar Movimiento de Trazabilidad
+
+                        # 2. Preparar Movimiento de Trazabilidad. Magnitud
+                        #    positiva; la dirección la lleva tipo_movimiento
+                        #    (Tarea 07, decisión 8). Las filas negativas
+                        #    históricas no se reescriben (deuda anotada).
                         movimiento = MovimientoInventario(
                             producto_id=producto.id,
-                            tipo_movimiento="SALIDA",
-                            cantidad=-detalle_data.cantidad,
+                            tipo_movimiento=TipoMovimiento.SALIDA,
+                            cantidad=detalle_data.cantidad,
                             costo_unitario=producto.precio_unitario, # Kardex usa costo
                             origen_destino=f"VENTA_{numero_factura}",
                             usuario_responsable_id=usuario_id
@@ -271,15 +288,28 @@ class FacturacionService:
                 detail="La factura ya está anulada"
             )
         
-        # Devolver stock al inventario
+        # Devolver stock SOLO por las líneas que efectivamente se descontaron al
+        # facturar: producto_id presente Y no cubiertas por un consumo al
+        # aplicar el servicio. Evita la devolución de más (audit §2 fila 5).
         for detalle in factura.detalles:
-            if detalle.producto_id:
-                producto = db.query(Inventario).filter(
-                    Inventario.id == detalle.producto_id
-                ).first()
-                if producto:
-                    producto.stock_actual += detalle.cantidad
-        
+            if not detalle.producto_id:
+                continue
+            if _consumo_en_ledger(db, detalle.servicio_id):
+                continue
+            producto = db.query(Inventario).filter(
+                Inventario.id == detalle.producto_id
+            ).with_for_update().first()
+            if producto:
+                producto.stock_actual += detalle.cantidad
+                db.add(MovimientoInventario(
+                    producto_id=producto.id,
+                    tipo_movimiento=TipoMovimiento.ENTRADA,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=producto.precio_unitario,
+                    origen_destino=f"Anulación factura {factura.numero_factura}",
+                    usuario_responsable_id=None,
+                ))
+
         factura.estado = "ANULADA"
         db.commit()
         db.refresh(factura)
@@ -356,7 +386,10 @@ class FacturacionService:
             if not s.facturado and not s.is_deleted:
                 prod_id = None
                 if s.tipo_servicio == 'INSUMO':
-                    prod_id = s.referencia_id
+                    # Los materiales se descuentan al aplicar el servicio y son
+                    # parte del precio del servicio (Tarea 07, decisión 3): la
+                    # línea se factura por su precio pero NO toca inventario.
+                    prod_id = None
                 elif s.tipo_servicio == 'VACUNACION':
                     vac = db.query(Vacunacion).filter(Vacunacion.id == s.referencia_id).first()
                     if vac:

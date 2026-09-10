@@ -34,8 +34,10 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
-    # Verify vaccine in inventory
-    producto = db.query(models.Inventario).filter(models.Inventario.id == vacunacion.vacuna_id).first()
+    # Verify vaccine in inventory (row-lock para concurrencia, Tarea 07 decisión 6)
+    producto = db.query(models.Inventario).filter(
+        models.Inventario.id == vacunacion.vacuna_id
+    ).with_for_update().first()
     if not producto:
         raise HTTPException(status_code=404, detail="Vacuna no encontrada en inventario")
     
@@ -75,7 +77,8 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
         estado="Aplicado"
     )
     db.add(servicio)
-    
+    db.flush()  # id del servicio para anclar el movimiento al ledger
+
     # Add to inventory history
     mov = models.MovimientoInventario(
         producto_id=producto.id,
@@ -83,7 +86,8 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
         cantidad=1,
         costo_unitario=producto.precio_unitario, # Using price since cost wasn't explicitly captured
         lote=vacunacion.lote,
-        origen_destino=f"Aplicación clínica - Consulta #{consulta.id}"
+        origen_destino=f"Aplicación clínica - Consulta #{consulta.id}",
+        servicio_consulta_id=servicio.id
     )
     db.add(mov)
 
@@ -112,7 +116,9 @@ def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Dep
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
-    producto = db.query(models.Inventario).filter(models.Inventario.id == desp.producto_id).first()
+    producto = db.query(models.Inventario).filter(
+        models.Inventario.id == desp.producto_id
+    ).with_for_update().first()
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
@@ -145,13 +151,15 @@ def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Dep
         estado="Aplicado"
     )
     db.add(servicio)
+    db.flush()  # id del servicio para anclar el movimiento al ledger
 
     mov = models.MovimientoInventario(
         producto_id=producto.id,
         tipo_movimiento="SALIDA",
         cantidad=1,
         costo_unitario=producto.precio_unitario,
-        origen_destino=f"Aplicación clinica - Consulta #{consulta.id}"
+        origen_destino=f"Aplicación clinica - Consulta #{consulta.id}",
+        servicio_consulta_id=servicio.id
     )
     db.add(mov)
 

@@ -10,9 +10,11 @@ from app.schemas.schemas import (
     RecetaCreate, RecetaResponse,
     ServicioConsultaCreate, ServicioConsultaUpdate, ServicioConsultaResponse
 )
-from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion
+from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion, Usuario
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
+from app.services import consumo_service
+from app.routers.usuarios import get_optional_current_user
 
 router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
 
@@ -152,17 +154,24 @@ def descargar_receta_pdf(
 def agregar_servicio_consulta(
     consulta_id: int,
     servicio_data: ServicioConsultaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[Usuario] = Depends(get_optional_current_user),
 ):
-    """Agrega un ítem o servicio a la consulta clínica (Vacuna, Cirugía, Insumo, etc.)"""
+    """Agrega un ítem o servicio a la consulta clínica (Vacuna, Cirugía, Insumo, etc.).
+
+    Si el servicio entra directo en estado "Aplicado", descuenta del inventario
+    los materiales que consume (receta del catálogo y/o línea INSUMO manual) a
+    través de consumo_service (Tarea 07, decisión 3).
+    """
     consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
-    
+
     nuevo_servicio = ServicioConsulta(
         consulta_id=consulta_id,
         tipo_servicio=servicio_data.tipo_servicio,
         referencia_id=servicio_data.referencia_id,
+        catalogo_servicio_id=servicio_data.catalogo_servicio_id,
         nombre_servicio=servicio_data.nombre_servicio,
         cantidad=servicio_data.cantidad,
         precio_unitario=servicio_data.precio_unitario,
@@ -170,89 +179,69 @@ def agregar_servicio_consulta(
         estado=servicio_data.estado,
         is_deleted=False
     )
-    
-    # Check simple deduct for 'Aplicado' straight away, mostly items start 'Pendiente'
-    if nuevo_servicio.estado == "Aplicado" and nuevo_servicio.referencia_id:
-        if nuevo_servicio.tipo_servicio in ["INSUMO", "VACUNACION"]:
-            inv = db.query(Inventario).filter(Inventario.id == nuevo_servicio.referencia_id).first()
-            if inv:
-                if inv.stock_actual < nuevo_servicio.cantidad:
-                    raise HTTPException(status_code=400, detail=f"Stock insuficiente para {inv.nombre}")
-                inv.stock_actual -= nuevo_servicio.cantidad
-                mov = MovimientoInventario(
-                    producto_id=inv.id,
-                    tipo_movimiento="SALIDA",
-                    cantidad=nuevo_servicio.cantidad,
-                    costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Consumo directo - Consulta #{consulta.id}"
-                )
-                db.add(mov)
-
     db.add(nuevo_servicio)
+    db.flush()  # id necesario para anclar movimientos/consumos
+
+    advertencias = []
+    if nuevo_servicio.estado == "Aplicado":
+        advertencias = consumo_service.consumir_para_servicio(
+            db,
+            nuevo_servicio,
+            overrides=consumo_service.overrides_from_payload(servicio_data.consumos),
+            usuario_id=current_user.id if current_user else None,
+        )
+
     db.commit()
     db.refresh(nuevo_servicio)
-    return nuevo_servicio
+    resp = ServicioConsultaResponse.model_validate(nuevo_servicio)
+    if advertencias:
+        resp.advertencias = advertencias
+    return resp
 
 @router.patch("/servicios/{servicio_id}", response_model=ServicioConsultaResponse)
 def actualizar_servicio_consulta(
     servicio_id: int,
     update_data: ServicioConsultaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[Usuario] = Depends(get_optional_current_user),
 ):
-    """Actualiza el estado, precio o cantidad de un servicio de consulta. Maneja stock si pasa de Pendiente a Aplicado o viceversa."""
+    """Actualiza estado, precio o cantidad de un servicio de consulta.
+
+    Al pasar de "no Aplicado" -> "Aplicado" consume materiales; al pasar de
+    "Aplicado" -> otro estado los revierte (lee consumo_material, no la receta).
+    Unificado en consumo_service (Tarea 07, decisión 3).
+    """
     servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
     old_estado = servicio.estado
-    old_cantidad = servicio.cantidad
 
     update_dict = update_data.model_dump(exclude_unset=True)
+    consumos_override = update_dict.pop("consumos", None)
     for k, v in update_dict.items():
         setattr(servicio, k, v)
 
     new_estado = servicio.estado
-    
-    # Manejo de Inventario Progresivo
-    if servicio.tipo_servicio in ["INSUMO", "VACUNACION"] and servicio.referencia_id:
-        inv = None
-        if servicio.tipo_servicio == "VACUNACION":
-            vac = db.query(Vacunacion).filter(Vacunacion.id == servicio.referencia_id).first()
-            if vac:
-                inv = db.query(Inventario).filter(Inventario.id == vac.vacuna_id).first()
-            else:
-                inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-        else:
-            inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-            
-        if inv:
-            # Si cambia de PENDIENTE a APLICADO
-            if old_estado != "Aplicado" and new_estado == "Aplicado":
-                if inv.stock_actual < servicio.cantidad:
-                    raise HTTPException(status_code=400, detail=f"Stock insuficiente para {inv.nombre}")
-                inv.stock_actual -= servicio.cantidad
-                db.add(MovimientoInventario(
-                    producto_id=inv.id,
-                    tipo_movimiento="SALIDA",
-                    cantidad=servicio.cantidad,
-                    costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Consumo directo mod - Consulta #{servicio.consulta_id}"
-                ))
+    uid = current_user.id if current_user else None
 
-            # Si cambia de APLICADO a PENDIENTE (Devolución)
-            elif old_estado == "Aplicado" and new_estado != "Aplicado":
-                inv.stock_actual += old_cantidad
-                db.add(MovimientoInventario(
-                    producto_id=inv.id,
-                    tipo_movimiento="ENTRADA",
-                    cantidad=old_cantidad,
-                    costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Reversión de consumo - Consulta #{servicio.consulta_id}"
-                ))
+    advertencias = []
+    if old_estado != "Aplicado" and new_estado == "Aplicado":
+        advertencias = consumo_service.consumir_para_servicio(
+            db,
+            servicio,
+            overrides=consumo_service.overrides_from_payload(consumos_override),
+            usuario_id=uid,
+        )
+    elif old_estado == "Aplicado" and new_estado != "Aplicado":
+        consumo_service.revertir_para_servicio(db, servicio, usuario_id=uid)
 
     db.commit()
     db.refresh(servicio)
-    return servicio
+    resp = ServicioConsultaResponse.model_validate(servicio)
+    if advertencias:
+        resp.advertencias = advertencias
+    return resp
 
 @router.get("/{consulta_id}/pdf")
 def descargar_consulta_pdf(
@@ -274,33 +263,19 @@ def descargar_consulta_pdf(
 @router.delete("/servicios/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_servicio_consulta(
     servicio_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[Usuario] = Depends(get_optional_current_user),
 ):
-    """Elimina lógicamente un servicio (Soft Delete) y devuelve stock si estaba aplicado"""
+    """Elimina lógicamente un servicio (Soft Delete) y revierte el consumo de
+    materiales si estaba aplicado (Tarea 07, decisión 3)."""
     servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
-    if servicio.estado == "Aplicado" and servicio.tipo_servicio in ["INSUMO", "VACUNACION"] and servicio.referencia_id:
-        inv = None
-        if servicio.tipo_servicio == "VACUNACION":
-            vac = db.query(Vacunacion).filter(Vacunacion.id == servicio.referencia_id).first()
-            if vac:
-                inv = db.query(Inventario).filter(Inventario.id == vac.vacuna_id).first()
-            else:
-                inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-        else:
-            inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-            
-        if inv:
-            inv.stock_actual += servicio.cantidad
-            db.add(MovimientoInventario(
-                producto_id=inv.id,
-                tipo_movimiento="ENTRADA",
-                cantidad=servicio.cantidad,
-                costo_unitario=inv.precio_unitario,
-                origen_destino=f"Eliminación/Reversión - Consulta #{servicio.consulta_id}"
-            ))
+    if servicio.estado == "Aplicado":
+        consumo_service.revertir_para_servicio(
+            db, servicio, usuario_id=current_user.id if current_user else None
+        )
 
     servicio.is_deleted = True
     servicio.estado = "Cancelado"

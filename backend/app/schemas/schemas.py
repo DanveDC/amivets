@@ -153,10 +153,21 @@ class ConsultaUpdate(BaseModel):
     precio_consulta: Optional[float] = None
 
 
+class ConsumoMaterialOverride(BaseModel):
+    """Ajuste real de consumo por linea al aplicar un servicio (Tarea 07, decision 6).
+
+    Sobreescribe la cantidad de la receta para ese material. Las lineas de
+    receta sin override usan la cantidad estandar de la receta.
+    """
+    inventario_id: int = Field(..., gt=0)
+    cantidad: Decimal = Field(..., gt=0)
+
+
 class ServicioConsultaBase(BaseModel):
     consulta_id: int
-    tipo_servicio: Optional[str] = Field(None, max_length=50) 
+    tipo_servicio: Optional[str] = Field(None, max_length=50)
     referencia_id: Optional[int] = None
+    catalogo_servicio_id: Optional[int] = Field(None, gt=0)
     nombre_servicio: Optional[str] = Field(None, max_length=255)
     cantidad: Optional[float] = Field(default=1.0)
     precio_unitario: Optional[float] = Field(default=0.0)
@@ -165,7 +176,9 @@ class ServicioConsultaBase(BaseModel):
     is_deleted: Optional[bool] = False
 
 class ServicioConsultaCreate(ServicioConsultaBase):
-    pass
+    # Overrides opcionales de consumo real por material (Decision 6). Solo se
+    # aplican si el servicio entra en estado "Aplicado".
+    consumos: Optional[List[ConsumoMaterialOverride]] = None
 
 class ServicioConsultaUpdate(BaseModel):
     cantidad: Optional[float] = Field(None, gt=0)
@@ -173,9 +186,15 @@ class ServicioConsultaUpdate(BaseModel):
     estado: Optional[str] = Field(None, max_length=50)
     detalles_clinicos: Optional[str] = None
     is_deleted: Optional[bool] = None
+    catalogo_servicio_id: Optional[int] = Field(None, gt=0)
+    consumos: Optional[List[ConsumoMaterialOverride]] = None
 
 class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
+    # Advertencias de stock al aplicar (Decision 4): faltantes que se
+    # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
+    # que dispara el consumo.
+    advertencias: Optional[List[dict]] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -386,6 +405,11 @@ class InventarioUpdate(BaseModel):
 class InventarioResponse(InventarioBase):
     id: int
     fecha_registro: datetime
+    # Consumir un material al aplicar un servicio puede dejar el stock en
+    # negativo (Tarea 07, decision 4: se permite, se avisa y se registra). El
+    # ge=0 de InventarioBase sigue validando el INPUT de alta/edicion, pero la
+    # LECTURA no debe fallar cuando el stock quedo negativo.
+    stock_actual: Decimal
 
     model_config = ConfigDict(from_attributes=True)
 

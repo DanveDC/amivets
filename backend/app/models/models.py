@@ -8,6 +8,22 @@ import enum
 from app.core.database import Base
 
 
+class TipoMovimiento:
+    """Conjunto cerrado para MovimientoInventario.tipo_movimiento (Tarea 07, slice B).
+
+    La columna sigue siendo String en la DB (sin CHECK en este slice); esta
+    clase es la fuente de verdad a nivel aplicacion para TODAS las escrituras
+    nuevas. Las filas historicas no se reescriben.
+    """
+    ENTRADA = "ENTRADA"
+    SALIDA = "SALIDA"
+    MERMA = "MERMA"
+    AJUSTE = "AJUSTE"
+    REVERSA = "REVERSA"
+
+    TODOS = frozenset({ENTRADA, SALIDA, MERMA, AJUSTE, REVERSA})
+
+
 class Propietario(Base):
     """Modelo para los propietarios de mascotas"""
     __tablename__ = "propietarios"

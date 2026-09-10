@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Inventario fraccionado (Tarea 07, decision 4). Cuando es True, aplicar un
+    # servicio con stock insuficiente vuelve a bloquear con HTTP 400. Por
+    # defecto False: se permite, se avisa y se registra el faltante en el ledger.
+    STRICT_INVENTORY: bool = False
     
     class Config:
         env_file = ".env"

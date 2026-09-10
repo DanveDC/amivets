@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.core.database import get_db
 from app.core import security
@@ -13,6 +13,11 @@ from app.core.config import settings
 router = APIRouter(prefix="/api/usuarios", tags=["Usuarios"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# Variante que NO fuerza 401 cuando falta / es invalido el token: los routers
+# clinicos de este stack no exigen login (ver e2e/helpers.js), pero cuando SI
+# llega una sesion valida queremos registrar usuario_responsable_id en el ledger
+# de inventario (Tarea 07, decision 8). Si no hay usuario, queda nullable.
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -32,6 +37,23 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+async def get_optional_current_user(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db),
+) -> Optional[Usuario]:
+    """Devuelve el Usuario de la sesion si el token es valido; None si no hay
+    token o no valida. Nunca levanta 401."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        username = payload.get("sub")
+    except JWTError:
+        return None
+    if not username:
+        return None
+    return db.query(Usuario).filter(Usuario.username == username).first()
 
 async def get_current_admin(current_user: Usuario = Depends(get_current_user)):
     if current_user.role != "admin":
