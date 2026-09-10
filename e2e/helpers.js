@@ -20,6 +20,11 @@ const TEST_PREFIX = 'PWTEST_';
 
 const ADMIN_CREDENTIALS = { username: 'admin', password: 'admin123' };
 
+// Password every throwaway user created by createTestUser (and its wrappers)
+// gets. Exposed so specs that need to log in AS that user (e.g. the
+// recepcionista role checks in Tarea 09) don't hard-code the literal.
+const TEST_USER_PASSWORD = 'Password123!';
+
 /**
  * Logs in via /token and returns a bearer token.
  * @param {import('@playwright/test').APIRequestContext} request
@@ -100,7 +105,7 @@ async function createTestUser(request, token, overrides = {}) {
   const payload = {
     username: tag,
     email: `${tag}@example.com`,
-    password: 'Password123!',
+    password: TEST_USER_PASSWORD,
     role: 'user',
     ...overrides,
   };
@@ -257,6 +262,122 @@ async function deleteTestConsulta(request, id) {
   } catch (_) {
     // best-effort cleanup
   }
+}
+
+// ===========================================================================
+// Servicios desde la consulta (Tarea 09, FASE 2)
+//   /api/servicios (servicio directo, sin consulta) · alias PATCH/DELETE ·
+//   POST /api/consultas/{id}/servicios (anexar) ·
+//   POST /api/facturas/from-consulta/{id} (facturar en un paso) ·
+//   rol `recepcionista` (no puede anexar servicios clínicos).
+//
+// Same convention as the rest of this file: "create"/"do" helpers throw loudly
+// so a broken contract fails at the setup line; "delete" helpers never throw.
+// The clinical routers have no auth dependency, so a bearer token is only
+// passed when the spec is deliberately exercising the role gate.
+// ===========================================================================
+
+/**
+ * Logs in as an arbitrary user via /token and returns a bearer token.
+ * getAdminToken is the admin-only shortcut; this is the generic form, needed
+ * for the recepcionista role checks. Throws on a failed login.
+ */
+async function loginAs(request, username, password) {
+  const res = await request.post('/token', { form: { username, password } });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Could not authenticate as "${username}" (status ${res.status()}).`
+    );
+  }
+  const body = await res.json();
+  return body.access_token;
+}
+
+/**
+ * Creates a throwaway user with the `recepcionista` role (Tarea 09, decisión 7)
+ * and logs in as them. Returns { user, token }. A recepcionista may open
+ * consultas and attach non-clinical services, but the backend answers 403 on
+ * clinical service types (VACUNACION, DESPARASITACION, CIRUGIA, HOSPITALIZACION,
+ * LABORATORIO). Delete the user with deleteTestUser in afterAll.
+ */
+async function createTestRecepcionista(request, adminToken, overrides = {}) {
+  const user = await createTestUser(request, adminToken, { role: 'recepcionista', ...overrides });
+  const token = await loginAs(request, user.username, TEST_USER_PASSWORD);
+  return { user, token };
+}
+
+/**
+ * Creates a "servicio directo": a ServicioConsulta with consulta_id = NULL that
+ * hangs off the mascota (Tarea 09, decisión 1). Requires mascota_id. Defaults to
+ * a non-clinical type in "Pendiente" so it touches no inventory.
+ */
+async function createTestServicioDirecto(request, mascotaId, overrides = {}) {
+  const payload = {
+    mascota_id: mascotaId,
+    tipo_servicio: 'ESTETICA',
+    nombre_servicio: testTag('servDirecto'),
+    cantidad: 1,
+    precio_unitario: 6000,
+    estado: 'Pendiente',
+    ...overrides,
+  };
+  const res = await request.post('/api/servicios/', { data: payload });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to create servicio directo: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** Soft-deletes (is_deleted=True) a test servicio. Best-effort — never throws. */
+async function deleteTestServicio(request, id) {
+  try {
+    await request.delete(`/api/servicios/${id}`);
+  } catch (_) {
+    // best-effort cleanup
+  }
+}
+
+/**
+ * Attaches a servicio to an open consulta (POST /api/consultas/{id}/servicios).
+ * Pass a bearer token only when the spec is exercising the role gate; anonymous
+ * calls are allowed by this stack. Throws on rejection.
+ */
+async function anexarServicioConsulta(request, consultaId, overrides = {}, token = null) {
+  const payload = {
+    tipo_servicio: 'PROCEDIMIENTO',
+    nombre_servicio: testTag('servAnexado'),
+    cantidad: 1,
+    precio_unitario: 10000,
+    estado: 'Pendiente',
+    ...overrides,
+  };
+  const res = await request.post(`/api/consultas/${consultaId}/servicios`, {
+    headers: token ? authHeaders(token) : {},
+    data: payload,
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to anexar servicio to consulta ${consultaId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/**
+ * Emits the factura of a consulta in one step (Tarea 09, decisión 8):
+ * POST /api/facturas/from-consulta/{id}. The server builds the detalles from
+ * consulta.servicios + the consultation fee and leaves the consulta CERRADA.
+ * `body` is the optional cobro payload {metodo_pago,total_pagado,descuento,impuesto}.
+ * Throws on rejection.
+ */
+async function facturarDesdeConsulta(request, consultaId, body = {}) {
+  const res = await request.post(`/api/facturas/from-consulta/${consultaId}`, { data: body });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to facturar desde consulta ${consultaId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
 }
 
 // ===========================================================================
@@ -519,7 +640,9 @@ module.exports = {
   BASE_URL,
   TEST_PREFIX,
   ADMIN_CREDENTIALS,
+  TEST_USER_PASSWORD,
   getAdminToken,
+  loginAs,
   authHeaders,
   isSupabaseAvailable,
   testTag,
@@ -539,6 +662,11 @@ module.exports = {
   cancelTestCita,
   createTestConsulta,
   deleteTestConsulta,
+  createTestRecepcionista,
+  createTestServicioDirecto,
+  deleteTestServicio,
+  anexarServicioConsulta,
+  facturarDesdeConsulta,
   createTestFactura,
   anularTestFactura,
   createTestCatalogoServicio,

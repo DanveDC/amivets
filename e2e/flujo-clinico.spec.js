@@ -246,6 +246,9 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     });
     expect(S.consulta.mascota_id).toBe(S.mascota.id);
     expect(S.consulta.estado_pago).toBe('POR_COBRAR');
+    // Tarea 09, decisión 6: eje de ciclo de vida clínico, separado del de cobro.
+    // Una consulta nueva nace ABIERTA; se cierra al facturar (ver test de factura).
+    expect(S.consulta.estado).toBe('ABIERTA');
 
     // El historial de peso ahora sí refleja la consulta.
     const historial = await (await request.get(`/api/mascotas/${S.mascota.id}/peso-history`, { headers: authHeaders(S.token) })).json();
@@ -256,7 +259,10 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     // tipo_servicio deliberadamente NO INSUMO/VACUNACION para no tocar stock:
     // acá probamos el ciclo de estados del servicio, no el kardex.
     const servPayload = {
-      consulta_id: S.consulta.id, // el schema lo exige aunque el router lo tome del path
+      // Tarea 09: consulta_id ya es opcional en el schema (un servicio directo
+      // llega sin él). Cuando se anexa a una consulta el id manda desde el path;
+      // se sigue mandando en el body por retro-compatibilidad, es inocuo.
+      consulta_id: S.consulta.id,
       tipo_servicio: 'PROCEDIMIENTO',
       nombre_servicio: testTag('servicio'),
       cantidad: 1,

@@ -115,7 +115,11 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(enLista).toBeTruthy();
     expect(enLista.vacuna_nombre).toBe(S.vacunaProd.nombre);
 
-    // El router crea un ServicioConsulta "VACUNACION" en la consulta.
+    // El router crea un ServicioConsulta "VACUNACION" espejo en la consulta.
+    // Tarea 09 (decisión 2) mantiene este espejo: pasa a ser la ÚNICA línea
+    // facturable/de carrito de la vacuna. Lo que se quitó fue el doble conteo en
+    // facturación (obtener_items_pendientes_consulta ya no recorre además
+    // consulta.vacunaciones), no el espejo. Por eso esta aserción sigue válida.
     const consulta = await (await request.get(`/api/consultas/${S.consulta.id}`, { headers: authHeaders(S.token) })).json();
     expect(consulta.servicios.some((s) => s.tipo_servicio === 'VACUNACION')).toBe(true);
 
