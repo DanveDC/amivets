@@ -57,11 +57,16 @@ def listar_consultas(
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
     estado_pago: Optional[str] = None,
+    estado: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Lista todas las consultas con filtros opcionales"""
+    """Lista todas las consultas con filtros opcionales.
+
+    `estado` filtra por el ciclo de vida clínico (ABIERTA / CERRADA / ANULADA,
+    Tarea 09, decisión 6); `estado_pago` sigue filtrando por el eje de cobro.
+    """
     return ConsultaService.listar_consultas(
-        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin, estado_pago
+        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin, estado_pago, estado
     )
 
 

@@ -54,7 +54,8 @@ class ConsultaService:
         veterinario: Optional[str] = None,
         fecha_inicio: Optional[str] = None,
         fecha_fin: Optional[str] = None,
-        estado_pago: Optional[str] = None
+        estado_pago: Optional[str] = None,
+        estado: Optional[str] = None
     ) -> List[Consulta]:
         """Lista consultas con filtros opcionales"""
         query = db.query(Consulta)
@@ -69,6 +70,8 @@ class ConsultaService:
             query = query.filter(Consulta.fecha_consulta <= fecha_fin)
         if estado_pago:
             query = query.filter(Consulta.estado_pago == estado_pago)
+        if estado:
+            query = query.filter(Consulta.estado == estado)
 
         return query.order_by(Consulta.fecha_consulta.desc()).offset(skip).limit(limit).all()
     
