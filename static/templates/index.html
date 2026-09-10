@@ -636,12 +636,43 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="prodTipoItem">Tipo de ítem *</label>
+                            <select id="prodTipoItem" required>
+                                <option value="PRODUCTO">Producto (venta directa)</option>
+                                <option value="MATERIAL">Material (se consume por servicio)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="prodMaterialUnidadGroup" hidden>
+                            <label for="prodUnidadMedida">Unidad de medida</label>
+                            <select id="prodUnidadMedida">
+                                <option value="">Sin definir</option>
+                                <option value="ml">Mililitros (ml)</option>
+                                <option value="g">Gramos (g)</option>
+                                <option value="unidad">Unidad</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" id="prodMaterialEnvaseRow" hidden>
+                        <div class="form-group">
+                            <label for="prodContenidoEnvase">Contenido por envase</label>
+                            <input type="number" id="prodContenidoEnvase" step="0.001" min="0" placeholder="Ej: 1000">
+                            <small style="color:var(--text-muted); font-size:0.75rem;">ej.: 1000 si la botella trae 1 L</small>
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex; align-items:center; gap:0.5rem; margin-top:1.75rem;">
+                                <input type="checkbox" id="prodMermaAlAbrir" style="width:auto;">
+                                Se pierde el envase completo al abrirlo
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="prodStock">Stock Inicial *</label>
-                            <input type="number" id="prodStock" required min="0" value="0">
+                            <input type="number" id="prodStock" required min="0" step="0.001" value="0">
                         </div>
                         <div class="form-group">
                             <label for="prodMinimo">Stock Mínimo *</label>
-                            <input type="number" id="prodMinimo" value="5" min="0">
+                            <input type="number" id="prodMinimo" value="5" min="0" step="0.001">
                         </div>
                     </div>
                     <div class="form-row">
@@ -706,8 +737,39 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="editProdTipoItem">Tipo de ítem *</label>
+                            <select id="editProdTipoItem" required>
+                                <option value="PRODUCTO">Producto (venta directa)</option>
+                                <option value="MATERIAL">Material (se consume por servicio)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="editProdMaterialUnidadGroup" hidden>
+                            <label for="editProdUnidadMedida">Unidad de medida</label>
+                            <select id="editProdUnidadMedida">
+                                <option value="">Sin definir</option>
+                                <option value="ml">Mililitros (ml)</option>
+                                <option value="g">Gramos (g)</option>
+                                <option value="unidad">Unidad</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" id="editProdMaterialEnvaseRow" hidden>
+                        <div class="form-group">
+                            <label for="editProdContenidoEnvase">Contenido por envase</label>
+                            <input type="number" id="editProdContenidoEnvase" step="0.001" min="0" placeholder="Ej: 1000">
+                            <small style="color:var(--text-muted); font-size:0.75rem;">ej.: 1000 si la botella trae 1 L</small>
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex; align-items:center; gap:0.5rem; margin-top:1.75rem;">
+                                <input type="checkbox" id="editProdMermaAlAbrir" style="width:auto;">
+                                Se pierde el envase completo al abrirlo
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label>Stock Mínimo *</label>
-                            <input type="number" id="editProdMinimo" min="0" required>
+                            <input type="number" id="editProdMinimo" min="0" step="0.001" required>
                         </div>
                         <div class="form-group">
                             <label>Stock Actual <small style="color:var(--text-muted);">(solo lectura)</small></label>
@@ -761,7 +823,7 @@
                         </div>
                         <div class="form-group">
                             <label>Cantidad *</label>
-                            <input type="number" id="movStockCantidad" required min="1" placeholder="Ej: 20">
+                            <input type="number" id="movStockCantidad" required min="0.001" step="0.001" placeholder="Ej: 20 o 2,5">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -1160,7 +1222,7 @@
                     <input type="text" id="searchInventario" placeholder="Buscar por nombre, código o categoría..."
                         class="search-input" style="flex:1; min-width:200px; margin:0;">
                     <select id="filtroInventarioCategoria"
-                        style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); background:white; font-size:0.875rem; min-width:160px;">
+                        style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.875rem; min-width:160px;">
                         <option value="">Todas las categorías</option>
                         <option value="Antibiótico">Antibiótico</option>
                         <option value="Antiinflamatorio">Antiinflamatorio</option>
@@ -1909,7 +1971,7 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label for="abonoMetodoPago">Método de Pago *</label>
-                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.95rem; background: white;">
+                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.95rem;">
                         <option value="EFECTIVO">Efectivo</option>
                         <option value="TARJETA">Tarjeta</option>
                         <option value="TRANSFERENCIA">Transferencia</option>

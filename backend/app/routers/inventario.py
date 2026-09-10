@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -101,21 +103,25 @@ def eliminar_producto(
 @router.post("/{producto_id}/movimiento", response_model=InventarioResponse)
 def registrar_movimiento(
     producto_id: int,
-    cantidad: int, # Positivo para entrada, Negativo para salida
-    tipo: str = Query(..., description="ENTRADA o SALIDA"), 
+    cantidad: float,  # Positivo para entrada, negativo para salida; admite fracciones (Tarea 07)
+    tipo: str = Query(..., description="ENTRADA o SALIDA"),
     db: Session = Depends(get_db)
 ):
     """Registra entrada o salida de stock (Simplificado)"""
     producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-        
+
+    # El stock vive como Decimal (unidad base, 3 decimales). Convertir desde el
+    # query param via str() para no arrastrar ruido binario de float.
+    monto = abs(Decimal(str(cantidad))).quantize(Decimal("0.001"))
+
     if tipo.upper() == "SALIDA":
-        if producto.stock_actual < abs(cantidad):
+        if producto.stock_actual < monto:
             raise HTTPException(status_code=400, detail="Stock insuficiente")
-        producto.stock_actual -= abs(cantidad)
+        producto.stock_actual -= monto
     elif tipo.upper() == "ENTRADA":
-        producto.stock_actual += abs(cantidad)
+        producto.stock_actual += monto
     else:
         raise HTTPException(status_code=400, detail="Tipo de movimiento invalido")
 
