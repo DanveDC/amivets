@@ -116,6 +116,9 @@ class ConsultaBase(BaseModel):
     proxima_cita: Optional[datetime] = None
     estado_pago: Optional[str] = "POR_COBRAR"
     precio_consulta: Optional[float] = 0.0
+    # Ciclo de vida clinico (Tarea 09, decision 6): ABIERTA / CERRADA / ANULADA.
+    # La respuesta siempre lo trae; crear_consulta lo fuerza a 'ABIERTA'.
+    estado: Optional[str] = Field(None, max_length=20)
 
     @field_validator('temperatura')
     @classmethod
@@ -151,6 +154,8 @@ class ConsultaUpdate(BaseModel):
     proxima_cita: Optional[datetime] = None
     estado_pago: Optional[str] = None
     precio_consulta: Optional[float] = None
+    # Tarea 09, decision 6: el veterinario puede cerrar/reabrir la consulta.
+    estado: Optional[str] = Field(None, max_length=20)
 
 
 class ConsumoMaterialOverride(BaseModel):
@@ -164,7 +169,11 @@ class ConsumoMaterialOverride(BaseModel):
 
 
 class ServicioConsultaBase(BaseModel):
-    consulta_id: int
+    # Tarea 09, decision 1: opcional. Un servicio directo llega con mascota_id y
+    # consulta_id = None; un servicio anexado a una consulta, al reves. El CHECK
+    # de la DB exige que haya al menos uno.
+    consulta_id: Optional[int] = None
+    mascota_id: Optional[int] = None
     tipo_servicio: Optional[str] = Field(None, max_length=50)
     referencia_id: Optional[int] = None
     catalogo_servicio_id: Optional[int] = Field(None, gt=0)
@@ -480,6 +489,19 @@ class FacturaBase(BaseModel):
 
 class FacturaCreate(FacturaBase):
     detalles: List[DetalleFacturaCreate] = Field(..., min_length=1)
+
+
+class FacturaDesdeConsulta(BaseModel):
+    """Body opcional de POST /api/facturas/from-consulta/{id} (Tarea 09, decision 8).
+
+    El servidor arma los detalles desde consulta.servicios + el honorario; el
+    cliente solo pasa datos de cobro. Todo opcional: sin body se emite una
+    factura PENDIENTE por el total.
+    """
+    metodo_pago: Optional[str] = Field(None, max_length=50)
+    total_pagado: Optional[float] = Field(default=0.0)
+    descuento: Optional[float] = Field(default=0.0)
+    impuesto: Optional[float] = Field(default=0.0)
 
 
 class FacturaUpdate(BaseModel):

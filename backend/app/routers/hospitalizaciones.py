@@ -3,21 +3,46 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
-from app.models.models import Hospitalizacion, Mascota
+from app.models.models import Hospitalizacion, Mascota, Consulta, ServicioConsulta
 from app.schemas.schemas import HospitalizacionCreate, HospitalizacionResponse
+from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/hospitalizaciones", tags=["Hospitalización"])
 
 @router.post("/", response_model=HospitalizacionResponse, status_code=status.HTTP_201_CREATED)
-def ingresar_paciente(hospitalizacion: HospitalizacionCreate, db: Session = Depends(get_db)):
+def ingresar_paciente(
+    hospitalizacion: HospitalizacionCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles("admin", "veterinario")),
+):
     """Ingresa un paciente a hospitalización"""
     # Verificar mascota
     mascota = db.query(Mascota).filter(Mascota.id == hospitalizacion.mascota_id).first()
     if not mascota:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
-    
+
     db_hosp = Hospitalizacion(**hospitalizacion.model_dump())
     db.add(db_hosp)
+
+    # Espejo ServicioConsulta si la internación cuelga de una consulta (Tarea 09,
+    # decisión 2). Mismo patrón que routers/clinico.py.
+    if db_hosp.consulta_id:
+        consulta = db.query(Consulta).filter(Consulta.id == db_hosp.consulta_id).first()
+        if not consulta:
+            raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        db.flush()
+        db.add(ServicioConsulta(
+            consulta_id=db_hosp.consulta_id,
+            mascota_id=consulta.mascota_id,
+            tipo_servicio="HOSPITALIZACION",
+            referencia_id=db_hosp.id,
+            nombre_servicio=f"HOSPITALIZACIÓN: {(db_hosp.motivo or '')[:50]}",
+            cantidad=float(db_hosp.dias_cama or 1),
+            precio_unitario=db_hosp.precio_aplicado,
+            detalles_clinicos=f"Jaula: {db_hosp.jaula_nro or 'N/A'} | Estado: {db_hosp.estado_paciente or 'Estable'}",
+            estado="Aplicado",
+        ))
+
     db.commit()
     db.refresh(db_hosp)
     return db_hosp

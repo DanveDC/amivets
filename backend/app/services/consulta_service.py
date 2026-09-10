@@ -23,7 +23,12 @@ class ConsultaService:
                 detail="El veterinario_id indicado no corresponde a un usuario con rol veterinario",
             )
         try:
-            nueva_consulta = Consulta(**consulta_data.model_dump())
+            data = consulta_data.model_dump()
+            # La consulta nace ABIERTA (Tarea 09, decisión 6). Se fuerza acá y no
+            # se acepta del cliente: model_dump trae estado=None por el default
+            # del schema, y pasarlo pisaría el server_default con NULL.
+            data.pop("estado", None)
+            nueva_consulta = Consulta(**data, estado="ABIERTA")
             db.add(nueva_consulta)
             db.commit()
             db.refresh(nueva_consulta)

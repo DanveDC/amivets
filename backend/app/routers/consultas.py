@@ -14,7 +14,12 @@ from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta,
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
 from app.services import consumo_service
-from app.routers.usuarios import get_optional_current_user
+from app.routers.usuarios import get_optional_current_user, require_roles
+from app.routers.servicios import (
+    actualizar_servicio_impl,
+    eliminar_servicio_impl,
+    validar_tipo_servicio_por_rol,
+)
 
 router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
 
@@ -93,9 +98,10 @@ def eliminar_consulta(
 def crear_receta(
     consulta_id: int,
     receta_data: RecetaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Optional[Usuario] = Depends(require_roles("admin", "veterinario")),
 ):
-    """Crea una receta médica para una consulta"""
+    """Crea una receta médica para una consulta (admin / veterinario)"""
     consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
@@ -167,8 +173,14 @@ def agregar_servicio_consulta(
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
+    # Tarea 09, decisión 7: la recepcionista no puede anexar servicios clínicos.
+    validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
+
     nuevo_servicio = ServicioConsulta(
         consulta_id=consulta_id,
+        # mascota_id se llena siempre (también con consulta) para simplificar
+        # las queries de historia (Tarea 09, decisión 1).
+        mascota_id=consulta.mascota_id,
         tipo_servicio=servicio_data.tipo_servicio,
         referencia_id=servicio_data.referencia_id,
         catalogo_servicio_id=servicio_data.catalogo_servicio_id,
@@ -205,58 +217,10 @@ def actualizar_servicio_consulta(
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_optional_current_user),
 ):
-    """Actualiza estado, precio o cantidad de un servicio de consulta.
-
-    Al pasar de "no Aplicado" -> "Aplicado" consume materiales; al pasar de
-    "Aplicado" -> otro estado los revierte (lee consumo_material, no la receta).
-    Unificado en consumo_service (Tarea 07, decisión 3).
-    """
-    servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
-    if not servicio:
-        raise HTTPException(status_code=404, detail="Servicio no encontrado")
-
-    old_estado = servicio.estado
-
-    update_dict = update_data.model_dump(exclude_unset=True)
-    consumos_override = update_dict.pop("consumos", None)
-
-    # M2: editar cantidad/consumos de un servicio que sigue en "Aplicado"
-    # cambiaria solo la columna, sin tocar el ledger ni ConsumoMaterial -> la
-    # reversa posterior devolveria un monto distinto al consumido (drift). Se
-    # exige revertir el estado primero. Con estado Pendiente/Cancelado el edit
-    # es libre.
-    nuevo_estado = update_dict.get("estado", servicio.estado)
-    toca_cantidad = "cantidad" in update_dict and update_dict["cantidad"] != servicio.cantidad
-    toca_consumos = consumos_override is not None
-    if servicio.estado == "Aplicado" and nuevo_estado == "Aplicado" and (toca_cantidad or toca_consumos):
-        raise HTTPException(
-            status_code=409,
-            detail="No se puede cambiar la cantidad de un servicio ya aplicado; revertí el estado primero",
-        )
-
-    for k, v in update_dict.items():
-        setattr(servicio, k, v)
-
-    new_estado = servicio.estado
-    uid = current_user.id if current_user else None
-
-    advertencias = []
-    if old_estado != "Aplicado" and new_estado == "Aplicado":
-        advertencias = consumo_service.consumir_para_servicio(
-            db,
-            servicio,
-            overrides=consumo_service.overrides_from_payload(consumos_override),
-            usuario_id=uid,
-        )
-    elif old_estado == "Aplicado" and new_estado != "Aplicado":
-        consumo_service.revertir_para_servicio(db, servicio, usuario_id=uid)
-
-    db.commit()
-    db.refresh(servicio)
-    resp = ServicioConsultaResponse.model_validate(servicio)
-    if advertencias:
-        resp.advertencias = advertencias
-    return resp
+    """Alias de PATCH /api/servicios/{id} (Tarea 09). La lógica vive en
+    routers/servicios.py; este path se mantiene para no romper contratos
+    existentes (e2e/flujo-clinico.spec.js)."""
+    return actualizar_servicio_impl(servicio_id, update_data, db, current_user)
 
 @router.get("/{consulta_id}/pdf")
 def descargar_consulta_pdf(
@@ -281,18 +245,7 @@ def eliminar_servicio_consulta(
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_optional_current_user),
 ):
-    """Elimina lógicamente un servicio (Soft Delete) y revierte el consumo de
-    materiales si estaba aplicado (Tarea 07, decisión 3)."""
-    servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
-    if not servicio:
-        raise HTTPException(status_code=404, detail="Servicio no encontrado")
-
-    if servicio.estado == "Aplicado":
-        consumo_service.revertir_para_servicio(
-            db, servicio, usuario_id=current_user.id if current_user else None
-        )
-
-    servicio.is_deleted = True
-    servicio.estado = "Cancelado"
-    db.commit()
-    return None
+    """Alias de DELETE /api/servicios/{id} (Tarea 09). La lógica vive en
+    routers/servicios.py; este path se mantiene para no romper contratos
+    existentes."""
+    return eliminar_servicio_impl(servicio_id, db, current_user)

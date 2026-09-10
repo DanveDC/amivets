@@ -63,6 +63,40 @@ async def get_current_admin(current_user: Usuario = Depends(get_current_user)):
         )
     return current_user
 
+
+# Roles validos del backend. `recepcionista` se introduce con la Tarea 09
+# (decision 7): puede abrir consultas y anexar servicios NO clinicos, pero no
+# vacunar, operar, hospitalizar, pedir laboratorio ni recetar.
+ROLES_VALIDOS = {"admin", "veterinario", "recepcionista", "user"}
+
+
+def require_roles(*roles: str):
+    """Dependencia de autorizacion por rol para los routers clinicos.
+
+    LIMITACION CONOCIDA Y DELIBERADA (Tarea 09, decision 7): los routers
+    clinicos de este stack NO exigen login -- la suite e2e (ver e2e/helpers.js)
+    llama sin token y varios flujos internos tambien. Para no romper ese
+    contrato, si NO hay usuario autenticado se DEJA PASAR. El gate solo aplica
+    cuando SI hay sesion: en ese caso el rol debe estar en `roles`, si no -> 403.
+    Cuando el stack pase a exigir login, cambiar `get_optional_current_user` por
+    `get_current_user` aca y desaparece el agujero.
+    """
+
+    async def _dep(
+        current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    ) -> Optional[Usuario]:
+        if current_user is not None and current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Tu rol no tiene permiso para esta acción. "
+                    f"Roles habilitados: {', '.join(sorted(roles))}."
+                ),
+            )
+        return current_user
+
+    return _dep
+
 @router.post("/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def crear_usuario(
     usuario: UsuarioCreate,

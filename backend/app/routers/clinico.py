@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from ..core.database import get_db
 from ..core.config import settings
 from ..models import models
 from ..schemas import schemas
+from .usuarios import require_roles
 
 router = APIRouter(
     prefix="/api/clinico",
@@ -68,6 +69,7 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
     # Create Service record for the consultation cart
     servicio = models.ServicioConsulta(
         consulta_id=vacunacion.consulta_id,
+        mascota_id=consulta.mascota_id,
         tipo_servicio="VACUNACION",
         referencia_id=db_vacunacion.id,
         nombre_servicio=f"VACUNA: {producto.nombre}",
@@ -142,6 +144,7 @@ def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Dep
     # Create Service record
     servicio = models.ServicioConsulta(
         consulta_id=desp.consulta_id,
+        mascota_id=consulta.mascota_id,
         tipo_servicio="DESPARASITACION",
         referencia_id=db_desp.id,
         nombre_servicio=f"DESPARASITACIÓN: {producto.nombre}",
@@ -172,7 +175,11 @@ def obtener_hospitalizaciones(mascota_id: int, db: Session = Depends(get_db)):
     return db.query(models.Hospitalizacion).filter(models.Hospitalizacion.mascota_id == mascota_id).all()
 
 @router.post("/hospitalizacion", response_model=schemas.HospitalizacionResponse)
-def crear_hospitalizacion(hosp: schemas.HospitalizacionCreate, db: Session = Depends(get_db)):
+def crear_hospitalizacion(
+    hosp: schemas.HospitalizacionCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     if hosp.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == hosp.consulta_id).first()
         if not consulta:
@@ -197,6 +204,7 @@ def crear_hospitalizacion(hosp: schemas.HospitalizacionCreate, db: Session = Dep
         db.flush()
         servicio = models.ServicioConsulta(
             consulta_id=hosp.consulta_id,
+            mascota_id=consulta.mascota_id,
             tipo_servicio="HOSPITALIZACION",
             referencia_id=db_hosp.id,
             nombre_servicio=f"HOSPITALIZACIÓN: {hosp.motivo[:50]}",
@@ -216,7 +224,11 @@ def obtener_cirugias(mascota_id: int, db: Session = Depends(get_db)):
     return db.query(models.Cirugia).filter(models.Cirugia.mascota_id == mascota_id).all()
 
 @router.post("/cirugia", response_model=schemas.CirugiaResponse)
-def crear_cirugia(cir: schemas.CirugiaCreate, db: Session = Depends(get_db)):
+def crear_cirugia(
+    cir: schemas.CirugiaCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     if cir.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == cir.consulta_id).first()
         if not consulta:
@@ -239,6 +251,7 @@ def crear_cirugia(cir: schemas.CirugiaCreate, db: Session = Depends(get_db)):
         db.flush()
         servicio = models.ServicioConsulta(
             consulta_id=cir.consulta_id,
+            mascota_id=consulta.mascota_id,
             tipo_servicio="CIRUGIA",
             referencia_id=db_cir.id,
             nombre_servicio=f"CIRUGÍA: {cir.tipo_procedimiento}",
@@ -258,7 +271,11 @@ def obtener_pruebas(mascota_id: int, db: Session = Depends(get_db)):
     return db.query(models.PruebaComplementaria).filter(models.PruebaComplementaria.mascota_id == mascota_id).all()
 
 @router.post("/prueba_complementaria", response_model=schemas.PruebaComplementariaResponse)
-def crear_prueba_complementaria(prueba: schemas.PruebaComplementariaCreate, db: Session = Depends(get_db)):
+def crear_prueba_complementaria(
+    prueba: schemas.PruebaComplementariaCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     if prueba.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == prueba.consulta_id).first()
         if not consulta:
@@ -280,6 +297,7 @@ def crear_prueba_complementaria(prueba: schemas.PruebaComplementariaCreate, db: 
         db.flush()
         servicio = models.ServicioConsulta(
             consulta_id=prueba.consulta_id,
+            mascota_id=consulta.mascota_id,
             tipo_servicio="LABORATORIO" if "Lab" in prueba.tipo else "DIAGNOSTICO",
             referencia_id=db_prueba.id,
             nombre_servicio=f"ESTUDIO: {prueba.tipo}",
