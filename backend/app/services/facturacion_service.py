@@ -334,49 +334,6 @@ class FacturacionService:
         return factura
 
     @staticmethod
-    def facturar_y_descargar_stock(db: Session, factura_id: int, usuario_id: int):
-        factura = db.query(Factura).filter(Factura.id == factura_id).first()
-
-        if not factura or factura.estado == "PAGADA":
-            raise HTTPException(status_code=400, detail="Factura inválida o ya pagada")
-
-        factura.estado = "PAGADA"
-        factura.es_presupuesto = False
-
-        for detalle in factura.detalles:
-            if detalle.producto_id:
-                producto = db.query(Inventario).filter(Inventario.id == detalle.producto_id).with_for_update().first() # ROW-LOCKING PARA CONCURRENCIA
-
-                # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
-                ya_descontado = False
-                if detalle.servicio_id:
-                    serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == detalle.servicio_id).first()
-                    if serv and serv.estado == "Aplicado":
-                        ya_descontado = True
-
-                if not ya_descontado:
-                    if producto.stock_actual < detalle.cantidad:
-                        db.rollback()
-                        raise HTTPException(status_code=400, detail=f"Stock insuficiente para el producto {producto.nombre}")
-
-                    # 1. Reducir stock base
-                    producto.stock_actual -= detalle.cantidad
-
-                    # 2. Rastrear Movimiento
-                    nuevo_movimiento = MovimientoInventario(
-                        producto_id=producto.id,
-                        tipo_movimiento="SALIDA",
-                        cantidad=-detalle.cantidad,
-                        costo_unitario=producto.precio_unitario,
-                        origen_destino=f"VENTA_FACTURA_{factura.numero_factura}",
-                        usuario_responsable_id=usuario_id
-                    )
-                db.add(nuevo_movimiento)
-
-        db.commit()
-        return factura
-
-    @staticmethod
     def obtener_items_pendientes_consulta(db: Session, consulta_id: int):
         """
         Colecta todos los items que no han sido facturados asociados a una consulta
