@@ -10,6 +10,7 @@ import uuid
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.limiter import limiter
+from app.core.price_history_backfill import backfill_initial_price_history
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo, liquidaciones, notas, servicios
@@ -29,6 +30,15 @@ logger = logging.getLogger(__name__)
 # scripts/init_db.py con Alembic antes de levantar uvicorn (ver db_migrate.py);
 # este create_all solo cubre el caso de correr uvicorn directo sin init_db.
 Base.metadata.create_all(bind=engine)
+
+# Ancla inicial del historial de precios (Tarea 08, decision 7). El deploy no
+# corre `alembic upgrade`, asi que el backfill de la migracion c9d0e1f2a3b4
+# nunca se ejecuta; se replica aca, justo despues de create_all. Es idempotente
+# (WHERE NOT EXISTS) y nunca debe abortar el arranque de la app.
+try:
+    backfill_initial_price_history(engine)
+except Exception as e:
+    logger.warning(f"Price history backfill skipped: {e}")
 
 # Crear la aplicación FastAPI
 app = FastAPI(

@@ -2074,3 +2074,119 @@ body.qr-booking-page {
 }
 .qr-booking-page .success-view p { color: var(--text-secondary); font-size: .95rem; line-height: 1.5; }
 .qr-booking-page .success-note { margin-top: 1rem; color: var(--text-muted); font-size: .85rem; }
+
+/* ============================================================
+   HISTORIAL DE PRECIOS (Tarea 08)
+   ============================================================ */
+.hist-precios-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.hist-precios-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.hist-precios-toggle input {
+    width: auto;
+    margin: 0;
+}
+
+.hist-precios-chart-wrap {
+    position: relative;
+    height: 260px;
+    margin-bottom: 1.25rem;
+}
+
+.hist-precios-chart-empty {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 2rem 1rem;
+    margin: 0;
+}
+
+.hist-precios-nota {
+    font-size: 0.8rem;
+    color: var(--warning-dark);
+    background: var(--warning-subtle);
+    border-radius: var(--radius-sm);
+    padding: 0.5rem 0.75rem;
+    margin: 0 0 1rem;
+}
+
+.hist-precios-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.hist-precios-table th,
+.hist-precios-table td {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+}
+
+.hist-precios-table th {
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--surface-hover);
+}
+
+.hist-precios-table td {
+    color: var(--text-primary);
+}
+
+.hist-precios-table tr:last-child td {
+    border-bottom: none;
+}
+
+.hist-precios-var--up {
+    color: var(--secondary);
+    font-weight: 600;
+}
+
+.hist-precios-var--down {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.hist-precios-row--anulada td {
+    opacity: 0.55;
+}
+
+.hist-precios-tag-correccion {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    background: var(--warning-subtle);
+    color: var(--warning-dark);
+}
+
+.hist-precios-hint {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--warning-dark);
+    margin-top: 0.4rem;
+}
+
+input.is-locked {
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}

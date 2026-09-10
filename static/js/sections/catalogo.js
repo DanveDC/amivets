@@ -4,6 +4,12 @@
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS, showNotification, openModal, closeModal } from '../core/ui.js';
+import { abrirHistorialPrecios, gatePrecioInput } from './historial-precios.js';
+
+// Abre el panel "Historial de precios" (Tarea 08) para un servicio del catálogo.
+// Sin curva de costo: los servicios no tienen costo de compra.
+export const abrirHistorialServicio = (id, nombre, precioVariable = false) =>
+    abrirHistorialPrecios({ tipo: 'catalogo', id, nombre, precioVariable });
 
 // ============================================================
 // CATALOGO DE SERVICIOS MODULE
@@ -58,6 +64,7 @@ export async function cargarCatalogo() {
                 <td>
                     <div class="row-actions" style="justify-content:flex-start;">
                         <button onclick="abrirModalServicio(${s.id})" class="btn-secondary btn-sm" style="font-size:0.8rem;">Editar</button>
+                        <button onclick="abrirHistorialServicio(${s.id}, '${(s.nombre || '').replace(/'/g, "\\'")}', ${!!s.precio_variable})" class="btn-secondary btn-sm btn-historial-precios" style="font-size:0.8rem;" title="Historial de precios">Historial</button>
                         ${s.activo ? `<button onclick="desactivarServicio(${s.id})" class="btn-secondary btn-sm btn-row-danger" style="font-size:0.8rem;">Desact.</button>` : ''}
                     </div>
                 </td>
@@ -222,6 +229,14 @@ export async function abrirModalServicio(id = null) {
     const recetaSection = document.getElementById('catalogoRecetaSection');
     showRecetaError('');
 
+    // Tarea 08: alta -> precio editable por cualquiera; edición -> solo admin.
+    const precioInput = document.getElementById('catalogoPrecioRef');
+    const precioHint = document.getElementById('catalogoPrecioRefHint');
+    const motivoGroup = document.getElementById('catalogoMotivoGroup');
+    if (precioInput) { precioInput.disabled = false; precioInput.classList.remove('is-locked'); }
+    if (precioHint) precioHint.hidden = true;
+    if (motivoGroup) motivoGroup.hidden = true;
+
     if (id) {
         try {
             const s = await fetchAPI(`/catalogo/${id}`);
@@ -231,6 +246,7 @@ export async function abrirModalServicio(id = null) {
             document.getElementById('catalogoPrecioRef').value = s.precio_ref;
             document.getElementById('catalogoUnidad').value = s.unidad || '';
             document.getElementById('catalogoPrecioVariable').checked = s.precio_variable;
+            gatePrecioInput({ inputId: 'catalogoPrecioRef', hintId: 'catalogoPrecioRefHint', motivoGroupId: 'catalogoMotivoGroup' });
         } catch (err) {
             showNotification('Error cargando servicio: ' + err.message, 'error');
             return;
@@ -261,6 +277,9 @@ export async function guardarServicio(e) {
     };
     try {
         if (id) {
+            // Tarea 08: motivo opcional del cambio de precio (solo lo ve el admin).
+            const motivo = document.getElementById('catalogoMotivo')?.value.trim();
+            if (motivo) payload.motivo = motivo;
             await fetchAPI(`/catalogo/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
             showNotification('Servicio actualizado', 'success');
         } else {

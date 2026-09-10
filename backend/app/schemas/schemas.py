@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, field_serializer, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, field_serializer, computed_field, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -400,6 +400,10 @@ class InventarioUpdate(BaseModel):
     contenido_por_envase: Optional[Decimal] = Field(None, ge=0)
     merma_al_abrir: Optional[bool] = None
     activo: Optional[bool] = None
+    # Motivo opcional del cambio de precio (Tarea 08). No es una columna de
+    # inventario: el router lo saca del loop generico y lo pasa a
+    # registrar_cambio_precio(). exclude=True lo mantiene fuera de model_dump().
+    motivo: Optional[str] = Field(None, max_length=200, exclude=True)
 
     @field_validator('tipo_item')
     @classmethod
@@ -443,6 +447,46 @@ class MovimientoInventarioResponse(BaseModel):
     servicio_consulta_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialPrecioRead(BaseModel):
+    """Una fila del historial de precios de lista (Tarea 08), para materiales y
+    servicios (misma forma para los dos, decision 2).
+
+    variacion_abs / variacion_pct se derivan de precio_anterior y quedan en None
+    cuando no hay con que compararlas: registro inicial de migracion
+    (precio_anterior IS NULL) o precio_anterior = 0 para el porcentaje.
+    """
+    id: int
+    precio_nuevo: Decimal
+    precio_anterior: Optional[Decimal] = None
+    motivo: Optional[str] = None
+    usuario_id: Optional[int] = None
+    corrige_id: Optional[int] = None
+    fecha_cambio: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def variacion_abs(self) -> Optional[float]:
+        if self.precio_anterior is None:
+            return None
+        return float((self.precio_nuevo - self.precio_anterior).quantize(Decimal("0.01")))
+
+    @computed_field
+    @property
+    def variacion_pct(self) -> Optional[float]:
+        if self.precio_anterior is None or self.precio_anterior == 0:
+            return None
+        pct = (self.precio_nuevo - self.precio_anterior) / self.precio_anterior * Decimal("100")
+        return float(pct.quantize(Decimal("0.01")))
+
+    # Coherente con InventarioBase: los Decimal se emiten como numero (no string)
+    # en el JSON de respuesta. model_dump() sigue devolviendo Decimal.
+    @field_serializer('precio_nuevo', 'precio_anterior', when_used='json')
+    def _serializar_decimales(self, v):
+        return float(v) if v is not None else None
 
 
 # ========== FACTURA SCHEMAS ==========
@@ -740,6 +784,9 @@ class CatalogoServicioUpdate(BaseModel):
     precio_variable: Optional[bool] = None
     unidad: Optional[str] = Field(None, max_length=100)
     activo: Optional[bool] = None
+    # Motivo opcional del cambio de precio (Tarea 08). No es una columna: el
+    # router lo saca del loop generico y lo pasa a registrar_cambio_precio().
+    motivo: Optional[str] = Field(None, max_length=200, exclude=True)
 
 
 class CatalogoServicioResponse(CatalogoServicioBase):

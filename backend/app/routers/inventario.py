@@ -1,3 +1,4 @@
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -5,8 +6,16 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import Inventario
-from app.schemas.schemas import InventarioCreate, InventarioUpdate, InventarioResponse
+from app.models.models import Inventario, MovimientoInventario, HistorialPrecioInventario, Usuario
+from app.routers.usuarios import get_current_user
+from app.schemas.schemas import (
+    InventarioCreate,
+    InventarioUpdate,
+    InventarioResponse,
+    MovimientoInventarioResponse,
+    HistorialPrecioRead,
+)
+from app.services.precio_service import registrar_cambio_precio, cuantizar_precio
 
 router = APIRouter(prefix="/api/inventario", tags=["Inventario y Farmacia"])
 
@@ -72,19 +81,117 @@ def obtener_producto(
 def actualizar_producto(
     producto_id: int,
     producto_update: InventarioUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
-    """Actualiza un producto"""
+    """Actualiza un producto.
+
+    El precio de lista (`precio_unitario`) NO pasa por el loop generico: si el
+    payload lo trae y (cuantizado) difiere del actual, lo escribe
+    `registrar_cambio_precio` -- que ademas historiza el cambio -- y exige rol
+    admin (Tarea 08, decision 7). El resto de los campos (nombre, stock_minimo,
+    proveedor, etc.) siguen por setattr: un veterinario los puede seguir
+    editando.
+    """
     producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-        
-    for key, value in producto_update.model_dump(exclude_unset=True).items():
+
+    payload = producto_update.model_dump(exclude_unset=True)
+    payload.pop("motivo", None)  # no es columna; solo alimenta el historial
+    precio_nuevo = payload.pop("precio_unitario", None)
+
+    if precio_nuevo is not None and cuantizar_precio(precio_nuevo) != cuantizar_precio(producto.precio_unitario):
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Solo un administrador puede cambiar precios")
+        registrar_cambio_precio(
+            db,
+            entidad_row=producto,
+            precio_nuevo=precio_nuevo,
+            usuario_id=current_user.id,
+            motivo=producto_update.motivo,
+        )
+
+    for key, value in payload.items():
         setattr(producto, key, value)
-    
+
     db.commit()
     db.refresh(producto)
     return producto
+
+
+@router.get("/{producto_id}/historial-precios", response_model=List[HistorialPrecioRead])
+def historial_precios_producto(
+    producto_id: int,
+    desde: Optional[date] = Query(None, description="Filtra fecha_cambio desde este dia inclusive (YYYY-MM-DD)"),
+    hasta: Optional[date] = Query(None, description="Filtra fecha_cambio hasta este dia inclusive (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Historial de precios de lista del material/producto, del mas nuevo al mas
+    viejo (Tarea 08). La vigencia en una fecha se deriva tomando la primera fila
+    con fecha_cambio <= esa fecha."""
+    producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
+    if not producto:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    q = db.query(HistorialPrecioInventario).filter(
+        HistorialPrecioInventario.inventario_id == producto_id
+    )
+    if desde is not None:
+        q = q.filter(
+            HistorialPrecioInventario.fecha_cambio
+            >= datetime.combine(desde, time.min, tzinfo=timezone.utc)
+        )
+    if hasta is not None:
+        q = q.filter(
+            HistorialPrecioInventario.fecha_cambio
+            < datetime.combine(hasta, time.min, tzinfo=timezone.utc) + timedelta(days=1)
+        )
+
+    return q.order_by(
+        HistorialPrecioInventario.fecha_cambio.desc(),
+        HistorialPrecioInventario.id.desc(),
+    ).all()
+
+
+@router.get("/{producto_id}/movimientos", response_model=List[MovimientoInventarioResponse])
+def movimientos_producto(
+    producto_id: int,
+    tipo: Optional[str] = Query(None, description="ENTRADA | SALIDA | MERMA | AJUSTE | REVERSA"),
+    desde: Optional[date] = Query(None, description="Filtra fecha_registro desde este dia inclusive (YYYY-MM-DD)"),
+    hasta: Optional[date] = Query(None, description="Filtra fecha_registro hasta este dia inclusive (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Ledger de movimientos del producto, del mas nuevo al mas viejo (Tarea 08).
+
+    Es el primer lector de `movimientos_inventario`: la UI dibuja la curva de
+    costo con el `costo_unitario` de cada ENTRADA al lado de la curva de precio
+    de venta.
+    """
+    producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
+    if not producto:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    q = db.query(MovimientoInventario).filter(MovimientoInventario.producto_id == producto_id)
+    if tipo:
+        q = q.filter(MovimientoInventario.tipo_movimiento == tipo.upper())
+    if desde is not None:
+        q = q.filter(
+            MovimientoInventario.fecha_registro
+            >= datetime.combine(desde, time.min, tzinfo=timezone.utc)
+        )
+    if hasta is not None:
+        q = q.filter(
+            MovimientoInventario.fecha_registro
+            < datetime.combine(hasta, time.min, tzinfo=timezone.utc) + timedelta(days=1)
+        )
+
+    return q.order_by(
+        MovimientoInventario.fecha_registro.desc(),
+        MovimientoInventario.id.desc(),
+    ).all()
 
 @router.delete("/{producto_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_producto(

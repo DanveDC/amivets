@@ -1,10 +1,13 @@
+from datetime import date, datetime, time, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import CatalogoServicio, RecetaServicio, Inventario
+from app.models.models import CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
+from app.routers.usuarios import get_current_user
 from app.schemas.schemas import (
     CatalogoServicioCreate,
     CatalogoServicioUpdate,
@@ -12,7 +15,9 @@ from app.schemas.schemas import (
     RecetaServicioCreate,
     RecetaServicioUpdate,
     RecetaServicioResponse,
+    HistorialPrecioRead,
 )
+from app.services.precio_service import registrar_cambio_precio, cuantizar_precio
 
 router = APIRouter(prefix="/api/catalogo", tags=["Catalogo de Servicios"])
 
@@ -81,18 +86,75 @@ def actualizar_servicio(
     servicio_id: int,
     data: CatalogoServicioUpdate,
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
-    """Update a catalog service"""
+    """Update a catalog service.
+
+    El precio de referencia (`precio_ref`) NO pasa por el loop generico: si el
+    payload lo trae y (cuantizado) difiere del actual, lo escribe
+    `registrar_cambio_precio` -- que ademas historiza -- y exige rol admin
+    (Tarea 08). El resto de los campos (nombre, categoria, unidad,
+    `precio_variable`, etc.) siguen por setattr.
+    """
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    payload.pop("motivo", None)  # no es columna; solo alimenta el historial
+    precio_nuevo = payload.pop("precio_ref", None)
+
+    if precio_nuevo is not None and cuantizar_precio(precio_nuevo) != cuantizar_precio(servicio.precio_ref):
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Solo un administrador puede cambiar precios")
+        registrar_cambio_precio(
+            db,
+            entidad_row=servicio,
+            precio_nuevo=precio_nuevo,
+            usuario_id=current_user.id,
+            motivo=data.motivo,
+        )
+
+    for key, value in payload.items():
         setattr(servicio, key, value)
 
     db.commit()
     db.refresh(servicio)
     return servicio
+
+
+@router.get("/{servicio_id}/historial-precios", response_model=List[HistorialPrecioRead])
+def historial_precios_servicio(
+    servicio_id: int,
+    desde: Optional[date] = Query(None, description="Filtra fecha_cambio desde este dia inclusive (YYYY-MM-DD)"),
+    hasta: Optional[date] = Query(None, description="Filtra fecha_cambio hasta este dia inclusive (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Historial de precios de referencia del servicio, del mas nuevo al mas
+    viejo (Tarea 08)."""
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    q = db.query(HistorialPrecioServicio).filter(
+        HistorialPrecioServicio.catalogo_servicio_id == servicio_id
+    )
+    if desde is not None:
+        q = q.filter(
+            HistorialPrecioServicio.fecha_cambio
+            >= datetime.combine(desde, time.min, tzinfo=timezone.utc)
+        )
+    if hasta is not None:
+        q = q.filter(
+            HistorialPrecioServicio.fecha_cambio
+            < datetime.combine(hasta, time.min, tzinfo=timezone.utc) + timedelta(days=1)
+        )
+
+    return q.order_by(
+        HistorialPrecioServicio.fecha_cambio.desc(),
+        HistorialPrecioServicio.id.desc(),
+    ).all()
 
 
 @router.delete("/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)

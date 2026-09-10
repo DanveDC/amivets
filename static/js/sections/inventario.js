@@ -4,6 +4,12 @@
 
 import { fetchAPI } from '../core/api.js';
 import { ICONS, showNotification, openModal, closeModal } from '../core/ui.js';
+import { abrirHistorialPrecios, gatePrecioInput } from './historial-precios.js';
+
+// Abre el panel "Historial de precios" (Tarea 08) para un material/producto.
+// Expuesto en window por app.js; lo llama el onclick de la fila.
+export const abrirHistorialProducto = (id, nombre) =>
+    abrirHistorialPrecios({ tipo: 'inventario', id, nombre });
 
 // Formato numérico es-AR: coma decimal, punto de miles.
 const fmtNum = (n) => Number(n ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 3 });
@@ -99,6 +105,7 @@ export const loadInventario = async (filtro = '') => {
                 <td style="text-align:right;">
                     <div class="row-actions">
                         <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${stockActual})" title="Ajustar stock" aria-label="Ajustar stock" style="font-size:0.75rem; padding:4px 8px;">${ICONS.box} Stock</button>
+                        <button class="btn-secondary btn-sm btn-historial-precios" onclick="abrirHistorialProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Historial de precios" aria-label="Historial de precios" style="font-size:0.75rem; padding:4px 8px;">${ICONS.dollar}</button>
                         <button class="btn-secondary btn-sm" onclick="abrirEditarProducto(${p.id})" title="Editar" aria-label="Editar" style="font-size:0.75rem; padding:4px 8px;">${ICONS.edit}</button>
                         <button class="btn-secondary btn-sm btn-row-danger" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" aria-label="Desactivar" style="font-size:0.75rem; padding:4px 8px;">${ICONS.trash}</button>
                     </div>
@@ -165,6 +172,8 @@ export const abrirEditarProducto = async (id) => {
         document.getElementById('editProdContenidoEnvase').value = p.contenido_por_envase ?? '';
         document.getElementById('editProdMermaAlAbrir').checked = !!p.merma_al_abrir;
         toggleMaterialFields('editProd');
+        // Tarea 08: solo un admin puede cambiar el precio; el resto lo ve bloqueado.
+        gatePrecioInput({ inputId: 'editProdPrecio', hintId: 'editProdPrecioHint', motivoGroupId: 'editProdMotivoGroup' });
         openModal('modalEditarProducto');
     } catch (error) {
         alert('Error al cargar producto: ' + error.message);
@@ -192,6 +201,9 @@ export const handleEditarProductoSubmit = async (e) => {
             contenido_por_envase: esMaterial && contenidoRaw !== '' ? parseFloat(contenidoRaw) : null,
             merma_al_abrir: esMaterial ? !!document.getElementById('editProdMermaAlAbrir')?.checked : false,
         };
+        // Tarea 08: motivo opcional del cambio de precio (solo lo ve el admin).
+        const motivo = document.getElementById('editProdMotivo')?.value.trim();
+        if (motivo) data.motivo = motivo;
         await fetchAPI(`/inventario/${id}`, { method: 'PUT', body: JSON.stringify(data) });
         showNotification('Producto actualizado.', 'success');
         closeModal('modalEditarProducto');

@@ -343,6 +343,15 @@ class Inventario(Base):
     detalles_factura = relationship("DetalleFactura", back_populates="producto")
     recetas = relationship("RecetaServicio", back_populates="inventario")
     consumos_material = relationship("ConsumoMaterial", back_populates="inventario")
+    # Historial de precio de lista (Tarea 08). Del mas viejo al mas nuevo; el
+    # cascade sigue el mismo criterio que CatalogoServicio.recetas: borrar el
+    # material se lleva su historial (decision 2).
+    historial_precios = relationship(
+        "HistorialPrecioInventario",
+        back_populates="inventario",
+        order_by="HistorialPrecioInventario.fecha_cambio",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<Inventario {self.codigo} - {self.nombre}>"
@@ -728,6 +737,13 @@ class CatalogoServicio(Base):
         cascade="all, delete-orphan",
     )
     servicios_consulta = relationship("ServicioConsulta", back_populates="catalogo_servicio")
+    # Historial de precio de referencia (Tarea 08), mismo criterio que Inventario.
+    historial_precios = relationship(
+        "HistorialPrecioServicio",
+        back_populates="catalogo_servicio",
+        order_by="HistorialPrecioServicio.fecha_cambio",
+        cascade="all, delete-orphan",
+    )
 
 
 class RecetaServicio(Base):
@@ -783,4 +799,71 @@ class ConsumoMaterial(Base):
 
     def __repr__(self):
         return f"<ConsumoMaterial svc_consulta={self.servicio_consulta_id} inv={self.inventario_id}>"
+
+
+class HistorialPrecioInventario(Base):
+    """Un cambio del precio de lista (venta) de un material/producto (Tarea 08).
+
+    Append-only: nunca UPDATE ni DELETE (decision 6). Una correccion es una fila
+    nueva con corrige_id (self-FK) apuntando a la anulada. precio_anterior es
+    redundante a proposito: hace cada fila autoexplicativa para la tabla de la
+    UI (fecha, precio, variacion, quien) sin joins (decision 3).
+
+    Numeric(10, 2) como el resto de las columnas de dinero de features nuevas
+    (decision 8). El registro de migracion se reconoce por
+    precio_anterior IS NULL AND usuario_id IS NULL (decision 7).
+    """
+    __tablename__ = "historial_precio_inventario"
+
+    id = Column(Integer, primary_key=True, index=True)
+    inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False, index=True)
+    precio_nuevo = Column(Numeric(10, 2), nullable=False)
+    precio_anterior = Column(Numeric(10, 2), nullable=True)
+    motivo = Column(String(200), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    corrige_id = Column(Integer, ForeignKey("historial_precio_inventario.id"), nullable=True)
+    fecha_cambio = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        # Responde "precio vigente en la fecha X" con ORDER BY fecha_cambio DESC
+        # LIMIT 1 en O(log n) (decision 3).
+        Index("ix_hist_precio_inv_inventario_fecha", "inventario_id", "fecha_cambio"),
+    )
+
+    inventario = relationship("Inventario", back_populates="historial_precios")
+    usuario = relationship("Usuario")
+    corrige = relationship("HistorialPrecioInventario", remote_side=[id])
+
+    def __repr__(self):
+        return f"<HistorialPrecioInventario inv={self.inventario_id} {self.precio_anterior}->{self.precio_nuevo}>"
+
+
+class HistorialPrecioServicio(Base):
+    """Un cambio del precio de referencia de un servicio del catalogo (Tarea 08).
+
+    Misma forma y mismas reglas que HistorialPrecioInventario. Para servicios con
+    precio_variable = True el precio_ref es orientativo; el historial lo registra
+    igual (es lo que la clinica declara como referencia).
+    """
+    __tablename__ = "historial_precio_servicio"
+
+    id = Column(Integer, primary_key=True, index=True)
+    catalogo_servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=False, index=True)
+    precio_nuevo = Column(Numeric(10, 2), nullable=False)
+    precio_anterior = Column(Numeric(10, 2), nullable=True)
+    motivo = Column(String(200), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    corrige_id = Column(Integer, ForeignKey("historial_precio_servicio.id"), nullable=True)
+    fecha_cambio = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_hist_precio_svc_servicio_fecha", "catalogo_servicio_id", "fecha_cambio"),
+    )
+
+    catalogo_servicio = relationship("CatalogoServicio", back_populates="historial_precios")
+    usuario = relationship("Usuario")
+    corrige = relationship("HistorialPrecioServicio", remote_side=[id])
+
+    def __repr__(self):
+        return f"<HistorialPrecioServicio svc={self.catalogo_servicio_id} {self.precio_anterior}->{self.precio_nuevo}>"
 

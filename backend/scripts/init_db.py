@@ -8,6 +8,7 @@ from scripts.reset_db import reset_database, create_initial_admin
 from scripts.import_real_data import import_real_data
 from app.core.database import engine, Base
 from app.core.db_migrate import run_migrations
+from app.core.price_history_backfill import backfill_initial_price_history
 from sqlalchemy import inspect
 
 # Frase de confirmación explícita para el reset destructivo. No es un booleano
@@ -83,6 +84,16 @@ def init_production_db():
     # mejor no arrancar que servir sobre un esquema a medio migrar.
     run_migrations(engine)
     print("[init] Alembic: esquema al día.")
+
+    # Ancla inicial del historial de precios (Tarea 08, decision 7): el deploy no
+    # corre `alembic upgrade`, asi que se replica el backfill de la migracion
+    # c9d0e1f2a3b4 aca, sobre el esquema ya creado. Idempotente; nunca aborta el
+    # init.
+    try:
+        backfill_initial_price_history(engine)
+        print("[init] Historial de precios: ancla inicial verificada.")
+    except Exception as e:
+        print(f"[init] Historial de precios backfill omitido: {e}")
 
     print("\n=== CONFIGURACIÓN DE BASE DE DATOS FINALIZADA ===")
 
