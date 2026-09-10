@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+
+    # Local timezone of the clinic. The server may run in UTC (e.g. on Render),
+    # but appointment date checks must use the clinic's civil date.
+    CLINIC_TIMEZONE: str = "America/Argentina/Buenos_Aires"
     
     # CORS
     CORS_ORIGINS: Union[List[str], str] = [

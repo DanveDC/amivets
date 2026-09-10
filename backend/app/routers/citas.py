@@ -3,10 +3,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.models import Cita, CitaEstado, Mascota, Propietario
 from app.schemas.schemas import CitaCreate, CitaUpdate, CitaResponse, CitaStatusUpdate
+
+CLINIC_TZ = ZoneInfo(settings.CLINIC_TIMEZONE)
 
 router = APIRouter(prefix="/api/citas", tags=["Agenda y Citas"])
 
@@ -16,10 +20,16 @@ def agendar_cita(
     db: Session = Depends(get_db)
 ):
     """Agenda una nueva cita con verificación de disponibilidad"""
-    # Solo impedir citas de días anteriores a hoy
-    now_utc = datetime.now(timezone.utc)
+    # Solo impedir citas de días anteriores a hoy, usando la fecha civil de la
+    # clínica. El front manda hora local sin zona; el server puede correr en UTC,
+    # así que comparar contra now_utc.date() rechaza citas del mismo día por la
+    # noche (UTC-3 ya está en el día siguiente en UTC).
+    hoy_local = datetime.now(CLINIC_TZ).date()
+    fecha_cita = cita.fecha_cita
+    if fecha_cita.tzinfo is not None:
+        fecha_cita = fecha_cita.astimezone(CLINIC_TZ)
     # Ignoramos la hora para comparar fechas puras (el mismo día es válido siempre)
-    if cita.fecha_cita.date() < now_utc.date():
+    if fecha_cita.date() < hoy_local:
         raise HTTPException(status_code=400, detail="No se pueden agendar citas de días anteriores.")
         
     # El mismo día se permite a cualquier hora para facilitar el registro de llegadas en recepción
