@@ -7,6 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.reset_db import reset_database, create_initial_admin
 from scripts.import_real_data import import_real_data
 from app.core.database import engine, Base
+from app.core.servicios_consulta_schema import ensure_servicios_consulta_schema
 from sqlalchemy import inspect
 
 # Frase de confirmación explícita para el reset destructivo. No es un booleano
@@ -75,6 +76,15 @@ def init_production_db():
         print("\nLa base de datos ya está inicializada. Conservando datos existentes.")
         create_initial_admin()
         import_real_data()
+
+    # Esquema + backfill de "servicios desde la consulta" (Tarea 09): el deploy no
+    # corre `alembic upgrade` y `create_all` no altera tablas existentes. Replica
+    # el DDL de la migración d0e1f2a3b4c5 de forma idempotente. Nunca aborta el init.
+    try:
+        ensure_servicios_consulta_schema(engine)
+        print("[init] Servicios desde la consulta: esquema y backfill verificados.")
+    except Exception as e:
+        print(f"[init] Servicios desde la consulta backfill omitido: {e}")
 
     print("\n=== CONFIGURACIÓN DE BASE DE DATOS FINALIZADA ===")
 
