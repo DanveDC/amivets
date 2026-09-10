@@ -52,7 +52,7 @@ const SECTIONS = [
     // Reachable via the user menu and the command palette — no tab.
     { id: 'sec-catalogo',        label: 'Catálogo',          tab: false, init: () => { cargarCategoriasSelect(); cargarCatalogo(); } },
     { id: 'sec-citas-web',       label: 'Citas web / QR',    tab: false, init: initCitasWeb },
-    { id: 'sec-ordenes-medico',  label: 'Órdenes (Médico)',  tab: false, init: null },
+    // sec-ordenes-medico eliminado (Tarea 09, etapa 5): su función quedó en "Hoy".
     { id: 'sec-usuarios',        label: 'Usuarios',          tab: false, init: loadUsuarios, roles: ['admin'] },
     { id: 'sec-perfil',          label: 'Mi perfil',         tab: false, init: loadPerfil },
 ];

@@ -123,13 +123,21 @@ Reglas del troceo:
   </div>
   <div class="av-toast-stack" hidden></div>
   ```
-- **Pestañas** (orden 1A): Consultorio · Agenda · Propietarios · Facturación ·
-  Inventario · Informes. Las 5 restantes (Órdenes médico, Citas web/QR,
-  Catálogo, Usuarios, Perfil) **no van en la barra**: entran por
-  - Catálogo, Citas web/QR, Usuarios (admin) → menú del usuario (dropdown en
-    `av-user`), y por command palette.
-  - Órdenes médico → es contexto de `veterinario`; va como pestaña extra solo
-    para ese rol (o badge en la barra). Decidir e implementar, documentar acá.
+- **Pestañas** (orden 1A, actualizado por Tarea 09 etapas 4–5):
+  **Hoy** · Consultorio · Agenda · Propietarios · Facturación · Inventario ·
+  Informes. Las restantes (Citas web/QR, Catálogo, Usuarios, Perfil) **no van
+  en la barra**: entran por el menú del usuario (dropdown en `av-user`) y el
+  command palette.
+  - **Hoy** (`sec-hoy`) es la primera pestaña y el aterrizaje
+    (`DEFAULT_SECTION`): bandeja de consultas `ABIERTA` + turnos en sala.
+  - **Órdenes médico** (`sec-ordenes-medico`) **se eliminó** (Tarea 09,
+    etapa 5): su función quedó absorbida por "Hoy". `sections/ordenes.js`
+    queda como shim (badge + evento `av:hoy-refresh`).
+  - **Consulta abierta** (`sec-consulta-abierta`) es una sección sin pestaña
+    (Tarea 09, etapa 3): se abre desde "Hoy", desde el historial del paciente
+    o al crear una consulta. Reemplaza al modal `#modalDetalleConsulta`.
+  - `+ Nuevo` en la `av-topbar` es un menú (`av-newmenu`) con "Agregar
+    consulta", "Agregar servicio directo" y "Agregar propietario".
   - Perfil → menú del usuario.
 - **Gating por rol** (reemplaza `.admin-only` + `display:none`):
   `core/session.js` lee `/usuarios/me`, y `router.js` no registra / no pinta la
@@ -137,7 +145,7 @@ Reglas del troceo:
   navegación directa por hash a una sección no permitida (muestra `.av-empty`
   "Sin acceso"). Mapa de roles: tomar el que ya aplica hoy —
   - `sec-usuarios`: solo `admin`.
-  - `sec-ordenes-medico`: `veterinario` (y `admin`).
+  - `sec-ordenes-medico`: eliminado (Tarea 09, etapa 5).
   - resto: los tres roles (confirmar contra el comportamiento actual del HTML
     y de `checkAdminAccess`; si algo hoy no está gateado, no inventar
     restricciones nuevas).

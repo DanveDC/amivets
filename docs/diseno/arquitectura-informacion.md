@@ -204,6 +204,13 @@ el rol es qué pestañas hay dentro de Configuración.
 
 ### La tabla de correspondencias, sección por sección
 
+> **Estado (Tarea 09, etapas 3–5, rama `redesign/minimalist-ui`):** ya está
+> implementado el núcleo de esta arquitectura para el eje consulta→servicios:
+> **Hoy** (`sec-hoy`) es la primera pestaña y el aterrizaje;
+> **Órdenes (Médico)** se eliminó y su bandeja vive en Hoy;
+> la **consulta abierta** es una pantalla propia (`sec-consulta-abierta`) en
+> vez del modal. El resto de la tabla sigue siendo propuesta.
+
 | Sección de hoy | Qué pasa con ella | El hecho que lo motiva |
 | --- | --- | --- |
 | **Consultorio** | Se renombra **Pacientes** y absorbe Propietarios | 255 consultas contra 1 cita: es la pantalla real del sistema (Hecho 1) |

@@ -6,7 +6,7 @@
 // POST /api/facturas/ sin consulta_id.
 
 import { fetchAPI } from '../core/api.js';
-import { ICONS, showNotification, openModal, closeModal, debounce } from '../core/ui.js';
+import { showNotification, openModal, closeModal, debounce } from '../core/ui.js';
 import {
     verConsultaCompleta,
     seleccionarMascotaBasica,
@@ -268,6 +268,12 @@ export const initHoy = () => {
 
     document.getElementById('selectorMascotaSearch')?.addEventListener('input', (e) => {
         buscarMascotasSelector(e.target.value);
+    });
+
+    // ordenes.js (shim) emite esto tras un alta de cita/consulta.
+    document.addEventListener('av:hoy-refresh', () => {
+        const sec = document.getElementById('sec-hoy');
+        if (sec && !sec.hidden) loadHoy();
     });
 
     const form = document.getElementById('formServicioDirecto');

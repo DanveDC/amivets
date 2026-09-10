@@ -396,9 +396,9 @@
         </div>
 
         <!-- Tarea 09, etapa 3: la pantalla de consulta abierta (antes el modal
-             #modalDetalleConsulta) vive ahora dentro de <main class="av-main">
-             como <section id="sec-consulta-abierta">. El carrito de servicios,
-             su formulario #formAgregarServicio y todos sus IDs se movieron ahí
+             #modalDetalleConsulta) vive ahora dentro del main.av-main como la
+             seccion #sec-consulta-abierta. El carrito de servicios, su
+             formulario #formAgregarServicio y todos sus IDs se movieron ahi
              sin cambiar de nombre. -->
 
         <!-- Modal Registrar Cita -->
@@ -1715,22 +1715,9 @@
                 </div>
             </section>
 
-            <!-- Content Area: Órdenes Médico -->
-            <section id="sec-ordenes-medico" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-ordenes-medico">
-                <div class="content-header">
-                    <h2>Órdenes de Consulta Asignadas</h2>
-                </div>
-                <div class="kpi-grid" style="margin-bottom: 2rem;">
-                    <div class="kpi-card">
-                        <h3>Pendientes</h3>
-                        <div class="value" id="kpiOrdenesPendientes">0</div>
-                    </div>
-                </div>
-                <div id="ordenesMedicoList">
-                    <!-- Loaded via JS -->
-                    <p style="text-align: center; color: var(--text-secondary);">No tiene órdenes asignadas.</p>
-                </div>
-            </section>
+            <!-- sec-ordenes-medico se eliminó en la Tarea 09, etapa 5: su función
+                 (bandeja de trabajo del veterinario) vive ahora en "Hoy"
+                 (sec-hoy), que lista consultas ABIERTA y turnos en sala. -->
 
             <!-- Content Area: Mi Perfil -->
             <section id="sec-perfil" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-perfil">
@@ -2225,7 +2212,7 @@
     </div>
 
     <script src="/static/js/auth.js?v=3"></script>
-    <script type="module" src="/static/js/app.js?v=35"></script>
+    <script type="module" src="/static/js/app.js?v=36"></script>
 </body>
 
 </html>
