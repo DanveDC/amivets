@@ -21,6 +21,7 @@ import * as cmdk from './core/cmdk.js';
 import * as theme from './core/theme.js';
 
 import * as consultorio from './sections/consultorio.js';
+import * as hoy from './sections/hoy.js';
 import * as agenda from './sections/agenda.js';
 import * as propietarios from './sections/propietarios.js';
 import * as inventario from './sections/inventario.js';
@@ -123,6 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     consultorio.setupConsultorioSearch();
     consultorio.initConsultorio();
     consultorio.initConsultaAbierta();
+    hoy.initHoy();
 
     // Initialize custom selects logic
     consultorio.initCustomSelects();

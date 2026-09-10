@@ -41,7 +41,7 @@
     <div class="av-app">
         <!-- Top bar -->
         <header class="av-topbar">
-            <a class="av-brand" href="#sec-consultorio">
+            <a class="av-brand" href="#sec-hoy">
                 <i class="ph ph-paw-print" aria-hidden="true"></i>AmiVets
             </a>
             <button type="button" class="av-search" id="cmdkTrigger"
@@ -52,9 +52,18 @@
             </button>
             <div class="av-user av-row av-spacer">
                 <span id="userNameDisplay"></span>
-                <button class="btn btn-primary" id="btnRegistrarPropietario">
-                    <i class="ph ph-plus" aria-hidden="true"></i>Nuevo
-                </button>
+                <details class="av-newmenu" id="avNewMenu">
+                    <summary class="btn btn-primary">
+                        <i class="ph ph-plus" aria-hidden="true"></i>Nuevo
+                        <i class="ph ph-caret-down" aria-hidden="true"></i>
+                    </summary>
+                    <div class="av-newmenu-panel" role="menu">
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="btnNuevoConsulta">Agregar consulta</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="btnNuevoServicioDirecto">Agregar servicio directo</button>
+                        <div class="av-usermenu-sep" role="separator"></div>
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="btnRegistrarPropietario">Agregar propietario</button>
+                    </div>
+                </details>
                 <details class="av-usermenu">
                     <summary class="av-usermenu-trigger" aria-label="Menú de usuario">
                         <i class="ph ph-list" aria-hidden="true"></i>
@@ -857,8 +866,106 @@
             </div>
         </div>
 
+        <!-- Modal: seleccionar mascota (Tarea 09, etapa 4) -->
+        <div id="modalSelectorMascota" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="selectorMascotaTitulo">Seleccionar paciente</h2>
+                    <span class="close" data-modal="modalSelectorMascota" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <div class="form-group">
+                    <label for="selectorMascotaSearch">Buscar por nombre o código</label>
+                    <input type="text" id="selectorMascotaSearch" placeholder="Escriba el nombre del paciente..." autocomplete="off">
+                </div>
+                <div id="selectorMascotaResultados" role="listbox" aria-label="Resultados de pacientes"
+                     style="max-height: 40vh; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Modal: servicio directo (Tarea 09, etapa 4) -->
+        <div id="modalServicioDirecto" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Servicio directo</h2>
+                    <span class="close" data-modal="modalServicioDirecto" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <p class="text-muted" id="servicioDirectoPaciente" style="margin: 0 0 1rem;"></p>
+                <form id="formServicioDirecto">
+                    <input type="hidden" id="servicioDirectoMascotaId">
+                    <input type="hidden" id="servicioDirectoCatalogoId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="servicioDirectoTipo">Tipo *</label>
+                            <select id="servicioDirectoTipo" required>
+                                <option value="ESTETICA">Estética / Peluquería</option>
+                                <option value="INSUMO">Insumo / Producto</option>
+                                <option value="CONSULTA">Consulta / Honorarios</option>
+                                <option value="OTRO">Otro</option>
+                                <option value="VACUNACION">Vacunación</option>
+                                <option value="LABORATORIO">Laboratorio</option>
+                                <option value="CIRUGIA">Cirugía</option>
+                                <option value="HOSPITALIZACION">Hospitalización</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="servicioDirectoEstado">Estado *</label>
+                            <select id="servicioDirectoEstado" required>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="Aplicado">Aplicado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="servicioDirectoNombre">Descripción *</label>
+                        <input type="text" id="servicioDirectoNombre" required placeholder="Ej: Corte de uñas, Baño, Antipulgas...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="servicioDirectoCantidad">Cantidad *</label>
+                            <input type="number" id="servicioDirectoCantidad" value="1" min="0.1" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="servicioDirectoPrecio">Precio unitario ($) *</label>
+                            <input type="number" id="servicioDirectoPrecio" value="0" min="0" step="0.01" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalServicioDirecto">Cancelar</button>
+                        <button type="submit" class="btn-secondary" id="btnServicioDirectoGuardar">Guardar</button>
+                        <button type="button" class="btn-primary" id="btnServicioDirectoCobrar">Guardar y cobrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Main Content -->
         <main class="av-main">
+
+            <!-- Content Area: Hoy (Tarea 09, etapa 4) -->
+            <section id="sec-hoy" class="av-hoy" role="tabpanel" aria-labelledby="tab-sec-hoy" hidden>
+                <div class="content-header">
+                    <h2>Hoy</h2>
+                </div>
+
+                <div class="av-hoy-actions">
+                    <button type="button" class="btn-primary" id="btnHoyNuevaConsulta">+ Agregar consulta</button>
+                    <button type="button" class="btn-secondary" id="btnHoyServicioDirecto">+ Agregar servicio directo</button>
+                </div>
+
+                <div class="av-hoy-section">
+                    <h3>Consultas abiertas</h3>
+                    <div id="hoyConsultasList" class="av-hoy-list" aria-live="polite">
+                        <p class="av-muted" style="padding: 12px 16px;">Cargando…</p>
+                    </div>
+                </div>
+
+                <div class="av-hoy-section">
+                    <h3>Turnos en sala</h3>
+                    <div id="hoyTurnosList" class="av-hoy-list" aria-live="polite">
+                        <p class="av-muted" style="padding: 12px 16px;">Cargando…</p>
+                    </div>
+                </div>
+            </section>
 
             <!-- Content Area: Consulta abierta (Tarea 09, etapa 3) -->
             <section id="sec-consulta-abierta" class="av-ca" role="tabpanel"
@@ -2118,7 +2225,7 @@
     </div>
 
     <script src="/static/js/auth.js?v=3"></script>
-    <script type="module" src="/static/js/app.js?v=34"></script>
+    <script type="module" src="/static/js/app.js?v=35"></script>
 </body>
 
 </html>

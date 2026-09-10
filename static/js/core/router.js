@@ -26,15 +26,19 @@ import { loadUsuarios } from '../sections/usuarios.js';
 import { loadPerfil } from '../sections/perfil.js';
 import { cargarCategoriasSelect, cargarCatalogo } from '../sections/catalogo.js';
 import { init as initCitasWeb } from '../sections/citas-web.js';
+import { loadHoy } from '../sections/hoy.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Section registry
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DEFAULT_SECTION = 'sec-consultorio';
+const DEFAULT_SECTION = 'sec-hoy';
 
 // Primary tab bar, in 1A order.
 const SECTIONS = [
+    // Tarea 09, etapa 4: "Hoy" es el aterrizaje. Bandeja de consultas ABIERTA
+    // + turnos en sala (absorbe sec-ordenes-medico).
+    { id: 'sec-hoy',             label: 'Hoy',               tab: true,  init: loadHoy },
     { id: 'sec-consultorio',     label: 'Consultorio',       tab: true,  init: initConsultorio },
     // Tarea 09, etapa 3: pantalla de consulta abierta. No es pestaña; se abre
     // desde "Hoy", desde el historial del paciente o al crear una consulta. Su
