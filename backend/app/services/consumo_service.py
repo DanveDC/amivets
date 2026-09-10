@@ -47,12 +47,19 @@ def _q(valor) -> Decimal:
 
 
 def overrides_from_payload(consumos) -> dict:
-    """Convierte la lista ConsumoMaterialOverride del request en {inv_id: Decimal}."""
+    """Convierte la lista ConsumoMaterialOverride del request en {inv_id: Decimal}.
+
+    Acepta tanto objetos pydantic (ruta POST) como dicts planos: el PATCH hace
+    ``update_data.model_dump(exclude_unset=True)`` y saca ``consumos`` ya
+    convertido a lista de dicts, no de modelos (evita el AttributeError -> 500).
+    """
     if not consumos:
         return {}
     out = {}
     for c in consumos:
-        out[int(c.inventario_id)] = _q(c.cantidad)
+        iid = c["inventario_id"] if isinstance(c, dict) else c.inventario_id
+        cant = c["cantidad"] if isinstance(c, dict) else c.cantidad
+        out[int(iid)] = _q(cant)
     return out
 
 
@@ -72,14 +79,22 @@ def _resolver_inventario_legacy(db: Session, servicio: ServicioConsulta):
 
 
 def _ya_consumido(db: Session, servicio_consulta_id: int) -> bool:
-    """True si este servicio ya genero consumo no revertido (Decision 3)."""
+    """True si este servicio ya genero consumo no revertido (Decision 3).
+
+    Cuenta SOLO SALIDA contra REVERSA. La MERMA queda EXCLUIDA del conteo: siempre
+    viaja al lado de una SALIDA para el mismo material, pero la reversa escribe una
+    unica REVERSA combinada (usado + merma). Si sumaramos MERMA, tras revertir un
+    servicio con merma quedaria salidas(2) > reversas(1) y el re-aplicar seria un
+    no-op silencioso (bug H3). Con SALIDA-vs-REVERSA el balance cierra en cada
+    ciclo aplicar/revertir/re-aplicar.
+    """
     if db.query(ConsumoMaterial.id).filter(
         ConsumoMaterial.servicio_consulta_id == servicio_consulta_id
     ).first():
         return True
     salidas = db.query(MovimientoInventario.id).filter(
         MovimientoInventario.servicio_consulta_id == servicio_consulta_id,
-        MovimientoInventario.tipo_movimiento.in_([TipoMovimiento.SALIDA, TipoMovimiento.MERMA]),
+        MovimientoInventario.tipo_movimiento == TipoMovimiento.SALIDA,
     ).count()
     reversas = db.query(MovimientoInventario.id).filter(
         MovimientoInventario.servicio_consulta_id == servicio_consulta_id,
@@ -125,6 +140,14 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
     Idempotente: si ya hay consumo no revertido para este servicio, no hace
     nada. Devuelve la lista de advertencias [{material, faltante, unidad}].
     """
+    # Candado de fila sobre el ServicioConsulta ANTES de leer el guard: sin esto,
+    # dos PATCH concurrentes Pendiente->Aplicado (doble-click en el select de
+    # estado) pasan ambos el _ya_consumido y consumen dos veces (bug H2). La
+    # transaccion del router no hace commit entre este lock y las escrituras.
+    db.query(ServicioConsulta.id).filter(
+        ServicioConsulta.id == servicio.id
+    ).with_for_update().first()
+
     if _ya_consumido(db, servicio.id):
         return []
 
@@ -210,6 +233,12 @@ def revertir_para_servicio(db: Session, servicio: ServicioConsulta, *, usuario_i
     (magnitud positiva) y borra las filas de consumo_material -- el rastro de
     auditoria queda en los movimientos SALIDA/MERMA/REVERSA.
     """
+    # Mismo candado atomico que consumir_para_servicio (bug H2): el chequeo de
+    # "ya revertido" y las escrituras van bajo un unico lock de fila.
+    db.query(ServicioConsulta.id).filter(
+        ServicioConsulta.id == servicio.id
+    ).with_for_update().first()
+
     consulta_id = servicio.consulta_id
 
     ya_revertido = db.query(MovimientoInventario.id).filter(

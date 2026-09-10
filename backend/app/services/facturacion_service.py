@@ -14,18 +14,35 @@ from app.models.models import (
 def _consumo_en_ledger(db: Session, servicio_id) -> bool:
     """True si el ServicioConsulta ya descontó materiales al aplicarse y esos
     movimientos no fueron revertidos. Fuente de verdad: el ledger, no el
-    booleano estado == 'Aplicado' (Tarea 07, decisión 3)."""
+    booleano estado == 'Aplicado' (Tarea 07, decisión 3).
+
+    Cuenta SOLO SALIDA contra REVERSA (la MERMA queda fuera: siempre acompaña a
+    una SALIDA del mismo material y la reversa combina ambas en una REVERSA
+    única; sumarla envenena el guard tras un ciclo aplicar/revertir).
+    """
     if not servicio_id:
         return False
     salidas = db.query(MovimientoInventario.id).filter(
         MovimientoInventario.servicio_consulta_id == servicio_id,
-        MovimientoInventario.tipo_movimiento.in_([TipoMovimiento.SALIDA, TipoMovimiento.MERMA]),
+        MovimientoInventario.tipo_movimiento == TipoMovimiento.SALIDA,
     ).count()
     reversas = db.query(MovimientoInventario.id).filter(
         MovimientoInventario.servicio_consulta_id == servicio_id,
         MovimientoInventario.tipo_movimiento == TipoMovimiento.REVERSA,
     ).count()
-    return salidas > reversas
+    if salidas > reversas:
+        return True
+    # Fallback para filas pre-migración (Tarea 07): los servicios aplicados antes
+    # de que existiera movimientos_inventario.servicio_consulta_id no tienen
+    # SALIDA anclada, así que el conteo de arriba da 0. Si el servicio está
+    # "Aplicado" asumimos que ya descontó y NO volvemos a descontar al facturar
+    # (dirección segura: evita el doble decremento de vacunas/desparasitaciones
+    # históricas). Las líneas de servicio que consumen material ya no llevan
+    # producto_id, así que este fallback no afecta al flujo nuevo.
+    serv = db.query(ServicioConsulta.estado).filter(
+        ServicioConsulta.id == servicio_id
+    ).first()
+    return bool(serv and serv[0] == "Aplicado")
 from app.schemas.schemas import FacturaCreate, FacturaUpdate
 
 
@@ -319,32 +336,32 @@ class FacturacionService:
     @staticmethod
     def facturar_y_descargar_stock(db: Session, factura_id: int, usuario_id: int):
         factura = db.query(Factura).filter(Factura.id == factura_id).first()
-        
+
         if not factura or factura.estado == "PAGADA":
             raise HTTPException(status_code=400, detail="Factura inválida o ya pagada")
 
         factura.estado = "PAGADA"
         factura.es_presupuesto = False
-        
+
         for detalle in factura.detalles:
             if detalle.producto_id:
                 producto = db.query(Inventario).filter(Inventario.id == detalle.producto_id).with_for_update().first() # ROW-LOCKING PARA CONCURRENCIA
-                
+
                 # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
                 ya_descontado = False
                 if detalle.servicio_id:
                     serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == detalle.servicio_id).first()
                     if serv and serv.estado == "Aplicado":
                         ya_descontado = True
-                
+
                 if not ya_descontado:
                     if producto.stock_actual < detalle.cantidad:
                         db.rollback()
                         raise HTTPException(status_code=400, detail=f"Stock insuficiente para el producto {producto.nombre}")
-                    
+
                     # 1. Reducir stock base
                     producto.stock_actual -= detalle.cantidad
-                    
+
                     # 2. Rastrear Movimiento
                     nuevo_movimiento = MovimientoInventario(
                         producto_id=producto.id,
@@ -355,7 +372,7 @@ class FacturacionService:
                         usuario_responsable_id=usuario_id
                     )
                 db.add(nuevo_movimiento)
-                
+
         db.commit()
         return factura
 
