@@ -9,7 +9,6 @@ import asyncio
 import uuid
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.core.servicios_consulta_schema import ensure_servicios_consulta_schema
 from app.core.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -26,16 +25,10 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Crear las tablas en la base de datos
+# Crear las tablas en la base de datos. Las migraciones de esquema las aplica
+# scripts/init_db.py con Alembic antes de levantar uvicorn (ver db_migrate.py);
+# este create_all solo cubre el caso de correr uvicorn directo sin init_db.
 Base.metadata.create_all(bind=engine)
-
-# Esquema + backfill de "servicios desde la consulta" (Tarea 09). El deploy no
-# corre `alembic upgrade` y `create_all` no altera tablas existentes; se replica
-# el DDL de la migracion d0e1f2a3b4c5 de forma idempotente. Nunca aborta el arranque.
-try:
-    ensure_servicios_consulta_schema(engine)
-except Exception as e:
-    logger.warning(f"servicios_consulta schema/backfill skipped: {e}")
 
 # Crear la aplicación FastAPI
 app = FastAPI(

@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.reset_db import reset_database, create_initial_admin
 from scripts.import_real_data import import_real_data
 from app.core.database import engine, Base
-from app.core.servicios_consulta_schema import ensure_servicios_consulta_schema
+from app.core.db_migrate import run_migrations
 from sqlalchemy import inspect
 
 # Frase de confirmación explícita para el reset destructivo. No es un booleano
@@ -77,14 +77,12 @@ def init_production_db():
         create_initial_admin()
         import_real_data()
 
-    # Esquema + backfill de "servicios desde la consulta" (Tarea 09): el deploy no
-    # corre `alembic upgrade` y `create_all` no altera tablas existentes. Replica
-    # el DDL de la migración d0e1f2a3b4c5 de forma idempotente. Nunca aborta el init.
-    try:
-        ensure_servicios_consulta_schema(engine)
-        print("[init] Servicios desde la consulta: esquema y backfill verificados.")
-    except Exception as e:
-        print(f"[init] Servicios desde la consulta backfill omitido: {e}")
+    # Migraciones Alembic: sella la base nueva o aplica las pendientes sobre una
+    # existente (ver app/core/db_migrate.py). Reemplaza a los replicantes de DDL
+    # hechos a mano. Si una migración falla, la excepción sube y el init aborta:
+    # mejor no arrancar que servir sobre un esquema a medio migrar.
+    run_migrations(engine)
+    print("[init] Alembic: esquema al día.")
 
     print("\n=== CONFIGURACIÓN DE BASE DE DATOS FINALIZADA ===")
 

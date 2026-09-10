@@ -1,5 +1,5 @@
 # AmiVets Models - Force Sync v2
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON, Numeric, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, Enum, JSON, Numeric, UniqueConstraint, Index, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from typing import List, Optional
@@ -158,7 +158,7 @@ class Consulta(Base):
     # eje de cobro (estado_pago). ABIERTA = en curso; CERRADA = facturada o
     # cerrada por el veterinario; ANULADA = error. La migracion d0e1f2a3b4c5
     # deja las filas historicas en 'CERRADA' y el server_default en 'ABIERTA'.
-    estado = Column(String(20), server_default="ABIERTA", default="ABIERTA")
+    estado = Column(String(20), server_default="ABIERTA", default="ABIERTA", index=True)
 
     # Relaciones
     mascota = relationship("Mascota", back_populates="consultas")
@@ -200,6 +200,16 @@ class Consulta(Base):
 class ServicioConsulta(Base):
     """Pivot node for any action taken logically inside a consultation"""
     __tablename__ = "servicios_consulta"
+    # Declarados en el modelo (además de en las migraciones d0e1f2a3b4c5 /
+    # e1f2a3b4c5d6) para que create_all los reproduzca en una base nueva, ahora
+    # que el arranque sella/upgradea con Alembic en vez de replicar el DDL.
+    __table_args__ = (
+        CheckConstraint(
+            "consulta_id IS NOT NULL OR mascota_id IS NOT NULL",
+            name="ck_servicio_consulta_scope",
+        ),
+        Index("ix_servicios_consulta_mascota_created", "mascota_id", "created_at"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     # nullable desde Tarea 09 (decision 1): un "servicio directo" (corte de unas,

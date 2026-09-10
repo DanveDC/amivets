@@ -6,7 +6,8 @@
 set -e
 
 echo "▶ Initializing database..."
-# init_db.py runs Base.metadata.create_all — idempotent
+# init_db.py: create_all (base nueva) + Alembic stamp/upgrade head + seeds.
+# Idempotente. Si una migración falla, aborta acá y el contenedor no arranca.
 python /app/scripts/init_db.py
 
 echo "▶ Starting Sync Worker in background..."
