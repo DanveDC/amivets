@@ -449,6 +449,7 @@
                             <form id="formAgregarServicio" style="display: flex; gap: 0.75rem; flex-direction: column;">
                                 <input type="hidden" id="addServicioConsultaId">
                                 <input type="hidden" id="addServicioReferenciaId">
+                                <input type="hidden" id="addServicioCatalogoId">
 
                                 <!-- Fila 1: Categoría + Búsqueda -->
                                 <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem;">
@@ -496,6 +497,15 @@
                                         <input type="number" id="addServicioPrecio" value="0" min="0" step="0.01" required
                                             style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
                                     </div>
+                                </div>
+
+                                <!-- Materiales de la receta del servicio de catálogo (Tarea 07, slice D) -->
+                                <div id="addServicioRecetaBlock" hidden
+                                    style="margin-top: 0.25rem; background: var(--info-subtle); border: 1.5px solid var(--primary-subtle); border-radius: var(--radius-md); padding: 0.75rem;">
+                                    <div style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform: uppercase; margin-bottom: 0.5rem;">
+                                        Materiales que consume (ajustá si usaste otra cantidad)
+                                    </div>
+                                    <div id="addServicioRecetaLista" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
                                 </div>
 
                                 <!-- Campos dinámicos por tipo -->

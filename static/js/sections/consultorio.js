@@ -437,7 +437,7 @@ export const setupConsultorioSearch = () => {
         filterBar.id = filterBarId;
         filterBar.style.cssText = 'display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem;';
         filterBar.innerHTML = `
-            <select id="filtroMascotaEspecie" style="flex: 1; min-width: 100px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; background: white;">
+            <select id="filtroMascotaEspecie" style="flex: 1; min-width: 100px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem;">
                 <option value="">Todas las especies</option>
                 <option value="Perro">Perro</option>
                 <option value="Gato">Gato</option>
@@ -445,12 +445,12 @@ export const setupConsultorioSearch = () => {
                 <option value="Conejo">Conejo</option>
                 <option value="Otro">Otro</option>
             </select>
-            <select id="filtroMascotaSexo" style="flex: 1; min-width: 90px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; background: white;">
+            <select id="filtroMascotaSexo" style="flex: 1; min-width: 90px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem;">
                 <option value="">Todos los sexos</option>
                 <option value="Macho">Macho</option>
                 <option value="Hembra">Hembra</option>
             </select>
-            <select id="filtroMascotaEstadoReproductivo" style="flex: 1; min-width: 130px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem; background: white;">
+            <select id="filtroMascotaEstadoReproductivo" style="flex: 1; min-width: 130px; padding: 0.4rem 0.5rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.8rem;">
                 <option value="">Estado reproductivo</option>
                 <option value="Entero">Entero</option>
                 <option value="Castrado">Castrado/Esterilizado</option>
@@ -614,7 +614,7 @@ const renderDetalleServicios = (servicios) => {
                 <div style="margin-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 0.75rem; display: flex; align-items: center; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                         <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Estado:</span>
-                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.75rem; cursor: pointer; background: white; font-weight: 600; color: var(--text-secondary);">
+                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)" style="padding: 3px 10px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.75rem; cursor: pointer; font-weight: 600; color: var(--text-secondary);">
                             <option value="Pendiente" ${s.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
                             <option value="Aplicado" ${s.estado === 'Aplicado' ? 'selected' : ''}>Aplicado</option>
                         </select>
@@ -632,10 +632,13 @@ const renderDetalleServicios = (servicios) => {
 
 export const cambiarEstadoServicio = async (servicioId, newState) => {
     try {
-        await fetchAPI(`/consultas/servicios/${servicioId}`, {
+        const resp = await fetchAPI(`/consultas/servicios/${servicioId}`, {
             method: 'PATCH',
             body: JSON.stringify({ estado: newState })
         });
+        // Pendiente->Aplicado dispara el consumo de la receta backend-side; acá
+        // solo hace falta surfacear los faltantes (sin editor: usa la receta).
+        _avisarFaltantesStock(resp);
         // Refrescar
         verConsultaCompleta(currentViewedConsultaId, currentMascotaId);
     } catch (e) {
@@ -665,6 +668,7 @@ document.getElementById('addServicioTipo')?.addEventListener('change', async (e)
     // Reset basic fields
     searchInput.value = '';
     document.getElementById('addServicioReferenciaId').value = '';
+    _clearServicioReceta();
     datalist.innerHTML = '';
     currentInventoryItems = [];
 
@@ -752,6 +756,9 @@ document.getElementById('addServicioItemSearch')?.addEventListener('input', (e) 
     const val = e.target.value;
     const tipo = document.getElementById('addServicioTipo').value;
 
+    // Editar el texto a mano rompe el vínculo con el servicio de catálogo elegido.
+    _clearServicioReceta();
+
     if (tipo === 'INSUMO' || tipo === 'VACUNACION') {
         // Find if the value matches one of our inventory options
         const match = currentInventoryItems.find(i => `${i.nombre} [Stock: ${i.stock_actual}]` === val);
@@ -813,8 +820,8 @@ function _renderCatalogSuggestions(items) {
         dropdown = document.createElement('div');
         dropdown.id = 'catalogSuggestDropdown';
         dropdown.style.cssText = `
-            position:absolute; z-index:9999; background:#fff; border:1px solid #d1d5db;
-            border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.12);
+            position:absolute; z-index:9999; background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; box-shadow:var(--shadow-md, 0 4px 12px rgba(0,0,0,0.12));
             max-height:220px; overflow-y:auto; width:100%;
         `;
         const searchInput = document.getElementById('addServicioItemSearch');
@@ -827,17 +834,18 @@ function _renderCatalogSuggestions(items) {
 
     dropdown.innerHTML = items.map(item => `
         <div class="catalog-suggest-item"
+             data-id="${item.id}"
              data-nombre="${item.nombre.replace(/"/g, '&quot;')}"
              data-precio="${item.precio_ref}"
-             style="padding:0.6rem 0.9rem; cursor:pointer; border-bottom:1px solid #f3f4f6; font-size:0.875rem;">
+             style="padding:0.6rem 0.9rem; cursor:pointer; border-bottom:1px solid var(--border); font-size:0.875rem;">
             <span style="font-weight:600;">${item.nombre}</span>
-            <span style="color:#6b7280; font-size:0.8rem; margin-left:0.5rem;">${item.categoria}</span>
-            <span style="float:right; color:#059669; font-weight:700;">$${item.precio_ref}</span>
+            <span style="color:var(--text-muted); font-size:0.8rem; margin-left:0.5rem;">${item.categoria}</span>
+            <span style="float:right; color:var(--color-success, #059669); font-weight:700;">$${item.precio_ref}</span>
         </div>
     `).join('');
 
     dropdown.querySelectorAll('.catalog-suggest-item').forEach(el => {
-        el.addEventListener('mouseenter', () => el.style.background = '#f0fdf4');
+        el.addEventListener('mouseenter', () => el.style.background = 'var(--surface-hover)');
         el.addEventListener('mouseleave', () => el.style.background = '');
         el.addEventListener('mousedown', () => {
             const nombre = el.dataset.nombre;
@@ -845,12 +853,52 @@ function _renderCatalogSuggestions(items) {
             document.getElementById('addServicioItemSearch').value = nombre;
             document.getElementById('addServicioNombre').value = nombre;
             document.getElementById('addServicioPrecio').value = precio;
+            const catId = el.dataset.id || '';
+            document.getElementById('addServicioCatalogoId').value = catId;
+            _loadServicioReceta(catId);
             _hideCatalogSuggestions();
             document.getElementById('addServicioCantidad').focus();
         });
     });
 
     dropdown.style.display = 'block';
+}
+
+// ============ RECETA DE MATERIALES DEL SERVICIO (Tarea 07, slice D) ============
+// Al elegir un servicio del catálogo con receta, precargamos sus materiales
+// como cantidades editables. Lo que el veterinario deja en cada input se manda
+// como `consumos` (override por material) al aplicar el servicio.
+function _clearServicioReceta() {
+    const catInput = document.getElementById('addServicioCatalogoId');
+    if (catInput) catInput.value = '';
+    const block = document.getElementById('addServicioRecetaBlock');
+    const lista = document.getElementById('addServicioRecetaLista');
+    if (lista) lista.innerHTML = '';
+    if (block) block.hidden = true;
+}
+
+async function _loadServicioReceta(catalogoId) {
+    _clearServicioReceta();
+    if (!catalogoId) return;
+    document.getElementById('addServicioCatalogoId').value = catalogoId;
+    const block = document.getElementById('addServicioRecetaBlock');
+    const lista = document.getElementById('addServicioRecetaLista');
+    if (!block || !lista) return;
+    try {
+        const recetas = await fetchAPI(`/catalogo/${catalogoId}/recetas`);
+        if (!recetas || !recetas.length) return;
+        lista.innerHTML = recetas.map(r => `
+            <div style="display:grid; grid-template-columns:1fr 90px 44px; gap:0.5rem; align-items:center;">
+                <span style="font-size:0.8rem; color:var(--info-dark); font-weight:600;">${r.inventario_nombre || ('#' + r.inventario_id)}</span>
+                <input type="number" class="consumo-cantidad" data-inventario-id="${r.inventario_id}" step="0.001" min="0" value="${Number(r.cantidad)}"
+                    style="padding:0.4rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.85rem; font-weight:600; text-align:center;">
+                <span style="font-size:0.72rem; color:var(--text-muted);">${r.unidad_medida || ''}</span>
+            </div>
+        `).join('');
+        block.hidden = false;
+    } catch (err) {
+        // La receta es opcional: si falla el fetch, el formulario sigue usable.
+    }
 }
 
 function _hideCatalogSuggestions() {
@@ -946,22 +994,44 @@ document.getElementById('formAgregarServicio')?.addEventListener('submit', async
         estado: 'Aplicado'
     };
 
+    // Servicio anclado al catálogo: su receta se consume al aplicar. Cada input
+    // de la receta puede ajustarse; se manda como override por material.
+    const catalogoId = document.getElementById('addServicioCatalogoId').value;
+    if (catalogoId) {
+        body.catalogo_servicio_id = Number(catalogoId);
+        const consumos = [...document.querySelectorAll('#addServicioRecetaLista .consumo-cantidad')]
+            .filter(el => el.value.trim() !== '' && Number(el.value) > 0)
+            .map(el => ({ inventario_id: Number(el.dataset.inventarioId), cantidad: Number(el.value) }));
+        if (consumos.length) body.consumos = consumos;
+    }
+
     try {
-        await fetchAPI(`/consultas/${cid}/servicios`, {
+        const resp = await fetchAPI(`/consultas/${cid}/servicios`, {
             method: 'POST',
             body: JSON.stringify(body)
         });
         e.target.reset();
         document.getElementById('addServicioReferenciaId').value = '';
+        _clearServicioReceta();
         const container = document.getElementById('containerCamposDinamicos');
         if (container) { container.innerHTML = ''; container.style.display = 'none'; }
 
         verConsultaCompleta(cid, currentMascotaId);
         showNotification("Acto médico y registro clínico guardados.", "success");
+        _avisarFaltantesStock(resp);
     } catch (err) {
         alert("Error agregando cargo: " + err.message);
     }
 });
+
+// Muestra una advertencia por cada faltante de stock devuelto al aplicar un
+// servicio (Tarea 07, decisión 4). El guardado sigue siendo exitoso (200/201).
+function _avisarFaltantesStock(resp) {
+    if (!resp || !Array.isArray(resp.advertencias) || !resp.advertencias.length) return;
+    resp.advertencias.forEach(a => {
+        showNotification(`Stock insuficiente de ${a.material}: faltaron ${a.faltante} ${a.unidad}`, 'warning');
+    });
+}
 
 export const exportarConsultaPDF = async (consultaId) => {
     try {
@@ -1161,7 +1231,7 @@ const switchPetTab = (tabName) => {
                     <input type="text" id="filtroConsultaVet" placeholder="Veterinario..." style="flex:1; min-width:120px; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                     <input type="date" id="filtroConsultaFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                     <input type="date" id="filtroConsultaFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                    <select id="filtroConsultaEstadoPago" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; background:white;">
+                    <select id="filtroConsultaEstadoPago" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                         <option value="">Todos los pagos</option>
                         <option value="POR_COBRAR">Por Cobrar</option>
                         <option value="COBRADO">Cobrado</option>
@@ -1219,7 +1289,7 @@ const switchPetTab = (tabName) => {
             break;
         case 'peso':
             contentArea.innerHTML = `
-                <div style="background: white; border-radius: 8px; padding: 1.5rem;">
+                <div style="background: var(--surface); border-radius: 8px; padding: 1.5rem;">
                     <h3 style="margin-top: 0; color: #1f2937; text-align: center;">Evolución de Peso</h3>
                     <div id="chartContainer" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
                         <canvas id="weightChart"></canvas>
@@ -1596,7 +1666,7 @@ export const borrarNota = async (notaId) => {
 
 const cargarVacunasPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/vacunaciones/${mascotaId}`);
@@ -1608,7 +1678,7 @@ const cargarVacunasPet = async (mascotaId) => {
 
 const cargarDesparasitacionesPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('desparasitacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr></thead><tbody id="tblDesp"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('desparasitacion') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr></thead><tbody id="tblDesp"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/desparasitaciones/${mascotaId}`);
@@ -1620,7 +1690,7 @@ const cargarDesparasitacionesPet = async (mascotaId) => {
 
 const cargarHospitalizacionesPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Egreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Egreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`);
@@ -1638,7 +1708,7 @@ const cargarHospitalizacionesPet = async (mascotaId) => {
 
 const cargarCirugiasPet = async (mascotaId) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('cirugia') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Riesgo ASA</th></tr></thead><tbody id="tblCir"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('cirugia') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Riesgo ASA</th></tr></thead><tbody id="tblCir"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/cirugias/${mascotaId}`);
@@ -1650,7 +1720,7 @@ const cargarCirugiasPet = async (mascotaId) => {
 
 const cargarPruebasPet = async (mascotaId, filterType) => {
     const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('prueba') + `<div style="background:white; border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Resultados</th></tr></thead><tbody id="tblPrueba"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
+    cnt.innerHTML = buildClinicoForm('prueba') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Resultados</th></tr></thead><tbody id="tblPrueba"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
     hydrateCombos();
     try {
         const data = await fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`);
