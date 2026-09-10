@@ -190,24 +190,41 @@ class FacturacionService:
             db.add(nueva_factura)
             for mov in movimientos:
                 db.add(mov)
-            
+
+            # Marcar como facturado CUALQUIER ServicioConsulta referenciado por
+            # una línea de esta factura, tenga o no consulta. Esto cubre la
+            # facturación de servicios directos sueltos (Tarea 09, decisión 8),
+            # además del caso consulta.
+            servicio_ids = {
+                getattr(d, 'servicio_id', None)
+                for d in factura_data.detalles
+                if getattr(d, 'servicio_id', None)
+            }
+            if servicio_ids:
+                db.query(ServicioConsulta).filter(
+                    ServicioConsulta.id.in_(servicio_ids)
+                ).update({ServicioConsulta.facturado: True}, synchronize_session=False)
+
             # Si viene de una consulta, marcar todo como facturado
             if factura_data.consulta_id:
                 consulta = db.query(Consulta).filter(Consulta.id == factura_data.consulta_id).first()
                 if consulta:
                     consulta.estado_pago = "COBRADO"
-                    
+
                     # Marcar servicios como facturados (sin borrar el estado médico)
                     for s in consulta.servicios:
                         s.facturado = True
-                    
-                    # Marcar otros items
+
+                    # Marcar las filas de detalle clínico. Ya no son fuente de
+                    # facturación (Tarea 09, decisión 2: la única línea es el
+                    # espejo ServicioConsulta), pero se siguen marcando para que
+                    # cualquier lectura directa de esos booleanos quede coherente.
                     for p in consulta.pruebas: p.facturado = True
                     for v in consulta.vacunaciones: v.facturado = True
                     for d in consulta.desparasitaciones: d.facturado = True
                     for c in consulta.cirugias: c.facturado = True
                     for h in consulta.hospitalizaciones: h.facturado = True
-            
+
             db.commit()
             db.refresh(nueva_factura)
             return nueva_factura
@@ -386,67 +403,14 @@ class FacturacionService:
                     "id_interno": s.id,
                     "producto_id": prod_id
                 })
-        
-        # 3. Pruebas
-        for p in consulta.pruebas:
-            if not p.facturado:
-                items.append({
-                "descripcion": f"Prueba: {p.tipo or 'N/D'}",
-                "cantidad": 1,
-                "precio_unitario": p.precio_aplicado or 0.0,
-                "subtotal": p.precio_aplicado or 0.0,
-                "tipo": "PRUEBA",
-                "id_interno": p.id
-                })
-        
-        # 4. Vacunas
-        for v in consulta.vacunaciones:
-            if not v.facturado:
-                items.append({
-                "descripcion": f"Vacunación: {v.vacuna.nombre if v.vacuna else 'Vacuna'}",
-                "cantidad": 1,
-                "precio_unitario": v.precio_aplicado or 0.0,
-                "subtotal": v.precio_aplicado or 0.0,
-                "tipo": "VACUNA",
-                "id_interno": v.id
-                })
-                
-        # 5. Desparasitaciones
-        for d in consulta.desparasitaciones:
-            if not d.facturado:
-                items.append({
-                    "descripcion": f"Desparasitación: {d.tipo}",
-                    "cantidad": 1,
-                    "precio_unitario": d.precio_aplicado,
-                    "subtotal": d.precio_aplicado,
-                    "tipo": "DESPARASITACION",
-                    "id_interno": d.id
-                })
-        
-        # 6. Cirugías
-        for c in consulta.cirugias:
-            if not c.facturado:
-                items.append({
-                    "descripcion": f"Cirugía: {c.tipo_procedimiento}",
-                    "cantidad": 1,
-                    "precio_unitario": c.precio_aplicado,
-                    "subtotal": c.precio_aplicado,
-                    "tipo": "CIRUGIA",
-                    "id_interno": c.id
-                })
-                
-        # 7. Hospitalizaciones
-        for h in consulta.hospitalizaciones:
-            if not h.facturado:
-                items.append({
-                    "descripcion": f"Hospitalización: {h.motivo}",
-                    "cantidad": h.dias_cama,
-                    "precio_unitario": h.precio_aplicado,
-                    "subtotal": h.precio_aplicado * h.dias_cama,
-                    "tipo": "HOSPITALIZACION",
-                    "id_interno": h.id
-                })
-        
+
+        # NOTA (Tarea 09, decisión 2 y §1.3 del diseño): antes había 5 loops más
+        # (consulta.pruebas / vacunaciones / desparasitaciones / cirugias /
+        # hospitalizaciones). Se eliminaron: cada fila de detalle clínico con
+        # consulta_id ya tiene su espejo ServicioConsulta (loop 2), así que
+        # recorrerlas de nuevo hacía DOBLE CONTEO. Ahora la única fuente del
+        # preview es consulta.servicios + el honorario de consulta.
+
         return {
             "propietario_id": consulta.mascota.propietario_id,
             "propietario_nombre": f"{consulta.mascota.propietario.nombre} {consulta.mascota.propietario.apellido}",

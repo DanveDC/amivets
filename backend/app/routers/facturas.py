@@ -5,8 +5,11 @@ from typing import List, Optional
 from io import BytesIO
 
 from app.core.database import get_db
-from app.schemas.schemas import FacturaCreate, FacturaUpdate, FacturaResponse, AbonoCreate, AbonoResponse
-from app.models.models import Factura, Abono
+from app.schemas.schemas import (
+    FacturaCreate, FacturaUpdate, FacturaResponse, AbonoCreate, AbonoResponse,
+    FacturaDesdeConsulta, DetalleFacturaCreate,
+)
+from app.models.models import Factura, Abono, Consulta
 from app.services.facturacion_service import FacturacionService
 from app.services.pdf_service import PDFService
 
@@ -27,6 +30,66 @@ def crear_factura(
     - Genera número de factura único
     """
     return FacturacionService.crear_factura(db, factura)
+
+
+@router.post("/from-consulta/{consulta_id}", response_model=FacturaResponse, status_code=status.HTTP_201_CREATED)
+def crear_factura_desde_consulta(
+    consulta_id: int,
+    body: Optional[FacturaDesdeConsulta] = None,
+    db: Session = Depends(get_db),
+):
+    """Emite la factura de una consulta en un paso (Tarea 09, decisión 8).
+
+    El servidor arma los detalles desde consulta.servicios (no borrados, no
+    facturados) + el honorario de consulta, crea la factura y cierra la consulta
+    (estado='CERRADA'). El flujo de dos pasos (GET /pendientes/{id} -> POST /)
+    sigue funcionando igual.
+
+    Anular la factura después NO reabre la consulta: queda 'CERRADA'. Reabrirla
+    es una acción manual (PUT /api/consultas/{id} con estado='ABIERTA').
+    """
+    body = body or FacturaDesdeConsulta()
+
+    data = FacturacionService.obtener_items_pendientes_consulta(db, consulta_id)
+    items = data.get("items", [])
+    if not items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La consulta no tiene ítems pendientes de facturar",
+        )
+
+    detalles = []
+    for it in items:
+        es_servicio = it.get("tipo") == "SERVICIO"
+        detalles.append(DetalleFacturaCreate(
+            producto_id=it.get("producto_id"),
+            servicio_id=it["id_interno"] if es_servicio else None,
+            # DetalleFactura.cantidad es Integer (deuda preexistente); se
+            # redondea una eventual cantidad fraccionada de servicio.
+            cantidad=int(round(float(it.get("cantidad") or 1))),
+            precio_unitario=it.get("precio_unitario") or 0.0,
+            descripcion=it.get("descripcion"),
+        ))
+
+    factura_create = FacturaCreate(
+        propietario_id=data["propietario_id"],
+        consulta_id=consulta_id,
+        metodo_pago=body.metodo_pago,
+        total_pagado=body.total_pagado or 0.0,
+        descuento=body.descuento or 0.0,
+        impuesto=body.impuesto or 0.0,
+        detalles=detalles,
+    )
+
+    factura = FacturacionService.crear_factura(db, factura_create)
+
+    consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
+    if consulta is not None:
+        consulta.estado = "CERRADA"
+        db.commit()
+        db.refresh(factura)
+
+    return factura
 
 
 @router.get("/{factura_id}", response_model=FacturaResponse)
