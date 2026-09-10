@@ -188,15 +188,21 @@ export const abrirNuevaConsultaFlow = () => {
 };
 
 // ── flujo: agregar servicio directo ─────────────────────────────────────────
+// Abre el modal de servicio directo ya apuntado a una mascota concreta (sin pasar
+// por el selector). Lo reusa la pestaña "Servicios" de la ficha del paciente.
+export const abrirServicioDirectoParaMascota = (id, nombre) => {
+    const form = document.getElementById('formServicioDirecto');
+    if (form) form.reset();
+    document.getElementById('servicioDirectoMascotaId').value = id;
+    document.getElementById('servicioDirectoCatalogoId').value = '';
+    const label = document.getElementById('servicioDirectoPaciente');
+    if (label) label.textContent = `Paciente: ${nombre || ('#' + id)}`;
+    openModal('modalServicioDirecto');
+};
+
 export const abrirServicioDirectoFlow = () => {
     abrirSelectorMascota('Servicio directo — elegí el paciente', (id, nombre) => {
-        const form = document.getElementById('formServicioDirecto');
-        if (form) form.reset();
-        document.getElementById('servicioDirectoMascotaId').value = id;
-        document.getElementById('servicioDirectoCatalogoId').value = '';
-        const label = document.getElementById('servicioDirectoPaciente');
-        if (label) label.textContent = `Paciente: ${nombre || ('#' + id)}`;
-        openModal('modalServicioDirecto');
+        abrirServicioDirectoParaMascota(id, nombre);
     });
 };
 
@@ -284,6 +290,7 @@ export const initHoy = () => {
             if (!s) return;
             closeModal('modalServicioDirecto');
             showNotification('Servicio directo guardado.', 'success');
+            document.dispatchEvent(new CustomEvent('av:servicio-directo-creado'));
             loadHoy();
         } catch (err) {
             showNotification('No se pudo guardar el servicio: ' + err.message, 'error');
@@ -295,6 +302,7 @@ export const initHoy = () => {
             if (!s) return;
             await cobrarServicioDirecto(s);
             closeModal('modalServicioDirecto');
+            document.dispatchEvent(new CustomEvent('av:servicio-directo-creado'));
             loadHoy();
         } catch (err) {
             showNotification('No se pudo cobrar: ' + err.message, 'error');

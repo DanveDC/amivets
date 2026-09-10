@@ -17,6 +17,9 @@ import { ICONS, showNotification, openModal, closeModal, debounce } from '../cor
 import { createPrettySelect, initSearchableSelect } from '../core/select.js';
 import { cargarFacturasMascota } from './facturacion.js';
 import { cargarBadgeOrdenes } from './ordenes.js';
+// Relación cíclica segura con hoy.js (hoy.js importa de este módulo). Sólo se usa
+// dentro de un handler ("+ Servicio directo" en la pestaña Servicios).
+import { abrirServicioDirectoParaMascota } from './hoy.js';
 // Relación cíclica segura con core/router.js (router importa initConsultorio de
 // este módulo). showSection es una función exportada hoisted; sólo se usa dentro
 // de handlers, nunca en la evaluación del módulo.
@@ -1077,34 +1080,29 @@ function _hideCatalogSuggestions() {
 }
 
 export const setQuickAction = (tipo, fallbackSearch = '', jump = false) => {
-    // Complex modules configuration
-    const complexModules = {
-        'CIRUGIA': { tab: 'procedimientos', formId: 'formCirugia' },
-        'HOSPITALIZACION': { tab: 'hospitalizaciones', formId: 'formHospitalizacion' },
-        'LABORATORIO': { tab: 'laboratorio', formId: 'formPrueba' },
-        'VACUNACION': { tab: 'vacunas', formId: 'formVacuna' }
+    // Tarea 09: el alta clínica pesada vive detrás de "+ Registrar" en la
+    // pestaña unificada "Servicios" de la ficha del paciente.
+    const registroPorTipo = {
+        'CIRUGIA': 'cirugia',
+        'HOSPITALIZACION': 'hospitalizacion',
+        'LABORATORIO': 'prueba',
+        'VACUNACION': 'vacuna',
+        'DESPARASITACION': 'desparasitacion',
     };
 
-    if (jump && complexModules[tipo]) {
-        const config = complexModules[tipo];
-
-        // El detalle clínico pesado (cirugía/hospitalización) vive en el perfil
-        // del paciente: volvemos a Consultorio y abrimos su pestaña.
+    if (jump && registroPorTipo[tipo]) {
         showSection('sec-consultorio');
-        switchPetTab(config.tab);
-
-        // Scroll hacia abajo para que el usuario note que se abrió la sección
+        switchPetTab('servicios');
+        // switchPetTab pinta el feed de forma asíncrona; esperamos a que el
+        // contenedor del formulario exista antes de inyectar el form clínico.
         setTimeout(() => {
+            const picker = document.getElementById('serviciosRegistrarPicker');
+            const trigger = document.getElementById('btnServiciosRegistrar');
+            if (picker) picker.hidden = false;
+            if (trigger) trigger.setAttribute('aria-expanded', 'true');
+            abrirRegistroClinico(registroPorTipo[tipo]);
             const el = document.getElementById('petTabContent');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-            // Abrir el formulario correspondiente
-            const form = document.getElementById(config.formId);
-            if (form) {
-                form.style.display = 'block';
-                const combo = form.querySelector('.combo-consultas');
-                if (combo) combo.value = currentViewedConsultaId;
-            }
         }, 300);
         return;
     }
@@ -1290,7 +1288,7 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
                         `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--info); border-color: var(--info-dark); margin-top: 4px;">${ICONS.fileText} Facturado</button>` :
                         `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`
                     }
-                    <button class="btn-secondary btn-sm" onclick="switchPetTab('hospitalizaciones'); setTimeout(()=>toggleForm('formHospitalizacion'), 200);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>
+                    <button class="btn-secondary btn-sm" onclick="switchPetTab('servicios'); setTimeout(()=>abrirRegistroClinico('hospitalizacion'), 300);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>
                 </td>
             </tr>`;
         }).join('');
@@ -1310,8 +1308,8 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
     document.getElementById('displayInfoMascota').textContent = especie || '...';
     document.getElementById('consultaMascotaId').value = id;
 
-    // Set default tab to Historia
-    switchPetTab('historia');
+    // Set default tab to Resumen (Tarea 09: funde historia + peso + alertas)
+    switchPetTab('resumen');
 
     // Load full data to show breed and reproductive status
     try {
@@ -1366,8 +1364,25 @@ const seleccionarMascotaBasica = async (id) => {
     } catch (e) { console.error(e); }
 };
 
-const switchPetTab = (tabName) => {
+// Tarea 09: la ficha pasa de 12 pestañas a 6. Las pestañas por tipo de servicio
+// (vacunas, desparasitaciones, hospitalizaciones, procedimientos, laboratorio,
+// imagenes) se colapsan en "Servicios" (historia unificada). "historia" y "peso"
+// se funden en "Resumen". Este mapa mantiene vivos los onclick/llamadas viejas.
+const PET_TAB_LEGACY = {
+    historia: 'resumen',
+    peso: 'resumen',
+    ordenes: 'resumen',
+    vacunas: 'servicios',
+    desparasitaciones: 'servicios',
+    hospitalizaciones: 'servicios',
+    procedimientos: 'servicios',
+    laboratorio: 'servicios',
+    imagenes: 'servicios',
+};
+
+const switchPetTab = (rawTabName) => {
     detenerDictado(); // cambiar de pestaña destruye el DOM de notas; no dejar el micrófono escuchando de fondo
+    const tabName = PET_TAB_LEGACY[rawTabName] || rawTabName;
     // UI Update Active State
     document.querySelectorAll('.pet-nav-item').forEach(el => {
         el.classList.toggle('active', el.dataset.tab === tabName);
@@ -1379,14 +1394,26 @@ const switchPetTab = (tabName) => {
     actionsArea.innerHTML = '';
 
     switch (tabName) {
-        case 'historia':
+        case 'resumen':
             contentArea.innerHTML = `
-                <div class="empty-state">
-                    <div class="icon">${ICONS.fileText}</div>
-                    <p>Resumen de Historia Clínica</p>
-                    <div id="historiaResumen" style="width: 100%; text-align: left; margin-top: 1rem;"></div>
+                <div id="resumenAlertas"></div>
+                <div id="historiaResumen" style="width: 100%; text-align: left;"></div>
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-top: 1.25rem;">
+                    <h3 style="margin-top: 0; color: var(--text-primary); text-align: center; font-size: 1.05rem;">Evolución de Peso</h3>
+                    <div id="chartContainer" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
+                        <canvas id="weightChart"></canvas>
+                    </div>
                 </div>`;
-            renderHistoriaTab();
+            renderResumenTab();
+            setTimeout(loadWeightChart, 100);
+            break;
+        case 'servicios':
+            actionsArea.innerHTML = `
+                <button class="btn-secondary" id="btnServiciosServicioDirecto">+ Servicio directo</button>
+                <button class="btn-primary" id="btnServiciosRegistrar" aria-expanded="false" aria-controls="serviciosRegistrarPicker">+ Registrar</button>`;
+            document.getElementById('btnServiciosServicioDirecto').onclick = () => abrirServicioDirectoFicha();
+            document.getElementById('btnServiciosRegistrar').onclick = (e) => toggleRegistrarPicker(e.currentTarget);
+            cargarServiciosPet(currentMascotaId);
             break;
         case 'consultas':
             actionsArea.innerHTML = `<button class="btn-primary" id="btnRegistrarConsulta">+ Nueva Consulta</button>`;
@@ -1428,44 +1455,9 @@ const switchPetTab = (tabName) => {
             actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formNota')">+ Nueva Nota</button>`;
             cargarNotasPet(currentMascotaId);
             break;
-        case 'vacunas':
-            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formVacuna')">+ Registrar Vacuna</button>`;
-            cargarVacunasPet(currentMascotaId);
-            break;
-        case 'desparasitaciones':
-            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formDesparasitacion')">+ Registrar Desparasitante</button>`;
-            cargarDesparasitacionesPet(currentMascotaId);
-            break;
-        case 'hospitalizaciones':
-            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formHospitalizacion')">+ Registrar Hosp.</button>`;
-            cargarHospitalizacionesPet(currentMascotaId);
-            break;
-        case 'procedimientos':
-            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formCirugia')">+ Registrar Cirugía</button>`;
-            cargarCirugiasPet(currentMascotaId);
-            break;
-        case 'laboratorio':
-        case 'imagenes':
-            actionsArea.innerHTML = `<button class="btn-primary" onclick="toggleForm('formPrueba')">+ Registrar Prueba</button>`;
-            cargarPruebasPet(currentMascotaId, tabName);
-            break;
         case 'recetas':
             actionsArea.innerHTML = `<button class="btn-primary" onclick="alert('Las recetas se crean desde una consulta')">Ver Recetas</button>`;
             cargarRecetasPet(currentMascotaId);
-            break;
-        case 'ordenes':
-            contentArea.innerHTML = '<div class="empty-state">No hay órdenes registradas.</div>';
-            break;
-        case 'peso':
-            contentArea.innerHTML = `
-                <div style="background: var(--surface); border-radius: 8px; padding: 1.5rem;">
-                    <h3 style="margin-top: 0; color: var(--text-primary); text-align: center;">Evolución de Peso</h3>
-                    <div id="chartContainer" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
-                        <canvas id="weightChart"></canvas>
-                    </div>
-                </div>
-            `;
-            setTimeout(loadWeightChart, 100);
             break;
         case 'facturacion':
             contentArea.innerHTML = `
@@ -1522,13 +1514,398 @@ const renderHistoriaTab = async () => {
                 <div><b>Observaciones:</b><br>${m.observaciones || 'Sin observaciones.'}</div>
                 ${vacunasHTML}
             </div>`;
-    } catch (e) { }
+    } catch (e) {
+        res.innerHTML = '<p style="color: var(--accent);">No se pudo cargar el resumen de la historia clínica.</p>';
+    }
+};
+
+// Tarea 09: "Resumen" funde la vieja pestaña "Historia Clínica" + "Evol. Peso" +
+// una franja de alertas del paciente (observaciones) arriba de todo.
+const renderResumenTab = async () => {
+    const alertBox = document.getElementById('resumenAlertas');
+    renderHistoriaTab();
+    if (!alertBox) return;
+    try {
+        const m = await fetchAPI(`/mascotas/${currentMascotaId}`);
+        if (m.observaciones && m.observaciones.trim()) {
+            alertBox.innerHTML = `
+                <div class="pet-resumen-alert" role="note">
+                    <span class="pet-resumen-alert-icon" aria-hidden="true">${ICONS.alertTriangle}</span>
+                    <span><b>Alertas del paciente:</b> ${m.observaciones}</span>
+                </div>`;
+        } else {
+            alertBox.innerHTML = '';
+        }
+    } catch (e) {
+        alertBox.innerHTML = '';
+    }
 };
 
 export const toggleForm = (formId) => {
     const el = document.getElementById(formId);
     if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 };
+
+// ===========================================================================
+// PESTAÑA "SERVICIOS" — historia unificada del paciente (Tarea 09)
+// Reemplaza las 6 pestañas por tipo (vacunas/desparasitaciones/hospitalizaciones/
+// procedimientos/laboratorio/imagenes). Feed: GET /api/servicios/?mascota_id&alcance=todos
+// Cada fila abre un detalle type-aware. El alta clínica sigue disponible detrás
+// de "+ Registrar"; el alta suelta detrás de "+ Servicio directo".
+// ===========================================================================
+
+const SERVICIO_TIPO_META = {
+    VACUNACION:      { label: 'Vacunación',      cls: 'vac' },
+    DESPARASITACION: { label: 'Desparasitación', cls: 'desp' },
+    CIRUGIA:         { label: 'Cirugía',         cls: 'cir' },
+    HOSPITALIZACION: { label: 'Hospitalización', cls: 'hosp' },
+    LABORATORIO:     { label: 'Laboratorio',     cls: 'lab' },
+    DIAGNOSTICO:     { label: 'Estudio',         cls: 'lab' },
+    INSUMO:          { label: 'Insumo',          cls: 'ins' },
+    ESTETICA:        { label: 'Estética',        cls: 'est' },
+    PROCEDIMIENTO:   { label: 'Procedimiento',   cls: 'proc' },
+    CONSULTA:        { label: 'Consulta',        cls: 'cons' },
+    OTRO:            { label: 'Otro',            cls: 'otro' },
+};
+const _servTipoMeta = (t) => SERVICIO_TIPO_META[t] || { label: t || 'Servicio', cls: 'otro' };
+
+// Formularios clínicos que "+ Registrar" reexpone (mantiene clinico.spec.js vivo).
+const REGISTRO_CLINICO_TIPOS = [
+    { tipo: 'cirugia',          label: 'Cirugía',         formId: 'formCirugia' },
+    { tipo: 'vacuna',           label: 'Vacunación',      formId: 'formVacuna' },
+    { tipo: 'hospitalizacion',  label: 'Hospitalización', formId: 'formHospitalizacion' },
+    { tipo: 'desparasitacion',  label: 'Desparasitación', formId: 'formDesparasitacion' },
+    { tipo: 'prueba',           label: 'Estudio / Lab.',  formId: 'formPrueba' },
+];
+
+const _serviciosState = { mascotaId: null, raw: [], detalleCache: {} };
+
+const _fmtFecha = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+};
+const _money = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+export const cargarServiciosPet = async (mascotaId) => {
+    const cnt = document.getElementById('petTabContent');
+    if (!cnt) return;
+    _serviciosState.mascotaId = mascotaId;
+    _serviciosState.detalleCache = {};
+
+    const tipoOpts = Object.entries(SERVICIO_TIPO_META)
+        .map(([v, m]) => `<option value="${v}">${m.label}</option>`).join('');
+
+    cnt.innerHTML = `
+        <div id="serviciosRegistrarPicker" class="serv-registrar-picker" hidden>
+            <span class="serv-registrar-picker-label">Registrar:</span>
+            ${REGISTRO_CLINICO_TIPOS.map(r => `
+                <button type="button" class="btn-secondary btn-sm serv-registrar-opt" data-tipo="${r.tipo}">+ ${r.label}</button>`).join('')}
+        </div>
+        <div id="serviciosRegistrarFormWrap"></div>
+
+        <form id="serviciosFiltros" class="serv-filtros" role="search" aria-label="Filtrar servicios del paciente">
+            <div class="serv-filtro-field serv-filtro-field--grow">
+                <label for="servFiltroTexto">Buscar</label>
+                <input type="text" id="servFiltroTexto" placeholder="Nombre del servicio...">
+            </div>
+            <div class="serv-filtro-field">
+                <label for="servFiltroTipo">Tipo</label>
+                <select id="servFiltroTipo"><option value="">Todos</option>${tipoOpts}</select>
+            </div>
+            <div class="serv-filtro-field">
+                <label for="servFiltroEstado">Estado</label>
+                <select id="servFiltroEstado">
+                    <option value="">Todos</option>
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="Aplicado">Aplicado</option>
+                    <option value="Cancelado">Cancelado</option>
+                </select>
+            </div>
+            <div class="serv-filtro-field">
+                <label for="servFiltroFacturado">Facturado</label>
+                <select id="servFiltroFacturado">
+                    <option value="">Todos</option>
+                    <option value="true">Sí</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+            <div class="serv-filtro-field">
+                <label for="servFiltroDesde">Desde</label>
+                <input type="date" id="servFiltroDesde">
+            </div>
+            <div class="serv-filtro-field">
+                <label for="servFiltroHasta">Hasta</label>
+                <input type="date" id="servFiltroHasta">
+            </div>
+            <div class="serv-filtro-actions">
+                <button type="submit" class="btn-primary btn-sm">Filtrar</button>
+                <button type="button" class="btn-secondary btn-sm" id="servFiltroLimpiar">Limpiar</button>
+            </div>
+        </form>
+
+        <div id="serviciosFeed" class="serv-feed" aria-live="polite"></div>`;
+
+    // Wiring de filtros.
+    document.getElementById('serviciosFiltros').addEventListener('submit', (e) => {
+        e.preventDefault();
+        cargarServiciosFeed();
+    });
+    document.getElementById('servFiltroLimpiar').addEventListener('click', () => {
+        ['servFiltroTexto', 'servFiltroTipo', 'servFiltroEstado', 'servFiltroFacturado', 'servFiltroDesde', 'servFiltroHasta']
+            .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        cargarServiciosFeed();
+    });
+    document.getElementById('servFiltroTexto').addEventListener('input', debounce(_renderServiciosFeedFromState, 200));
+
+    // Wiring del selector "+ Registrar".
+    document.querySelectorAll('.serv-registrar-opt').forEach(btn => {
+        btn.addEventListener('click', () => abrirRegistroClinico(btn.dataset.tipo));
+    });
+
+    await cargarServiciosFeed();
+};
+
+export const cargarServiciosFeed = async () => {
+    const box = document.getElementById('serviciosFeed');
+    const mascotaId = _serviciosState.mascotaId;
+    if (!box || !mascotaId) return;
+    box.innerHTML = '<p class="serv-feed-msg">Cargando servicios…</p>';
+
+    const params = new URLSearchParams({ mascota_id: mascotaId, alcance: 'todos' });
+    const tipo = document.getElementById('servFiltroTipo')?.value;
+    const estado = document.getElementById('servFiltroEstado')?.value;
+    const facturado = document.getElementById('servFiltroFacturado')?.value;
+    const desde = document.getElementById('servFiltroDesde')?.value;
+    const hasta = document.getElementById('servFiltroHasta')?.value;
+    if (tipo) params.set('tipo_servicio', tipo);
+    if (estado) params.set('estado', estado);
+    if (facturado) params.set('facturado', facturado);
+    if (desde) params.set('fecha_desde', desde);
+    if (hasta) params.set('fecha_hasta', hasta);
+
+    try {
+        const data = await fetchAPI(`/servicios/?${params.toString()}`);
+        _serviciosState.raw = Array.isArray(data) ? data : [];
+        _renderServiciosFeedFromState();
+    } catch (e) {
+        box.innerHTML = `<p class="serv-feed-msg serv-feed-msg--error">${ICONS.xCircle} No se pudieron cargar los servicios. ${e.message || ''}</p>`;
+    }
+};
+
+// Aplica solo el filtro de texto (cliente) sobre lo ya traído y pinta la lista.
+const _renderServiciosFeedFromState = () => {
+    const box = document.getElementById('serviciosFeed');
+    if (!box) return;
+    const q = (document.getElementById('servFiltroTexto')?.value || '').trim().toLowerCase();
+    let items = _serviciosState.raw;
+    if (q) items = items.filter(s => (s.nombre_servicio || '').toLowerCase().includes(q));
+
+    if (!items.length) {
+        box.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">${ICONS.clipboard}</div>
+                <p>${_serviciosState.raw.length ? 'Ningún servicio coincide con los filtros.' : 'Este paciente todavía no tiene servicios registrados.'}</p>
+            </div>`;
+        return;
+    }
+
+    box.innerHTML = `
+        <div class="serv-feed-head" role="row">
+            <span>Fecha</span><span>Tipo</span><span>Servicio</span><span>Cant. × precio</span><span>Estado</span>
+        </div>
+        ${items.map(_renderServicioRow).join('')}`;
+
+    box.querySelectorAll('.serv-row').forEach(row => {
+        row.addEventListener('click', () => verServicioDetalle(Number(row.dataset.id)));
+    });
+};
+
+const _renderServicioRow = (s) => {
+    const meta = _servTipoMeta(s.tipo_servicio);
+    const aplicado = s.estado === 'Aplicado';
+    const cancelado = s.estado === 'Cancelado';
+    const estadoDot = cancelado
+        ? '<span class="serv-dot serv-dot--off" aria-hidden="true"></span>'
+        : (aplicado ? '<span class="serv-dot serv-dot--on" aria-hidden="true"></span>'
+                    : '<span class="serv-dot" aria-hidden="true"></span>');
+    const sub = `${Number(s.cantidad || 0)} × ${_money(s.precio_unitario)}`;
+    return `
+        <button type="button" class="serv-row" data-id="${s.id}" aria-expanded="false" aria-controls="serv-detail-${s.id}">
+            <span class="serv-row-date">${_fmtFecha(s.created_at)}</span>
+            <span><span class="serv-badge serv-badge--${meta.cls}">${meta.label}</span></span>
+            <span class="serv-row-name">${s.nombre_servicio || meta.label}${s.consulta_id ? ' <span class="serv-row-origin">· Consulta</span>' : ''}</span>
+            <span class="serv-row-qty">${sub}</span>
+            <span class="serv-row-estado">${estadoDot}${s.estado || 'Pendiente'}</span>
+        </button>
+        <div class="serv-detail" id="serv-detail-${s.id}" hidden></div>`;
+};
+
+export const verServicioDetalle = async (servicioId) => {
+    const row = document.querySelector(`.serv-row[data-id="${servicioId}"]`);
+    const panel = document.getElementById(`serv-detail-${servicioId}`);
+    if (!row || !panel) return;
+
+    const isOpen = !panel.hidden;
+    // Cerrar cualquier otro detalle abierto (acordeón de una sola fila).
+    document.querySelectorAll('.serv-detail').forEach(p => { p.hidden = true; });
+    document.querySelectorAll('.serv-row').forEach(r => r.setAttribute('aria-expanded', 'false'));
+    if (isOpen) return;
+
+    panel.hidden = false;
+    row.setAttribute('aria-expanded', 'true');
+    panel.innerHTML = '<p class="serv-feed-msg">Cargando detalle…</p>';
+
+    const s = _serviciosState.raw.find(x => x.id === servicioId) || {};
+    try {
+        panel.innerHTML = await _renderServicioDetalle(s);
+    } catch (e) {
+        panel.innerHTML = `<p class="serv-feed-msg serv-feed-msg--error">${ICONS.xCircle} No se pudo cargar el detalle. ${e.message || ''}</p>`;
+    }
+};
+
+// Trae la fila clínica de detalle (por tipo) y devuelve una tabla clave→valor.
+const _detalleClinicoPorTipo = async (tipo, referenciaId, mascotaId) => {
+    const endpoints = {
+        VACUNACION: `/clinico/vacunaciones/${mascotaId}`,
+        DESPARASITACION: `/clinico/desparasitaciones/${mascotaId}`,
+        CIRUGIA: `/clinico/cirugias/${mascotaId}`,
+        HOSPITALIZACION: `/clinico/hospitalizaciones/${mascotaId}`,
+        LABORATORIO: `/clinico/pruebas_complementarias/${mascotaId}`,
+        DIAGNOSTICO: `/clinico/pruebas_complementarias/${mascotaId}`,
+    };
+    const url = endpoints[tipo];
+    if (!url) return null;
+    if (!_serviciosState.detalleCache[url]) {
+        _serviciosState.detalleCache[url] = fetchAPI(url).catch(() => []);
+    }
+    const lista = await _serviciosState.detalleCache[url];
+    if (!Array.isArray(lista) || !lista.length) return null;
+    const fila = referenciaId ? lista.find(x => x.id === referenciaId) : null;
+    const d = fila || lista[0]; // sin referencia_id: mostramos el más reciente como aproximación
+    const rows = [];
+    const add = (k, v) => { if (v !== undefined && v !== null && v !== '') rows.push([k, v]); };
+
+    if (tipo === 'VACUNACION') {
+        add('Vacuna', d.vacuna_nombre);
+        add('Lote', d.lote);
+        add('Fecha de aplicación', d.fecha_aplicacion ? new Date(d.fecha_aplicacion).toLocaleDateString() : null);
+        add('Próximo refuerzo', d.fecha_refuerzo ? new Date(d.fecha_refuerzo).toLocaleDateString() : null);
+    } else if (tipo === 'DESPARASITACION') {
+        add('Producto', d.producto_nombre);
+        add('Tipo', d.tipo);
+        add('Dosis', d.dosis);
+        add('Fecha de aplicación', d.fecha_aplicacion ? new Date(d.fecha_aplicacion).toLocaleDateString() : null);
+    } else if (tipo === 'CIRUGIA') {
+        add('Procedimiento', d.tipo_procedimiento);
+        add('Riesgo ASA', d.riesgo_asa);
+        add('Fecha', d.fecha_cirugia ? new Date(d.fecha_cirugia).toLocaleDateString() : null);
+        add('Informe quirúrgico', d.informe_quirurgico);
+    } else if (tipo === 'HOSPITALIZACION') {
+        add('Motivo', d.motivo);
+        add('Ingreso', d.fecha_ingreso ? new Date(d.fecha_ingreso).toLocaleString() : null);
+        add('Egreso', d.fecha_egreso ? new Date(d.fecha_egreso).toLocaleString() : 'En curso');
+        add('Estado del paciente', d.estado_paciente);
+        add('Jaula', d.jaula_nro);
+    } else { // LABORATORIO / DIAGNOSTICO
+        add('Tipo de estudio', d.tipo);
+        add('Resultado', d.resultado);
+        add('Archivo', d.archivo_url ? `<a href="${d.archivo_url}" target="_blank" rel="noopener">Ver documento</a>` : null);
+        add('Fecha', d.fecha ? new Date(d.fecha).toLocaleDateString() : null);
+    }
+    if (!rows.length) return null;
+    return `<dl class="serv-detail-dl">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+};
+
+const _renderServicioDetalle = async (s) => {
+    const meta = _servTipoMeta(s.tipo_servicio);
+    const mascotaId = _serviciosState.mascotaId;
+    let cuerpo = '';
+
+    const clinico = await _detalleClinicoPorTipo(s.tipo_servicio, s.referencia_id, mascotaId);
+    if (clinico) {
+        cuerpo += clinico;
+    }
+
+    // Datos del catálogo si el servicio está anclado.
+    if (s.catalogo_servicio_id) {
+        try {
+            const cat = await fetchAPI(`/catalogo/${s.catalogo_servicio_id}`);
+            if (cat) {
+                cuerpo += `<dl class="serv-detail-dl">
+                    <div><dt>Servicio de catálogo</dt><dd>${cat.nombre || '—'}</dd></div>
+                    <div><dt>Categoría</dt><dd>${cat.categoria || '—'}</dd></div>
+                    <div><dt>Precio de referencia</dt><dd>${_money(cat.precio_ref)}</dd></div>
+                </dl>`;
+            }
+        } catch (_) { /* opcional */ }
+    }
+
+    if (s.detalles_clinicos && s.detalles_clinicos.trim()) {
+        cuerpo += `<div class="serv-detail-notes"><dt>Detalle clínico</dt><pre>${s.detalles_clinicos}</pre></div>`;
+    }
+
+    if (!cuerpo) {
+        cuerpo = '<p class="serv-feed-msg">Sin detalle clínico adicional para este servicio.</p>';
+    }
+
+    const consultaLink = s.consulta_id
+        ? `<button type="button" class="btn-secondary btn-sm" onclick="verConsultaCompleta(${s.consulta_id}, ${mascotaId})">Abrir consulta #${s.consulta_id}</button>`
+        : '<span class="serv-detail-tag">Servicio directo (sin consulta)</span>';
+
+    return `
+        <div class="serv-detail-head">
+            <span class="serv-badge serv-badge--${meta.cls}">${meta.label}</span>
+            <span class="serv-detail-title">${s.nombre_servicio || meta.label}</span>
+            ${consultaLink}
+        </div>
+        ${cuerpo}`;
+};
+
+// "+ Registrar" — despliega el selector de tipo de formulario clínico.
+const toggleRegistrarPicker = (btn) => {
+    const picker = document.getElementById('serviciosRegistrarPicker');
+    if (!picker) return;
+    const show = picker.hidden;
+    picker.hidden = !show;
+    btn.setAttribute('aria-expanded', String(show));
+    if (!show) {
+        const wrap = document.getElementById('serviciosRegistrarFormWrap');
+        if (wrap) wrap.innerHTML = '';
+    }
+};
+
+// Inyecta el formulario clínico elegido (reusa buildClinicoForm + submitClinico).
+export const abrirRegistroClinico = (tipo) => {
+    const wrap = document.getElementById('serviciosRegistrarFormWrap');
+    if (!wrap) return;
+    wrap.innerHTML = buildClinicoForm(tipo);
+    const form = wrap.querySelector('form');
+    if (form) {
+        form.style.display = 'block';
+        const combo = form.querySelector('.combo-consultas');
+        if (combo && currentViewedConsultaId) combo.value = currentViewedConsultaId;
+    }
+    hydrateCombos();
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+// "+ Servicio directo" desde la ficha: reusa el modal #modalServicioDirecto
+// (mismo flujo/endpoint que "Hoy"), salteando el selector de paciente.
+const abrirServicioDirectoFicha = () => {
+    if (!currentMascotaId) return;
+    const nombre = document.getElementById('displayNombreMascota')?.textContent || `#${currentMascotaId}`;
+    abrirServicioDirectoParaMascota(currentMascotaId, nombre);
+};
+
+// Refrescar el feed cuando "Hoy"/ficha crea un servicio directo.
+document.addEventListener('av:servicio-directo-creado', () => {
+    const tab = document.querySelector('.pet-nav-item.active')?.dataset.tab;
+    if (tab === 'servicios' && _serviciosState.mascotaId) {
+        cargarServiciosFeed();
+        actualizarCountsPet(_serviciosState.mascotaId);
+    }
+});
 
 const buildClinicoForm = (type) => {
     // Shared select for Consultas
@@ -1833,76 +2210,11 @@ export const borrarNota = async (notaId) => {
     }
 };
 
-const cargarVacunasPet = async (mascotaId) => {
-    const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('vacuna') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Vacuna (ID:Nombre)</th><th>Lote</th></tr></thead><tbody id="tblVac"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
-    hydrateCombos();
-    try {
-        const data = await fetchAPI(`/clinico/vacunaciones/${mascotaId}`);
-        const tbody = document.getElementById('tblVac');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No hay vacunas registradas.</td></tr>`;
-        else tbody.innerHTML = data.map(v => `<tr><td>${new Date(v.fecha_aplicacion).toLocaleDateString()}</td><td>${v.vacuna_nombre}</td><td>${v.lote || '-'}</td></tr>`).join('');
-    } catch (e) { }
-};
-
-const cargarDesparasitacionesPet = async (mascotaId) => {
-    const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('desparasitacion') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Producto</th><th>Dosis</th></tr></thead><tbody id="tblDesp"><tr><td colspan="4" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
-    hydrateCombos();
-    try {
-        const data = await fetchAPI(`/clinico/desparasitaciones/${mascotaId}`);
-        const tbody = document.getElementById('tblDesp');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">No hay registros.</td></tr>`;
-        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_aplicacion).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.producto_nombre}</td><td>${d.dosis}</td></tr>`).join('');
-    } catch (e) { }
-};
-
-const cargarHospitalizacionesPet = async (mascotaId) => {
-    const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('hospitalizacion') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Ingreso</th><th>Egreso</th><th>Motivo</th><th>Estado</th><th>Jaula</th></tr></thead><tbody id="tblHosp"><tr><td colspan="5" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
-    hydrateCombos();
-    try {
-        const data = await fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`);
-        const tbody = document.getElementById('tblHosp');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">No hay registros de hospitalización.</td></tr>`;
-        else tbody.innerHTML = data.map(d => `<tr>
-            <td>${new Date(d.fecha_ingreso).toLocaleString()}</td>
-            <td>${d.fecha_egreso ? new Date(d.fecha_egreso).toLocaleString() : '<span style="color:var(--warning-dark); font-style:italic;">En curso</span>'}</td>
-            <td>${d.motivo}</td>
-            <td><span class="badge" style="background:var(--surface-hover); color:var(--text-secondary);">${d.estado_paciente || '-'}</span></td>
-            <td>${d.jaula_nro || '-'}</td>
-        </tr>`).join('');
-    } catch (e) { }
-};
-
-const cargarCirugiasPet = async (mascotaId) => {
-    const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('cirugia') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Procedimiento</th><th>Riesgo ASA</th></tr></thead><tbody id="tblCir"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
-    hydrateCombos();
-    try {
-        const data = await fetchAPI(`/clinico/cirugias/${mascotaId}`);
-        const tbody = document.getElementById('tblCir');
-        if (!data.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No hay cirugías registradas.</td></tr>`;
-        else tbody.innerHTML = data.map(d => `<tr><td>${new Date(d.fecha_cirugia).toLocaleDateString()}</td><td>${d.tipo_procedimiento}</td><td>${d.riesgo_asa || '-'}</td></tr>`).join('');
-    } catch (e) { }
-};
-
-const cargarPruebasPet = async (mascotaId, filterType) => {
-    const cnt = document.getElementById('petTabContent');
-    cnt.innerHTML = buildClinicoForm('prueba') + `<div style="background:var(--surface); border-radius:8px;"><table class="consultas-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Resultados</th></tr></thead><tbody id="tblPrueba"><tr><td colspan="3" style="text-align:center;color:var(--text-muted);">Cargando...</td></tr></tbody></table></div>`;
-    hydrateCombos();
-    try {
-        const data = await fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`);
-        const tbody = document.getElementById('tblPrueba');
-
-        let filtered = data;
-        if (filterType === 'laboratorio') filtered = data.filter(d => d.tipo === 'Laboratorio');
-        if (filterType === 'imagenes') filtered = data.filter(d => d.tipo !== 'Laboratorio');
-
-        if (!filtered.length) tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--text-muted);">No hay estudios registrados.</td></tr>`;
-        else tbody.innerHTML = filtered.map(d => `<tr><td>${new Date(d.fecha).toLocaleDateString()}</td><td>${d.tipo}</td><td>${d.resultado} ${d.archivo_url ? `<a href="${d.archivo_url}" target="_blank">[Ver Link]</a>` : ''}</td></tr>`).join('');
-    } catch (e) { }
-};
+// Tarea 09: cargarVacunasPet / cargarDesparasitacionesPet / cargarHospitalizacionesPet
+// / cargarCirugiasPet / cargarPruebasPet fueron eliminadas. Su lógica de lectura
+// vive ahora en el detalle type-aware de la pestaña "Servicios"
+// (_detalleClinicoPorTipo). El alta sigue disponible por "+ Registrar"
+// (buildClinicoForm + submitClinico).
 
 const cargarRecetasPet = async (mascotaId) => {
     const contentArea = document.getElementById('petTabContent');
@@ -1944,31 +2256,21 @@ const actualizarCountsPet = async (mascotaId) => {
     try {
         const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
+        // Tarea 09: la ficha tiene 6 pestañas. Los contadores por tipo clínico
+        // se colapsan en "count-servicios" (feed unificado alcance=todos).
         Promise.all([
             fetchAPI(`/consultas/?mascota_id=${mascotaId}`).catch(() => []),
-            fetchAPI(`/clinico/vacunaciones/${mascotaId}`).catch(() => []),
-            fetchAPI(`/clinico/desparasitaciones/${mascotaId}`).catch(() => []),
-            fetchAPI(`/clinico/hospitalizaciones/${mascotaId}`).catch(() => []),
-            fetchAPI(`/clinico/cirugias/${mascotaId}`).catch(() => []),
-            fetchAPI(`/clinico/pruebas_complementarias/${mascotaId}`).catch(() => []),
+            fetchAPI(`/servicios/?mascota_id=${mascotaId}&alcance=todos`).catch(() => []),
             fetchAPI(`/facturas/mascota/${mascotaId}`).catch(() => []),
             fetchAPI(`/notas/mascota/${mascotaId}`).catch(() => [])
-        ]).then(([cons, vac, desp, hosp, cir, pru, fac, notas]) => {
+        ]).then(([cons, serv, fac, notas]) => {
             setTxt('count-consultas', cons?.length || 0);
-            setTxt('count-vacunas', vac?.length || 0);
-            setTxt('count-desparasitaciones', desp?.length || 0);
-            setTxt('count-hosp', hosp?.length || 0);
-            setTxt('count-proc', cir?.length || 0);
+            setTxt('count-servicios', serv?.length || 0);
             setTxt('count-facturas', fac?.length || 0);
             setTxt('count-notas', notas?.length || 0);
-
-            const p = pru || [];
-            setTxt('count-lab', p.filter(x => x.tipo === 'Laboratorio').length);
-            setTxt('count-img', p.filter(x => x.tipo !== 'Laboratorio').length);
         }).catch(e => console.warn(e));
 
         setTxt('count-recetas', '-');
-        setTxt('count-ordenes', '-');
     } catch (e) { }
 };
 

@@ -57,6 +57,8 @@ Object.assign(window, {
     editarServicioConsulta: consultorio.editarServicioConsulta,
     toggleForm: consultorio.toggleForm,
     setQuickAction: consultorio.setQuickAction,
+    abrirRegistroClinico: consultorio.abrirRegistroClinico,
+    verServicioDetalle: consultorio.verServicioDetalle,
     exportarConsultaPDF: consultorio.exportarConsultaPDF,
     exportarRecetaPDF: consultorio.exportarRecetaPDF,
     submitClinico: consultorio.submitClinico,

@@ -17,7 +17,8 @@
 // Criterio UI vs API: la mayoría va por API (los formularios de pestaña
 // clínica dependen de la selección de paciente y de combos custom). Se recorre
 // UNA registración por la UI —cirugía, que no toca inventario— desde la
-// pestaña "procedimientos" del expediente, y se contrasta con la API.
+// pestaña unificada "Servicios" del expediente (Tarea 09: reemplazó las 6
+// pestañas por tipo), vía "+ Registrar" → Cirugía, y se contrasta con la API.
 //
 // Nada se mockea: no interviene Supabase / QR.
 
@@ -195,14 +196,17 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(noMascota.status()).toBe(404);
   });
 
-  test('cirugía: registro por UI en la pestaña de procedimientos, contrastado por API', async ({ page, request }) => {
+  test('cirugía: registro por UI en la pestaña "Servicios" (+ Registrar), contrastado por API', async ({ page, request }) => {
     const procedimiento = testTag('cirUI').slice(0, 55);
 
     await loginAsAdmin(page);
     await seleccionarPacientePorUI(page, S.mascota);
 
-    await page.click('.pet-nav-item[data-tab="procedimientos"]');
-    await page.click('button:has-text("+ Registrar Cirugía")');
+    // Tarea 09: el alta clínica vive detrás de "+ Registrar" en la pestaña
+    // unificada "Servicios" (antes: pestaña "procedimientos" + botón directo).
+    await page.click('.pet-nav-item[data-tab="servicios"]');
+    await page.click('#btnServiciosRegistrar');
+    await page.click('.serv-registrar-opt[data-tipo="cirugia"]');
     await expect(page.locator('#formCirugia')).toBeVisible();
 
     // El combo de consultas se hidrata desde /consultas/?mascota_id=; elegimos la sembrada.

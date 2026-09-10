@@ -1195,11 +1195,11 @@
                                     style="display: flex; gap: 1rem; margin-top: 0.5rem; min-height: 500px;">
                                     <aside class="pet-sidebar"
                                         style="width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px;">
-                                        <div class="pet-nav-item active" data-tab="historia">
+                                        <div class="pet-nav-item active" data-tab="resumen">
                                             <span class="icon">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                                             </span>
-                                            <span>Historia Clínica</span>
+                                            <span>Resumen</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="consultas">
                                             <span class="icon">
@@ -1208,19 +1208,12 @@
                                             <span>Consultas</span>
                                             <span class="count" id="count-consultas">0</span>
                                         </div>
-                                        <div class="pet-nav-item" data-tab="notas">
+                                        <div class="pet-nav-item" data-tab="servicios">
                                             <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h12"/><path d="M12 22V6"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M10 6a2 2 0 1 1 4 0"/></svg>
                                             </span>
-                                            <span>Notas</span>
-                                            <span class="count" id="count-notas">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="vacunas">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 11 11 3"/><path d="m21 15-4-4"/><path d="m21 10-2-2"/><path d="m15 13-3-3"/><path d="M13 18l-3-3"/><polyline points="10 17 4 23 3 22 9 16"/><path d="M8 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2Z"/></svg>
-                                            </span>
-                                            <span>Vacunas</span>
-                                            <span class="count" id="count-vacunas">0</span>
+                                            <span>Servicios</span>
+                                            <span class="count" id="count-servicios">0</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="recetas">
                                             <span class="icon">
@@ -1229,52 +1222,18 @@
                                             <span>Fórmulas</span>
                                             <span class="count" id="count-recetas">0</span>
                                         </div>
-                                        <div class="pet-nav-item" data-tab="desparasitaciones">
+                                        <div class="pet-nav-item" data-tab="notas">
                                             <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13a6 6 0 1 0 12 0 4 4 0 1 0-8 0 2 2 0 0 0 4 0"/><circle cx="10" cy="13" r="8"/><path d="M10 5v1"/><path d="M10 20v1"/><path d="M18 13h-1"/><path d="M3 13H2"/><path d="m17 21-1-1"/><path d="m4 5 1 1"/><path d="m16 6 1-1"/><path d="m3 21 1-1"/></svg>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                                             </span>
-                                            <span>Desparas.</span>
-                                            <span class="count" id="count-desparasitaciones">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="hospitalizaciones">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l.5-2.5A2 2 0 0 1 5.5 3h13a2 2 0 0 1 2 1.5L21 7"/><path d="M4 21V10"/><path d="M20 21V10"/><rect width="4" height="6" x="10" y="11"/></svg>
-                                            </span>
-                                            <span>Hosp.</span>
-                                            <span class="count" id="count-hosp">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="procedimientos">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h12"/><path d="M12 22V6"/><path d="M7 11 V7 a5 5 0 0 1 10 0 v4"/><path d="M10 6 a2 2 0 1 1 4 0"/></svg>
-                                            </span>
-                                            <span>Cirugías</span>
-                                            <span class="count" id="count-proc">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="laboratorio">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18"/><path d="M10 3v18"/><path d="M14 3v18"/><path d="M18 3v18"/><path d="M2 12h20"/><path d="M2 7h20"/><path d="M2 17h20"/></svg>
-                                            </span>
-                                            <span>Lab.</span>
-                                            <span class="count" id="count-lab">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="imagenes">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                                            </span>
-                                            <span>Imágenes</span>
-                                            <span class="count" id="count-img">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="peso">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
-                                            </span>
-                                            <span>Evol. Peso</span>
+                                            <span>Notas</span>
+                                            <span class="count" id="count-notas">0</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="facturacion" style="border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;">
                                             <span class="icon">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                                             </span>
-                                            <span>Facturación</span>
+                                            <span>Cobros</span>
                                             <span class="count" id="count-facturas">0</span>
                                         </div>
                                     </aside>
