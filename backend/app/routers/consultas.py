@@ -219,6 +219,21 @@ def actualizar_servicio_consulta(
 
     update_dict = update_data.model_dump(exclude_unset=True)
     consumos_override = update_dict.pop("consumos", None)
+
+    # M2: editar cantidad/consumos de un servicio que sigue en "Aplicado"
+    # cambiaria solo la columna, sin tocar el ledger ni ConsumoMaterial -> la
+    # reversa posterior devolveria un monto distinto al consumido (drift). Se
+    # exige revertir el estado primero. Con estado Pendiente/Cancelado el edit
+    # es libre.
+    nuevo_estado = update_dict.get("estado", servicio.estado)
+    toca_cantidad = "cantidad" in update_dict and update_dict["cantidad"] != servicio.cantidad
+    toca_consumos = consumos_override is not None
+    if servicio.estado == "Aplicado" and nuevo_estado == "Aplicado" and (toca_cantidad or toca_consumos):
+        raise HTTPException(
+            status_code=409,
+            detail="No se puede cambiar la cantidad de un servicio ya aplicado; revertí el estado primero",
+        )
+
     for k, v in update_dict.items():
         setattr(servicio, k, v)
 

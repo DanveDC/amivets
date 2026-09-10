@@ -130,9 +130,17 @@ async function cargarRecetas(servicioId) {
 async function agregarReceta() {
     const servicioId = document.getElementById('catalogoServicioId').value;
     if (!servicioId) return;
-    const inventarioId = parseInt(document.getElementById('recetaMaterialSelect').value, 10);
+    const materialSelect = document.getElementById('recetaMaterialSelect');
+    const inventarioId = parseInt(materialSelect.value, 10);
     const cantidad = parseFloat(document.getElementById('recetaMaterialCantidad').value);
-    const unidad = document.getElementById('recetaMaterialUnidad').value;
+    const unidadInput = document.getElementById('recetaMaterialUnidad');
+    // Si el material no declara unidad base (data-unidad vacio), no se manda
+    // blanco/stale: se fuerza 'unidad', que es como el backend interpreta NULL.
+    let unidad = (unidadInput.value || '').trim();
+    if (!unidad) {
+        unidad = (materialSelect.selectedOptions[0]?.dataset.unidad || '').trim() || 'unidad';
+        unidadInput.value = unidad;
+    }
     showRecetaError('');
     if (!inventarioId) { showRecetaError('Elegí un material.'); return; }
     if (!(cantidad > 0)) { showRecetaError('Ingresá una cantidad mayor a 0.'); return; }
@@ -200,8 +208,9 @@ function wireRecetaUI() {
     });
 
     document.getElementById('recetaMaterialSelect')?.addEventListener('change', (e) => {
-        const unidad = e.target.selectedOptions[0]?.dataset.unidad;
-        if (unidad) document.getElementById('recetaMaterialUnidad').value = unidad;
+        const unidad = (e.target.selectedOptions[0]?.dataset.unidad || '').trim();
+        // Material sin unidad declarada -> 'unidad' (no dejar el valor previo pegado).
+        document.getElementById('recetaMaterialUnidad').value = unidad || 'unidad';
     });
 }
 

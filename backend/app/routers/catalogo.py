@@ -152,6 +152,15 @@ def agregar_receta_servicio(
     if not material:
         raise HTTPException(status_code=404, detail="Material de inventario no encontrado")
 
+    # La linea de receta debe descontarse en la MISMA unidad en que se stockea el
+    # material: "5 g" contra un material en "ml" restaria 5 de un saldo en ml (M1).
+    unidad_material = material.unidad_medida or "unidad"
+    if data.unidad_medida != unidad_material:
+        raise HTTPException(
+            status_code=422,
+            detail=f"La unidad de la receta ('{data.unidad_medida}') no coincide con la del material '{material.nombre}' ('{unidad_material}')",
+        )
+
     ya_existe = (
         db.query(RecetaServicio)
         .filter(
@@ -189,7 +198,20 @@ def actualizar_receta_servicio(
     if not receta:
         raise HTTPException(status_code=404, detail="Linea de receta no encontrada")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    cambios = data.model_dump(exclude_unset=True)
+
+    # Misma regla que el POST (M1): si se cambia la unidad, tiene que seguir
+    # coincidiendo con la unidad base del material.
+    if cambios.get("unidad_medida") is not None:
+        inv = db.query(Inventario).filter(Inventario.id == receta.inventario_id).first()
+        unidad_material = (inv.unidad_medida or "unidad") if inv else "unidad"
+        if cambios["unidad_medida"] != unidad_material:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La unidad de la receta ('{cambios['unidad_medida']}') no coincide con la del material ('{unidad_material}')",
+            )
+
+    for key, value in cambios.items():
         setattr(receta, key, value)
 
     db.commit()
