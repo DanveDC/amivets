@@ -24,7 +24,7 @@ export const loadAgenda = async () => {
         filterBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem;';
         filterBar.innerHTML = `
             <input type="date" id="filtroAgendaFecha" value="${new Date().toLocaleDateString('en-CA')}" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; flex:1; min-width:120px;">
-            <select id="filtroAgendaEstado" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; background:white; flex:1; min-width:120px;">
+            <select id="filtroAgendaEstado" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; flex:1; min-width:120px;">
                 <option value="">Todos los estados</option>
                 <option value="PENDIENTE">Pendiente</option>
                 <option value="EN_ESPERA">En Espera</option>
