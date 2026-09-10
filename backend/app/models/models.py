@@ -227,6 +227,11 @@ class ServicioConsulta(Base):
     detalles_clinicos = Column(Text, nullable=True) # Datos de aplicacion (lote, dosis, hallazgos, etc)
     facturado = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False) # Soft delete for auditing
+    # Fecha del servicio para la historia unificada del paciente (Tarea 09,
+    # pestana "Servicios"). Un servicio anexado hereda la fecha de la consulta
+    # via backfill; uno directo usa el momento del alta. Indexada junto a
+    # mascota_id para el feed ordenado por fecha.
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     consulta = relationship("Consulta", back_populates="servicios")
     mascota = relationship("Mascota")

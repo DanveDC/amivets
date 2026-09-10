@@ -197,22 +197,53 @@ def crear_servicio_directo(
 
 
 @router.get("/", response_model=List[ServicioConsultaResponse])
-def listar_servicios_directos(
+def listar_servicios_mascota(
     mascota_id: int,
+    alcance: str = "directos",
+    tipo_servicio: Optional[str] = None,
+    estado: Optional[str] = None,
+    facturado: Optional[bool] = None,
+    fecha_desde: Optional[str] = None,
+    fecha_hasta: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    """Lista los servicios directos (consulta_id IS NULL) de una mascota, para la
-    historia y la facturación de sueltos. Excluye los borrados lógicamente."""
-    return (
-        db.query(ServicioConsulta)
-        .filter(
-            ServicioConsulta.mascota_id == mascota_id,
-            ServicioConsulta.consulta_id.is_(None),
-            ServicioConsulta.is_deleted == False,  # noqa: E712
-        )
-        .order_by(ServicioConsulta.id.desc())
-        .all()
+    """Feed de servicios de una mascota. Excluye los borrados lógicamente.
+
+    `alcance` (Tarea 09, pestaña "Servicios" = historia unificada):
+      - `directos` (default): solo los sueltos (consulta_id IS NULL). Compatible
+        con el flujo de cobro de servicios directos.
+      - `todos`: anexados a una consulta + directos, ordenados por fecha desc.
+      - `consulta`: solo los anexados a alguna consulta.
+
+    Filtros opcionales para el timeline: `tipo_servicio`, `estado`
+    (Pendiente / Aplicado / Cancelado), `facturado`, y rango `fecha_desde` /
+    `fecha_hasta` (YYYY-MM-DD, sobre `created_at`).
+    """
+    q = db.query(ServicioConsulta).filter(
+        ServicioConsulta.mascota_id == mascota_id,
+        ServicioConsulta.is_deleted == False,  # noqa: E712
     )
+
+    if alcance == "directos":
+        q = q.filter(ServicioConsulta.consulta_id.is_(None))
+    elif alcance == "consulta":
+        q = q.filter(ServicioConsulta.consulta_id.isnot(None))
+    elif alcance != "todos":
+        raise HTTPException(status_code=422, detail="alcance debe ser 'directos', 'todos' o 'consulta'")
+
+    if tipo_servicio:
+        q = q.filter(ServicioConsulta.tipo_servicio == tipo_servicio)
+    if estado:
+        q = q.filter(ServicioConsulta.estado == estado)
+    if facturado is not None:
+        q = q.filter(ServicioConsulta.facturado == facturado)
+    if fecha_desde:
+        q = q.filter(ServicioConsulta.created_at >= fecha_desde)
+    if fecha_hasta:
+        # inclusivo hasta el fin del día
+        q = q.filter(ServicioConsulta.created_at < f"{fecha_hasta} 23:59:59.999999")
+
+    return q.order_by(ServicioConsulta.created_at.desc(), ServicioConsulta.id.desc()).all()
 
 
 @router.patch("/{servicio_id}", response_model=ServicioConsultaResponse)

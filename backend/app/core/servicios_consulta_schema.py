@@ -161,3 +161,23 @@ def ensure_servicios_consulta_schema(engine) -> None:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS ix_consultas_estado ON consultas (estado)"
         ))
+
+        # --- 8. servicios_consulta.created_at (migracion e1f2a3b4c5d6): fecha
+        # propia para el timeline unificado de la pestana "Servicios". ---
+        if "created_at" not in sc_cols:
+            conn.execute(text(
+                "ALTER TABLE servicios_consulta ADD COLUMN IF NOT EXISTS created_at "
+                "TIMESTAMPTZ NOT NULL DEFAULT now()"
+            ))
+            conn.execute(text(
+                """
+                UPDATE servicios_consulta sc
+                SET created_at = c.fecha_consulta
+                FROM consultas c
+                WHERE sc.consulta_id = c.id AND c.fecha_consulta IS NOT NULL
+                """
+            ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_servicios_consulta_mascota_created "
+            "ON servicios_consulta (mascota_id, created_at)"
+        ))

@@ -48,8 +48,11 @@ class PropietarioService:
         
         if activo is not None:
             query = query.filter(Propietario.activo == activo)
-        
-        return query.offset(skip).limit(limit).all()
+
+        # Orden explícito y estable: sin ORDER BY, con >100 filas y limit=100 el
+        # heap-scan de Postgres puede dejar afuera al recién creado (la UI filtra
+        # client-side sobre estas <=limit filas). El más nuevo primero.
+        return query.order_by(Propietario.id.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
     def actualizar_propietario(

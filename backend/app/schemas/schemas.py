@@ -200,6 +200,8 @@ class ServicioConsultaUpdate(BaseModel):
 
 class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
+    # Fecha del servicio para la historia unificada del paciente (Tarea 09).
+    created_at: Optional[datetime] = None
     # Advertencias de stock al aplicar (Decision 4): faltantes que se
     # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
     # que dispara el consumo.
