@@ -177,4 +177,25 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     const missing = await request.delete('/api/catalogo/99999999', { headers: authHeaders(S.token) });
     expect(missing.status()).toBe(404);
   });
+
+  test('POST / y las rutas de receta (BOM) exigen sesión (revisión final Tarea 09)', async ({ request }) => {
+    const sinToken = await request.post('/api/catalogo/', {
+      data: { nombre: 'sin sesion', categoria: 'FARMACIA' },
+    });
+    expect(sinToken.status()).toBe(401);
+
+    const conToken = await request.post('/api/catalogo/', {
+      data: { nombre: testTag('servicioAuth'), categoria: 'FARMACIA' },
+      headers: authHeaders(S.token),
+    });
+    expect(conToken.status()).toBe(201);
+    const creado = await conToken.json();
+
+    const recetaSinToken = await request.post(`/api/catalogo/${creado.id}/recetas`, {
+      data: { inventario_id: 99999999, cantidad: 1, unidad_medida: 'unidad' },
+    });
+    expect(recetaSinToken.status()).toBe(401);
+
+    await request.delete(`/api/catalogo/${creado.id}`, { headers: authHeaders(S.token) });
+  });
 });

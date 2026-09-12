@@ -294,6 +294,30 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     expect((await estetica.json()).tipo_servicio).toBe('ESTETICA');
   });
 
+  test('DELETE /api/consultas/{id} exige admin (revisión final Tarea 09)', async ({ request }) => {
+    // Antes de la revisión, este endpoint no exigía sesión y hacía hard-delete
+    // en cascada (servicios, recetas, vacunaciones...) sin dejar rastro.
+    const consulta = await createTestConsulta(request, {
+      mascotaId: S.mascota.id,
+      veterinarioId: S.vet.id,
+    });
+
+    const sinToken = await request.delete(`/api/consultas/${consulta.id}`);
+    expect(sinToken.status()).toBe(401);
+
+    const conRecepcion = await request.delete(`/api/consultas/${consulta.id}`, {
+      headers: authHeaders(S.recep.token),
+    });
+    expect(conRecepcion.status()).toBe(403);
+
+    // Sigue intacta tras los dos intentos.
+    const intacta = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(S.token) })).json();
+    expect(intacta.id).toBe(consulta.id);
+
+    const conAdmin = await request.delete(`/api/consultas/${consulta.id}`, { headers: authHeaders(S.token) });
+    expect(conAdmin.status()).toBe(204);
+  });
+
   test('anular la factura de una consulta la reabre y se puede volver a facturar', async ({ request }) => {
     const consulta = await createTestConsulta(request, {
       mascotaId: S.mascota.id,

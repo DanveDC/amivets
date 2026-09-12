@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -202,8 +203,17 @@ def eliminar_usuario(
     ).count()
     if usuario.role == "admin" and remaining_admins == 0:
         raise HTTPException(status_code=400, detail="No se puede eliminar el último administrador")
-    db.delete(usuario)
-    db.commit()
+    try:
+        db.delete(usuario)
+        db.commit()
+    except IntegrityError:
+        # FKs a consultas/citas/cirugías/notas son NO ACTION: borrar un usuario
+        # con historial asociado tiraba 500 sin controlar (revisión final T09).
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede eliminar: el usuario tiene consultas, citas u otros registros asociados.",
+        )
     return {"message": "Usuario eliminado"}
 
 

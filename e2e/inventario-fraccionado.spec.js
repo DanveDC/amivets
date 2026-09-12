@@ -60,8 +60,11 @@ async function createTestMaterial(request, overrides = {}) {
 /** Crea un servicio de catálogo + su receta (una línea de material). */
 async function createServicioConReceta(request, { inventarioId, cantidad, unidad = 'ml' }) {
   const servicio = await createTestCatalogoServicio(request, { categoria: 'LABORATORIO', precio_ref: 100 });
+  // POST .../recetas exige sesión desde la revisión final de Tarea 09.
+  const token = await getAdminToken(request);
   const recRes = await request.post(`/api/catalogo/${servicio.id}/recetas`, {
     data: { inventario_id: inventarioId, cantidad, unidad_medida: unidad },
+    headers: authHeaders(token),
   });
   if (!recRes.ok()) {
     throw new Error(`[amivets-e2e] Failed to create receta: ${recRes.status()} ${await recRes.text()}`);

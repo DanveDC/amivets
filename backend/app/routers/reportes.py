@@ -96,6 +96,7 @@ def rendimiento_veterinarios(
             func.count(Consulta.id).label("total_consultas")
         )
         .join(Consulta, Consulta.veterinario_id == Usuario.id)
+        .filter(Consulta.estado != "ANULADA")
     )
     if dt_inicio:
         query = query.filter(Consulta.fecha_consulta >= dt_inicio)
@@ -132,7 +133,10 @@ def consultas_por_veterinario(
 
     dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
 
-    query = db.query(Consulta).filter(Consulta.veterinario_id == veterinario_id)
+    query = db.query(Consulta).filter(
+        Consulta.veterinario_id == veterinario_id,
+        Consulta.estado != "ANULADA",
+    )
     if dt_inicio:
         query = query.filter(Consulta.fecha_consulta >= dt_inicio)
     if dt_fin:
@@ -182,7 +186,7 @@ def resumen_consultas(
     """Consultas atendidas y pacientes unicos en el rango dado."""
     dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
 
-    query = db.query(Consulta)
+    query = db.query(Consulta).filter(Consulta.estado != "ANULADA")
     if dt_inicio:
         query = query.filter(Consulta.fecha_consulta >= dt_inicio)
     if dt_fin:

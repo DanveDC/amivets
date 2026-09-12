@@ -63,6 +63,7 @@ def listar_servicios(
 def crear_servicio(
     servicio: CatalogoServicioCreate,
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     """Create a new service in the catalog"""
     nuevo = CatalogoServicio(**servicio.model_dump())
@@ -158,7 +159,11 @@ def historial_precios_servicio(
 
 
 @router.delete("/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)
-def desactivar_servicio(servicio_id: int, db: Session = Depends(get_db)):
+def desactivar_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """Soft-delete a catalog service (sets activo=False)"""
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
@@ -200,6 +205,7 @@ def agregar_receta_servicio(
     servicio_id: int,
     data: RecetaServicioCreate,
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     """Agrega una linea de material a la receta de un servicio.
 
@@ -254,6 +260,7 @@ def actualizar_receta_servicio(
     receta_id: int,
     data: RecetaServicioUpdate,
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     """Cambia la cantidad estandar o la unidad de una linea de receta."""
     receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
@@ -282,7 +289,11 @@ def actualizar_receta_servicio(
 
 
 @router.delete("/recetas/{receta_id}", status_code=status.HTTP_204_NO_CONTENT)
-def eliminar_receta_servicio(receta_id: int, db: Session = Depends(get_db)):
+def eliminar_receta_servicio(
+    receta_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
     """Quita una linea de material de la receta."""
     receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
     if not receta:

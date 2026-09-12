@@ -14,7 +14,7 @@ from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta,
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
 from app.services import consumo_service
-from app.routers.usuarios import get_optional_current_user, require_roles
+from app.routers.usuarios import get_optional_current_user, require_roles, get_current_admin
 from app.routers.servicios import (
     actualizar_servicio_impl,
     eliminar_servicio_impl,
@@ -93,9 +93,18 @@ def actualizar_consulta(
 @router.delete("/{consulta_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_consulta(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(get_current_admin),
 ):
-    """Elimina una consulta"""
+    """Elimina una consulta (solo admin).
+
+    Es un hard-delete en cascada (servicios, recetas, vacunaciones,
+    desparasitaciones, pruebas — ver Consulta.__mapper__ en models.py):
+    destruye historia clínica real sin posibilidad de recuperación. A
+    diferencia del resto de los routers clínicos, este SÍ exige sesión
+    (get_current_admin, 401 sin token / 403 si no es admin) — el riesgo de
+    dejarlo abierto no es comparable al de los demás endpoints.
+    """
     if not ConsultaService.eliminar_consulta(db, consulta_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -255,10 +255,15 @@ async function createTestConsulta(request, { mascotaId, veterinarioId, ...overri
   return res.json();
 }
 
-/** Hard-deletes a test consulta. Best-effort — never throws. */
+/** Hard-deletes a test consulta. Best-effort — never throws.
+ *
+ * DELETE /api/consultas/{id} exige admin (get_current_admin) desde la revisión
+ * final de Tarea 09 — antes cualquiera podía borrar consultas sin sesión. Pide
+ * su propio token en vez de agregar un parámetro a los ~8 call sites. */
 async function deleteTestConsulta(request, id) {
   try {
-    await request.delete(`/api/consultas/${id}`);
+    const token = await getAdminToken(request);
+    await request.delete(`/api/consultas/${id}`, { headers: authHeaders(token) });
   } catch (_) {
     // best-effort cleanup
   }
@@ -384,7 +389,11 @@ async function facturarDesdeConsulta(request, consultaId, body = {}) {
 // Catálogo de servicios (/api/catalogo) — no auth in this stack.
 // ===========================================================================
 
-/** Creates a throwaway catalog service via the API. Throws on rejection. */
+/** Creates a throwaway catalog service via the API. Throws on rejection.
+ *
+ * POST /api/catalogo/ exige sesión desde la revisión final de Tarea 09 (antes
+ * cualquiera podía dar de alta un servicio o bypasear el gate de precio). Pide
+ * su propio token en vez de agregar un parámetro a los call sites. */
 async function createTestCatalogoServicio(request, overrides = {}) {
   const payload = {
     nombre: testTag('servicioCat'),
@@ -397,7 +406,8 @@ async function createTestCatalogoServicio(request, overrides = {}) {
     activo: true,
     ...overrides,
   };
-  const res = await request.post('/api/catalogo/', { data: payload });
+  const token = await getAdminToken(request);
+  const res = await request.post('/api/catalogo/', { data: payload, headers: authHeaders(token) });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test catalogo servicio: ${res.status()} ${await res.text()}`);
   }
