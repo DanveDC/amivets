@@ -6,6 +6,7 @@
 import { fetchAPI } from '../core/api.js';
 import { ICONS, openModal, closeModal } from '../core/ui.js';
 import { showSection } from '../core/router.js';
+import { getRole, getUserId, whenReady } from '../core/session.js';
 import { seleccionarMascotaBasica, switchPetTab } from './consultorio.js';
 import { cargarBadgeOrdenes } from './ordenes.js';
 
@@ -46,13 +47,22 @@ export const loadAgenda = async () => {
     const filtroMascota = (document.getElementById('filtroAgendaMascota')?.value || '').toLowerCase().trim();
 
     try {
+        // Un veterinario ve solo su agenda; admin y recepción, la de todos
+        // (mismo criterio que la bandeja "Hoy", Tarea 09).
+        await whenReady;
+        const soloMias = getRole() === 'veterinario' && getUserId();
+
         const citasParams = new URLSearchParams({ skip: 0, limit: 200 });
         if (filtroEstado) citasParams.set('estado', filtroEstado);
         if (filtroFecha) citasParams.set('fecha_inicio', filtroFecha);
+        if (soloMias) citasParams.set('veterinario_id', getUserId());
+
+        const consultasParams = new URLSearchParams({ skip: 0, limit: 100 });
+        if (soloMias) consultasParams.set('veterinario_id', getUserId());
 
         const [citasRaw, consultasRaw, mascotas] = await Promise.all([
             fetchAPI(`/citas/?${citasParams.toString()}`).catch(() => []),
-            fetchAPI('/consultas/?skip=0&limit=100').catch(() => []),
+            fetchAPI(`/consultas/?${consultasParams.toString()}`).catch(() => []),
             fetchAPI('/mascotas/?skip=0&limit=300').catch(() => [])
         ]);
         const mascotasMap = {};
