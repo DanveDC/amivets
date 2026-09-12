@@ -390,8 +390,8 @@ export const cargarHistorialFacturas = async () => {
                 <td><span style="font-size: 0.85rem; color: var(--text-secondary);">${metodo}</span></td>
                 <td style="text-align: right;">
                     <div class="row-actions">
-                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--secondary); border-color: var(--secondary-dark); border-radius: 6px;">${ICONS.dollar} Abonar</button>` : ''}
-                        <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); border: none; border-radius: 6px;">${ICONS.fileText} Ver PDF</button>
+                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--secondary); border-color: var(--secondary-dark); color: #fff; border-radius: 6px;">${ICONS.dollar} Abonar</button>` : ''}
+                        <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); border: none; color: #fff; border-radius: 6px;">${ICONS.fileText} Ver PDF</button>
                         ${f.consulta_id ? `<button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${f.consulta_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Consulta</button>` : ''}
                     </div>
                 </td>
@@ -427,7 +427,7 @@ export const cargarFacturasMascota = async (mascotaId) => {
                 <td><span class="status-pill" style="padding: 2px 6px; border-radius: 4px; background: ${estado==='PAGADA'?'var(--secondary-subtle)':(estado==='ANULADA'?'var(--accent-subtle)':'var(--warning-subtle)')}; color: ${estado==='PAGADA'?'var(--secondary-dark)':(estado==='ANULADA'?'var(--accent-dark)':'var(--warning-dark)')};">${estado}</span></td>
                 <td class="num"><b>$${parseFloat(total).toFixed(2)}</b></td>
                 <td>
-                    <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--primary); border: none;">${ICONS.fileText} PDF</button>
+                    <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--primary); border: none; color: #fff;">${ICONS.fileText} PDF</button>
                 </td>
             </tr>`;
         }).join('');
