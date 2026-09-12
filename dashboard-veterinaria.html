@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard KPIs — Clínica Veterinaria</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+<style>
+  :root {
+    --bg: #0f172a;
+    --bg-plane: #0b1220;
+    --card: #1e293b;
+    --card-border: rgba(255, 255, 255, 0.08);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    --accent: #10b981;
+    --accent-soft: rgba(16, 185, 129, 0.14);
+    --accent-2: #3b82f6;
+    --accent-2-soft: rgba(59, 130, 246, 0.14);
+
+    --status-good: #10b981;
+    --status-pending: #f59e0b;
+    --status-cancelled: #ef4444;
+
+    --grid-line: rgba(255, 255, 255, 0.06);
+    --up: #34d399;
+    --down: #f87171;
+
+    /* validated categorical set (5 slots) — see dataviz skill validation */
+    --series-1: #059669;
+    --series-2: #3b82f6;
+    --series-3: #d97706;
+    --series-4: #7c3aed;
+    --series-5: #dc2626;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body { padding: 20px; }
+
+  .wrap { max-width: 1440px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  .header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .header-title h1 {
+    font-size: 22px;
+    font-weight: 800;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .header-title p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .period-filter {
+    display: flex;
+    gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 4px;
+  }
+
+  .period-filter button {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease;
+  }
+
+  .period-filter button:hover { color: var(--text-primary); }
+
+  .period-filter button.active {
+    background: var(--accent);
+    color: #04150f;
+  }
+
+  /* ---------- KPI cards ---------- */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .kpi-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .kpi-label {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    font-variant-numeric: proportional-nums;
+  }
+
+  .kpi-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    font-weight: 600;
+  }
+
+  .kpi-change.positive { color: var(--up); }
+  .kpi-change.negative { color: var(--down); }
+  .kpi-change span.period-label { color: var(--text-muted); font-weight: 500; }
+
+  .kpi-change svg { width: 10px; height: 10px; flex: none; }
+
+  /* ---------- Charts grid ---------- */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .chart-card.span-2 { grid-column: span 2; }
+
+  .chart-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .chart-title {
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .chart-subtitle {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .chart-body {
+    position: relative;
+    height: 260px;
+  }
+
+  .chart-body.tall { height: 320px; }
+
+  .chart-with-legend {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .chart-with-legend .chart-body { flex: 1 1 auto; height: 220px; }
+
+  .donut-legend {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 140px;
+  }
+
+  .donut-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+  }
+
+  .donut-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    flex: none;
+  }
+
+  .donut-legend-label {
+    color: var(--text-secondary);
+    flex: 1 1 auto;
+  }
+
+  .donut-legend-value {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Table ---------- */
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 18px;
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+
+  thead th {
+    text-align: left;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 0 12px 10px;
+    border-bottom: 1px solid var(--card-border);
+  }
+
+  tbody td {
+    padding: 12px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--card-border);
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+  .cell-muted { color: var(--text-secondary); }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px 4px 8px;
+    border-radius: 999px;
+  }
+
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+  .status-completada { background: rgba(16, 185, 129, 0.14); color: #6ee7b7; }
+  .status-completada .status-dot { background: var(--status-good); }
+
+  .status-pendiente { background: rgba(59, 130, 246, 0.14); color: #93c5fd; }
+  .status-pendiente .status-dot { background: var(--accent-2); }
+
+  .status-cancelada { background: rgba(239, 68, 68, 0.14); color: #fca5a5; }
+  .status-cancelada .status-dot { background: var(--status-cancelled); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 980px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-card.span-2 { grid-column: span 1; }
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 14px; }
+    .header { flex-direction: column; align-items: stretch; }
+    .period-filter { justify-content: stretch; }
+    .period-filter button { flex: 1; }
+    .chart-with-legend { flex-direction: column; }
+    .donut-legend { width: 100%; flex-direction: row; flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="header">
+    <div class="header-title">
+      <h1>Panel de Indicadores — Clínica Veterinaria AmiVets</h1>
+      <p>Resumen operativo y financiero de la clínica</p>
+    </div>
+    <div class="period-filter" id="periodFilter">
+      <button data-period="week">Esta semana</button>
+      <button data-period="month" class="active">Este mes</button>
+      <button data-period="year">Este año</button>
+    </div>
+  </header>
+
+  <section class="kpi-grid" id="kpiGrid"></section>
+
+  <section class="charts-grid">
+    <article class="chart-card span-2">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title" id="revenueChartTitle">Ingresos por semana</div>
+          <div class="chart-subtitle" id="revenueChartSubtitle">Últimas 8 semanas</div>
+        </div>
+      </div>
+      <div class="chart-body tall"><canvas id="chartRevenue"></canvas></div>
+    </article>
+
+    <article class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Distribución de servicios</div>
+          <div class="chart-subtitle">Por ingresos del período</div>
+        </div>
+      </div>
+      <div class="chart-with-legend">
+        <div class="chart-body"><canvas id="chartServices"></canvas></div>
+        <div class="donut-legend" id="legendServices"></div>
+      </div>
+    </article>
+
+    <article class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Especies atendidas</div>
+          <div class="chart-subtitle">Por número de consultas</div>
+        </div>
+      </div>
+      <div class="chart-with-legend">
+        <div class="chart-body"><canvas id="chartSpecies"></canvas></div>
+        <div class="donut-legend" id="legendSpecies"></div>
+      </div>
+    </article>
+
+    <article class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Pacientes por día de la semana</div>
+          <div class="chart-subtitle">Volumen de consultas</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chartByDay"></canvas></div>
+    </article>
+
+    <article class="chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Top 10 razas más atendidas</div>
+          <div class="chart-subtitle">Número de pacientes</div>
+        </div>
+      </div>
+      <div class="chart-body tall"><canvas id="chartBreeds"></canvas></div>
+    </article>
+
+    <article class="chart-card span-2">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Ingresos por veterinario</div>
+          <div class="chart-subtitle">Total facturado en el período</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chartByVet"></canvas></div>
+    </article>
+  </section>
+
+  <section class="table-card">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">Últimas 10 citas del día</div>
+        <div class="chart-subtitle">Agenda de hoy</div>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Propietario</th>
+            <th>Mascota</th>
+            <th>Especie</th>
+            <th>Servicio</th>
+            <th>Veterinario</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="appointmentsBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const COLORS = {
+    accent: '#10b981',
+    accent2: '#3b82f6',
+    text: '#f1f5f9',
+    textSecondary: '#94a3b8',
+    textMuted: '#64748b',
+    grid: 'rgba(255,255,255,0.06)',
+    card: '#1e293b',
+    border: 'rgba(255,255,255,0.12)',
+    series: ['#059669', '#3b82f6', '#d97706', '#7c3aed', '#dc2626']
+  };
+
+  Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+  Chart.defaults.color = COLORS.textSecondary;
+
+  const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
+  const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+
+  function upArrowIcon() {
+    return '<svg viewBox="0 0 10 10" fill="currentColor"><path d="M5 1l4 6H1z"/></svg>';
+  }
+  function downArrowIcon() {
+    return '<svg viewBox="0 0 10 10" fill="currentColor"><path d="M5 9L1 3h8z"/></svg>';
+  }
+
+  function tooltipBase() {
+    return {
+      backgroundColor: COLORS.card,
+      borderColor: COLORS.border,
+      borderWidth: 1,
+      titleColor: COLORS.text,
+      bodyColor: COLORS.textSecondary,
+      padding: 10,
+      cornerRadius: 8,
+      displayColors: false,
+      titleFont: { weight: '700', size: 12.5 },
+      bodyFont: { size: 12.5 }
+    };
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Example data per period                                          */
+  /* ---------------------------------------------------------------- */
+
+  const VETS = ['Dra. Fabiana Gómez', 'Dr. Carlos Rondón', 'Dra. María Pérez', 'Dr. Luis Hernández'];
+  const BREEDS = ['Mestizo', 'Labrador Retriever', 'Pastor Alemán', 'Caniche (Poodle)', 'Chihuahua',
+    'Golden Retriever', 'Bulldog Francés', 'Schnauzer', 'Pitbull / A. Staffordshire', 'Común Europeo'];
+  const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+  const SERVICES = ['Consulta general', 'Vacunación', 'Cirugía', 'Grooming', 'Productos'];
+  const SPECIES = ['Perro', 'Gato', 'Exótico', 'Ave', 'Otro'];
+
+  const DATA = {
+    week: {
+      kpis: {
+        consultas: { value: 84, prev: 76 },
+        ingresos: { value: 4320, prev: 3950 },
+        pacientesNuevos: { value: 11, prev: 9 },
+        ocupacion: { value: 82, prev: 75 },
+        cancelaciones: { value: 4, prev: 7 }
+      },
+      periodLabel: 'vs. semana anterior',
+      revenue: {
+        title: 'Ingresos diarios',
+        subtitle: 'Últimos 7 días',
+        labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+        values: [520, 610, 580, 690, 640, 750, 530]
+      },
+      services: [1650, 850, 1100, 500, 220],
+      byDay: [12, 14, 16, 13, 15, 10, 4],
+      breeds: [20, 9, 8, 6, 6, 5, 4, 4, 3, 3],
+      byVet: [1300, 1150, 1020, 850],
+      species: [54, 22, 4, 3, 1]
+    },
+    month: {
+      kpis: {
+        consultas: { value: 342, prev: 298 },
+        ingresos: { value: 18450, prev: 16200 },
+        pacientesNuevos: { value: 47, prev: 39 },
+        ocupacion: { value: 78, prev: 71 },
+        cancelaciones: { value: 23, prev: 31 }
+      },
+      periodLabel: 'vs. mes anterior',
+      revenue: {
+        title: 'Ingresos por semana',
+        subtitle: 'Últimas 8 semanas',
+        labels: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Sem 5', 'Sem 6', 'Sem 7', 'Sem 8'],
+        values: [3800, 4100, 3950, 4600, 4300, 4750, 4900, 5200]
+      },
+      services: [6450, 3700, 4600, 2200, 1500],
+      byDay: [58, 62, 71, 55, 68, 45, 12],
+      breeds: [89, 41, 35, 28, 26, 22, 19, 17, 15, 14],
+      byVet: [5600, 4900, 4350, 3600],
+      species: [220, 95, 15, 8, 4]
+    },
+    year: {
+      kpis: {
+        consultas: { value: 3850, prev: 3320 },
+        ingresos: { value: 205000, prev: 178500 },
+        pacientesNuevos: { value: 512, prev: 430 },
+        ocupacion: { value: 74, prev: 68 },
+        cancelaciones: { value: 268, prev: 340 }
+      },
+      periodLabel: 'vs. año anterior',
+      revenue: {
+        title: 'Ingresos por mes',
+        subtitle: 'Últimos 12 meses',
+        labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
+        values: [14200, 13800, 15100, 16200, 15800, 17300, 18100, 17900, 19500, 20200, 21800, 22100]
+      },
+      services: [71750, 41000, 51250, 24600, 16400],
+      byDay: [640, 690, 780, 610, 750, 320, 60],
+      breeds: [980, 460, 390, 310, 290, 250, 210, 190, 170, 160],
+      byVet: [62000, 54000, 48000, 41000],
+      species: [2450, 1050, 200, 110, 40]
+    }
+  };
+
+  const APPOINTMENTS = [
+    { hora: '09:00', propietario: 'María Fernanda Torres', mascota: 'Rocky', especie: 'Perro', servicio: 'Consulta general', vet: 'Dra. Fabiana Gómez', estado: 'completada' },
+    { hora: '09:30', propietario: 'Carlos Delgado', mascota: 'Michi', especie: 'Gato', servicio: 'Vacunación', vet: 'Dr. Carlos Rondón', estado: 'completada' },
+    { hora: '10:15', propietario: 'Ana Sofía Blanco', mascota: 'Bongo', especie: 'Perro', servicio: 'Cirugía (esterilización)', vet: 'Dra. María Pérez', estado: 'completada' },
+    { hora: '10:45', propietario: 'Pedro Julián Rangel', mascota: 'Kiwi', especie: 'Ave', servicio: 'Consulta general', vet: 'Dr. Luis Hernández', estado: 'completada' },
+    { hora: '11:30', propietario: 'Gabriela Salazar', mascota: 'Toby', especie: 'Perro', servicio: 'Grooming', vet: 'Dra. Fabiana Gómez', estado: 'pendiente' },
+    { hora: '12:00', propietario: 'Luis Alberto Marín', mascota: 'Luna', especie: 'Gato', servicio: 'Consulta general', vet: 'Dr. Carlos Rondón', estado: 'pendiente' },
+    { hora: '13:15', propietario: 'Yolimar Peña', mascota: 'Simba', especie: 'Perro', servicio: 'Vacunación', vet: 'Dra. María Pérez', estado: 'cancelada' },
+    { hora: '14:00', propietario: 'Rafael Antonio Ortiz', mascota: 'Coco', especie: 'Exótico', servicio: 'Consulta general', vet: 'Dr. Luis Hernández', estado: 'pendiente' },
+    { hora: '15:30', propietario: 'Daniela Contreras', mascota: 'Nala', especie: 'Perro', servicio: 'Cirugía menor', vet: 'Dra. Fabiana Gómez', estado: 'pendiente' },
+    { hora: '16:00', propietario: 'José Gregorio Silva', mascota: 'Max', especie: 'Perro', servicio: 'Grooming', vet: 'Dr. Carlos Rondón', estado: 'pendiente' }
+  ];
+
+  /* ---------------------------------------------------------------- */
+  /* KPI cards                                                         */
+  /* ---------------------------------------------------------------- */
+
+  const PERIOD_PHRASE = { week: 'de la semana', month: 'del mes', year: 'del año' };
+
+  const KPI_DEFS = [
+    { key: 'consultas', label: (p) => 'Consultas ' + PERIOD_PHRASE[p], fmt: fmtInt, invert: false, ppChange: false },
+    { key: 'ingresos', label: (p) => 'Ingresos ' + PERIOD_PHRASE[p], fmt: fmtMoney, invert: false, ppChange: false },
+    { key: 'pacientesNuevos', label: (p) => 'Pacientes nuevos', fmt: fmtInt, invert: false, ppChange: false },
+    { key: 'ocupacion', label: () => 'Tasa de ocupación', fmt: (n) => n + '%', invert: false, ppChange: true },
+    { key: 'cancelaciones', label: () => 'Canceladas / no-shows', fmt: fmtInt, invert: true, ppChange: false }
+  ];
+
+  function renderKpis(period) {
+    const d = DATA[period];
+    const grid = document.getElementById('kpiGrid');
+    grid.innerHTML = '';
+
+    KPI_DEFS.forEach((def) => {
+      const kpi = d.kpis[def.key];
+      const diff = kpi.value - kpi.prev;
+      const pctChange = kpi.prev !== 0 ? (diff / kpi.prev) * 100 : 0;
+      const isGood = def.invert ? diff <= 0 : diff >= 0;
+      const arrow = diff >= 0 ? upArrowIcon() : downArrowIcon();
+      const changeText = def.ppChange
+        ? Math.abs(diff).toFixed(0) + ' pp'
+        : Math.abs(pctChange).toFixed(1) + '%';
+
+      const card = document.createElement('div');
+      card.className = 'kpi-card';
+      card.innerHTML =
+        '<div class="kpi-label">' + def.label(period) + '</div>' +
+        '<div class="kpi-value">' + def.fmt(kpi.value) + '</div>' +
+        '<div class="kpi-change ' + (isGood ? 'positive' : 'negative') + '">' +
+          arrow + '<span>' + changeText + '</span>' +
+          '<span class="period-label">' + d.periodLabel + '</span>' +
+        '</div>';
+      grid.appendChild(card);
+    });
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Donut legends                                                     */
+  /* ---------------------------------------------------------------- */
+
+  function renderDonutLegend(containerId, labels, values) {
+    const total = values.reduce((a, b) => a + b, 0);
+    const el = document.getElementById(containerId);
+    el.innerHTML = labels.map((label, i) => {
+      const pct = total ? ((values[i] / total) * 100).toFixed(0) : 0;
+      return '<div class="donut-legend-item">' +
+        '<span class="donut-dot" style="background:' + COLORS.series[i] + '"></span>' +
+        '<span class="donut-legend-label">' + label + '</span>' +
+        '<span class="donut-legend-value">' + pct + '%</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Appointments table (static — "today", independent of the filter)  */
+  /* ---------------------------------------------------------------- */
+
+  function renderAppointments() {
+    const body = document.getElementById('appointmentsBody');
+    body.innerHTML = APPOINTMENTS.map((a) => {
+      const statusLabel = a.estado.charAt(0).toUpperCase() + a.estado.slice(1);
+      return '<tr>' +
+        '<td>' + a.hora + '</td>' +
+        '<td>' + a.propietario + '</td>' +
+        '<td>' + a.mascota + '</td>' +
+        '<td class="cell-muted">' + a.especie + '</td>' +
+        '<td class="cell-muted">' + a.servicio + '</td>' +
+        '<td class="cell-muted">' + a.vet + '</td>' +
+        '<td><span class="status-badge status-' + a.estado + '"><span class="status-dot"></span>' + statusLabel + '</span></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Charts                                                             */
+  /* ---------------------------------------------------------------- */
+
+  let charts = {};
+
+  function barGridOptions(indexAxis) {
+    const isHorizontal = indexAxis === 'y';
+    return {
+      indexAxis: indexAxis || 'x',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: tooltipBase() },
+      scales: {
+        x: {
+          grid: { color: isHorizontal ? COLORS.grid : 'transparent', drawTicks: false },
+          border: { display: false },
+          ticks: { color: COLORS.textMuted, font: { size: 11 } },
+          beginAtZero: true
+        },
+        y: {
+          grid: { color: isHorizontal ? 'transparent' : COLORS.grid, drawTicks: false },
+          border: { display: false },
+          ticks: { color: COLORS.textMuted, font: { size: 11 } },
+          beginAtZero: true
+        }
+      }
+    };
+  }
+
+  function createRevenueChart(period) {
+    const r = DATA[period].revenue;
+    document.getElementById('revenueChartTitle').textContent = r.title;
+    document.getElementById('revenueChartSubtitle').textContent = r.subtitle;
+
+    if (charts.revenue) charts.revenue.destroy();
+    charts.revenue = new Chart(document.getElementById('chartRevenue'), {
+      type: 'bar',
+      data: {
+        labels: r.labels,
+        datasets: [{
+          data: r.values,
+          backgroundColor: COLORS.accent,
+          borderRadius: 5,
+          borderSkipped: 'bottom',
+          maxBarThickness: 44
+        }]
+      },
+      options: Object.assign(barGridOptions('x'), {
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign(tooltipBase(), {
+            callbacks: { label: (ctx) => fmtMoney(ctx.parsed.y) }
+          })
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: COLORS.textMuted } },
+          y: {
+            grid: { color: COLORS.grid, drawTicks: false },
+            border: { display: false },
+            ticks: { color: COLORS.textMuted, callback: (v) => '$' + v.toLocaleString('en-US') },
+            beginAtZero: true
+          }
+        }
+      })
+    });
+  }
+
+  function createDonut(canvasId, values) {
+    return new Chart(document.getElementById(canvasId), {
+      type: 'doughnut',
+      data: {
+        labels: canvasId === 'chartServices' ? SERVICES : SPECIES,
+        datasets: [{
+          data: values,
+          backgroundColor: COLORS.series,
+          borderColor: COLORS.card,
+          borderWidth: 3,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '66%',
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign(tooltipBase(), {
+            displayColors: true,
+            callbacks: {
+              label: (ctx) => {
+                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                const pct = ((ctx.parsed / total) * 100).toFixed(0);
+                return ' ' + fmtMoney(ctx.parsed) + ' (' + pct + '%)';
+              }
+            }
+          })
+        }
+      }
+    });
+  }
+
+  function createByDayChart(values) {
+    return new Chart(document.getElementById('chartByDay'), {
+      type: 'bar',
+      data: {
+        labels: DAYS,
+        datasets: [{
+          data: values,
+          backgroundColor: COLORS.accent2,
+          borderRadius: 5,
+          borderSkipped: 'left',
+          maxBarThickness: 22
+        }]
+      },
+      options: Object.assign(barGridOptions('y'), {
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign(tooltipBase(), {
+            callbacks: { label: (ctx) => fmtInt(ctx.parsed.x) + ' pacientes' }
+          })
+        }
+      })
+    });
+  }
+
+  function createBreedsChart(values) {
+    const sorted = BREEDS.map((label, i) => ({ label, value: values[i] }))
+      .sort((a, b) => b.value - a.value);
+
+    return new Chart(document.getElementById('chartBreeds'), {
+      type: 'bar',
+      data: {
+        labels: sorted.map((s) => s.label),
+        datasets: [{
+          data: sorted.map((s) => s.value),
+          backgroundColor: COLORS.accent,
+          borderRadius: 5,
+          borderSkipped: 'left',
+          maxBarThickness: 18
+        }]
+      },
+      options: Object.assign(barGridOptions('y'), {
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign(tooltipBase(), {
+            callbacks: { label: (ctx) => fmtInt(ctx.parsed.x) + ' pacientes' }
+          })
+        }
+      })
+    });
+  }
+
+  function createByVetChart(values) {
+    return new Chart(document.getElementById('chartByVet'), {
+      type: 'bar',
+      data: {
+        labels: VETS,
+        datasets: [{
+          data: values,
+          backgroundColor: COLORS.accent2,
+          borderRadius: 5,
+          borderSkipped: 'bottom',
+          maxBarThickness: 60
+        }]
+      },
+      options: Object.assign(barGridOptions('x'), {
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign(tooltipBase(), {
+            callbacks: { label: (ctx) => fmtMoney(ctx.parsed.y) }
+          })
+        },
+        scales: {
+          x: { grid: { display: false }, border: { display: false }, ticks: { color: COLORS.textMuted } },
+          y: {
+            grid: { color: COLORS.grid, drawTicks: false },
+            border: { display: false },
+            ticks: { color: COLORS.textMuted, callback: (v) => '$' + v.toLocaleString('en-US') },
+            beginAtZero: true
+          }
+        }
+      })
+    });
+  }
+
+  function initCharts(period) {
+    const d = DATA[period];
+    createRevenueChart(period);
+    charts.services = createDonut('chartServices', d.services);
+    charts.species = createDonut('chartSpecies', d.species);
+    charts.byDay = createByDayChart(d.byDay);
+    charts.breeds = createBreedsChart(d.breeds);
+    charts.byVet = createByVetChart(d.byVet);
+  }
+
+  function updateCharts(period) {
+    const d = DATA[period];
+
+    createRevenueChart(period);
+
+    charts.services.data.datasets[0].data = d.services;
+    charts.services.update();
+
+    charts.species.data.datasets[0].data = d.species;
+    charts.species.update();
+
+    charts.byDay.data.datasets[0].data = d.byDay;
+    charts.byDay.update();
+
+    const sortedBreeds = BREEDS.map((label, i) => ({ label, value: d.breeds[i] }))
+      .sort((a, b) => b.value - a.value);
+    charts.breeds.data.labels = sortedBreeds.map((s) => s.label);
+    charts.breeds.data.datasets[0].data = sortedBreeds.map((s) => s.value);
+    charts.breeds.update();
+
+    charts.byVet.data.datasets[0].data = d.byVet;
+    charts.byVet.update();
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Wiring                                                             */
+  /* ---------------------------------------------------------------- */
+
+  function renderPeriod(period) {
+    const d = DATA[period];
+    renderKpis(period);
+    renderDonutLegend('legendServices', SERVICES, d.services);
+    renderDonutLegend('legendSpecies', SPECIES, d.species);
+  }
+
+  function setActivePeriod(period) {
+    document.querySelectorAll('#periodFilter button').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.period === period);
+    });
+  }
+
+  document.getElementById('periodFilter').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-period]');
+    if (!btn) return;
+    const period = btn.dataset.period;
+    setActivePeriod(period);
+    renderPeriod(period);
+    updateCharts(period);
+  });
+
+  renderPeriod('month');
+  renderAppointments();
+  initCharts('month');
+})();
+</script>
+</body>
+</html>
