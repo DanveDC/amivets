@@ -142,9 +142,12 @@ def listar_veterinarios(
     current_user: Usuario = Depends(get_current_user)
 ):
     """Lista doctores/veterinarios habilitados"""
-    vets = db.query(Usuario).filter(Usuario.role == "veterinario").all()
+    # is_active=True: un veterinario desactivado (ver PUT /{id}) no debe seguir
+    # ofreciéndose para asignar consultas nuevas (revisión final Tarea 09 — el
+    # filtro faltaba y la lista se llenaba de cuentas de baja).
+    vets = db.query(Usuario).filter(Usuario.role == "veterinario", Usuario.is_active == True).all()  # noqa: E712
     if not vets: # Fallback just in case
-        return db.query(Usuario).filter(Usuario.username != "admin").all()
+        return db.query(Usuario).filter(Usuario.username != "admin", Usuario.is_active == True).all()  # noqa: E712
     return vets
 
 @router.get("/me", response_model=UsuarioResponse)

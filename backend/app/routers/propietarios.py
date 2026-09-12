@@ -38,10 +38,16 @@ def listar_propietarios(
     skip: int = 0,
     limit: int = 100,
     activo: Optional[bool] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Lista todos los propietarios con filtros opcionales"""
-    return PropietarioService.listar_propietarios(db, skip, limit, activo)
+    """Lista propietarios con filtros opcionales.
+
+    `search` busca por nombre, apellido o cédula (revisión final Tarea 09): sin
+    esto, la ventana fija de `limit` (100 por default) más de 200 propietarios
+    reales podían quedar fuera de cualquier búsqueda posible.
+    """
+    return PropietarioService.listar_propietarios(db, skip, limit, activo, search)
 
 
 @router.put("/{propietario_id}", response_model=PropietarioResponse)

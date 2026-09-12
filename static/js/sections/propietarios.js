@@ -13,18 +13,13 @@ export const loadPropietarios = async (filter = '') => {
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Cargando propietarios...</td></tr>';
     try {
-        let propietarios = await fetchAPI('/propietarios/');
-        // Filtrar inactivos
-        propietarios = propietarios.filter(p => p.activo !== false);
-
-        if (filter) {
-            const f = filter.toLowerCase();
-            propietarios = propietarios.filter(p =>
-                p.nombre.toLowerCase().includes(f) ||
-                p.apellido.toLowerCase().includes(f) ||
-                p.cedula.includes(f)
-            );
-        }
+        // Búsqueda del lado del servidor (revisión final Tarea 09): sin esto,
+        // solo se veían los primeros 100 propietarios por id — con cientos de
+        // registros reales, la inmensa mayoría quedaba invisible sin importar
+        // qué se escribiera en el buscador.
+        const params = new URLSearchParams({ activo: 'true', limit: '200' });
+        if (filter) params.set('search', filter);
+        const propietarios = await fetchAPI(`/propietarios/?${params.toString()}`);
 
         if (propietarios.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">No se encontraron propietarios.</td></tr>';
