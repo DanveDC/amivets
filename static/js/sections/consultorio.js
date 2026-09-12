@@ -381,8 +381,6 @@ export const handleConsultaSubmit = async (e) => {
     e.preventDefault();
     try {
         const isAdmin = localStorage.getItem('role') === 'admin';
-        const icc = document.getElementById('consultaICC').value || 'N/D';
-        const tllc = document.getElementById('consultaTLLC').value || 'N/D';
 
         const vetSelect = document.getElementById('consultaVeterinario');
         const vetOption = vetSelect.options[vetSelect.selectedIndex];
@@ -407,7 +405,7 @@ export const handleConsultaSubmit = async (e) => {
             peso: parseFloat(document.getElementById('consultaPeso').value) || null,
             temperatura: parseFloat(document.getElementById('consultaTemperatura').value) || null,
             fecha_consulta: document.getElementById('consultaFecha')?.value || null,
-            observaciones: `ICC: ${icc}, TLLC: ${tllc} | Pruebas: ${document.getElementById('consultaPruebas')?.value || 'N/A'}`
+            observaciones: `Pruebas: ${document.getElementById('consultaPruebas')?.value || 'N/A'}`
         };
         const creada = await fetchAPI('/consultas/', { method: 'POST', body: JSON.stringify(data) });
         showNotification('Consulta abierta.', 'success');
