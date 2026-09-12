@@ -24,7 +24,7 @@ export const loadReportes = async () => {
         // const reporteKpis = await fetchAPI('/reportes/kpis'); // Si existiera
 
         document.getElementById('kpiCitas').textContent = citasHoy;
-        document.getElementById('kpiPacientes').textContent = safeCitas.filter(c => c && c.estado === 'Finalizada').length; // Approx
+        document.getElementById('kpiPacientes').textContent = safeCitas.filter(c => c && c.estado === 'FINALIZADO').length; // Approx
 
         // El stock ya se actualiza en loadInventario si se visita
     } catch (error) {

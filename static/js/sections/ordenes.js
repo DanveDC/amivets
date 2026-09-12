@@ -18,7 +18,7 @@ import { seleccionarMascotaBasica, abrirFormularioConsulta } from './consultorio
 export const cargarBadgeOrdenes = async () => {
     try {
         const citas = await fetchAPI('/citas/');
-        const pendientes = (Array.isArray(citas) ? citas : []).filter(c => c && c.estado === 'pendiente');
+        const pendientes = (Array.isArray(citas) ? citas : []).filter(c => c && c.estado === 'PENDIENTE');
         const badge = document.getElementById('badgeOrdenesMedico');
         if (badge) badge.textContent = String(pendientes.length);
     } catch (_) {

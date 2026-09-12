@@ -102,8 +102,8 @@ export const loadAgenda = async () => {
                     <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">${mascotasMap[cita.mascota_id] || `Mascota ID: #${cita.mascota_id}`}</p>
                     <p style="font-size: 0.875rem; font-weight: 500;">${cita.motivo}</p>
                     <div style="margin-top: 1rem; text-align: right;">
-                        ${cita.estado === 'Programada' ? `<button onclick="checkInCita(${cita.id})" class="btn-secondary btn-sm">Marcar Check-in</button>` : ''}
-                        ${(cita.estado === 'En Sala' || cita.estado === 'Programada') ? `<button onclick="atenderDesdeOrden(${cita.mascota_id}, ${cita.id})" class="btn-primary btn-sm">Atender</button>` : ''}
+                        ${cita.estado === 'PENDIENTE' ? `<button onclick="checkInCita(${cita.id})" class="btn-secondary btn-sm">Marcar Check-in</button>` : ''}
+                        ${(cita.estado === 'EN_ESPERA' || cita.estado === 'PENDIENTE') ? `<button onclick="atenderDesdeOrden(${cita.mascota_id}, ${cita.id})" class="btn-primary btn-sm">Atender</button>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -180,10 +180,11 @@ export const loadAgenda = async () => {
 
 const getStatusColor = (status) => {
     switch (status) {
-        case 'Programada': return 'var(--info)'; // blue
-        case 'En Sala': return 'var(--warning)'; // warning
-        case 'Finalizada': return 'var(--secondary)'; // green
-        case 'Cancelada': return 'var(--accent)'; // red
+        case 'PENDIENTE': return 'var(--info)'; // blue
+        case 'EN_ESPERA': return 'var(--warning)'; // warning
+        case 'EN_CONSULTA': return 'var(--warning)'; // warning
+        case 'FINALIZADO': return 'var(--secondary)'; // green
+        case 'CANCELADA': return 'var(--accent)'; // red
         default: return 'var(--text-muted)'; // gray
     }
 };

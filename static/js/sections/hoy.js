@@ -95,11 +95,16 @@ const renderTurnos = async () => {
     if (!box) return;
     box.innerHTML = '<p class="av-muted" style="padding:12px 16px;">Cargando…</p>';
     try {
+        // Un veterinario ve solo sus turnos; admin y recepción, todos (mismo
+        // criterio que renderConsultasAbiertas más arriba).
+        await whenReady;
+        const soloMias = getRole() === 'veterinario' && getUserId();
+        const url = `/citas/${soloMias ? `?veterinario_id=${getUserId()}` : ''}`;
         const [citas, mascotas] = await Promise.all([
-            fetchAPI('/citas/'),
+            fetchAPI(url),
             cargarMascotasMap(),
         ]);
-        const pendientes = (Array.isArray(citas) ? citas : []).filter(c => c && c.estado === 'pendiente');
+        const pendientes = (Array.isArray(citas) ? citas : []).filter(c => c && c.estado === 'PENDIENTE');
         if (pendientes.length === 0) {
             box.innerHTML = '<p class="av-muted" style="padding:12px 16px;">No hay turnos pendientes.</p>';
             return;
