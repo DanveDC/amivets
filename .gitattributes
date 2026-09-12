@@ -1,0 +1,5 @@
+# Los shell scripts necesitan LF sí o sí: un shebang con CRLF rompe el
+# exec dentro de los contenedores Linux ("exec: no such file or directory").
+# En Windows con core.autocrlf activo, git convierte a CRLF al hacer
+# checkout si no se lo prohibimos acá.
+*.sh text eol=lf
