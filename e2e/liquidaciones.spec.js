@@ -60,7 +60,7 @@ async function seedCadenaLiquidable(request, token, tarifa) {
   await setTarifaConsulta(request, token, vet.id, tarifa);
   const propietario = await createTestPropietario(request);
   const mascota = await createTestMascota(request, propietario.id);
-  const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id });
+  const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id }, token);
   const factura = await createTestFactura(request, {
     propietarioId: propietario.id,
     consultaId: consulta.id,

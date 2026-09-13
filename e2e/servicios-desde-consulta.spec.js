@@ -18,10 +18,11 @@
 //   - GET  /api/consultas/?estado=ABIERTA
 //   - POST /api/facturas/from-consulta/{id} → arma detalles desde consulta.servicios
 //     + honorario, emite la factura y deja la consulta CERRADA. Sin doble conteo.
-//   - Permisos (require_roles / validar_tipo_servicio_por_rol): sin token se
-//     deja pasar (los e2e sin auth siguen verdes); con token de rol
-//     `recepcionista`, los tipos clínicos (VACUNACION, DESPARASITACION, CIRUGIA,
-//     HOSPITALIZACION, LABORATORIO) dan 403 al anexar / crear servicio directo.
+//   - Permisos (require_roles / validar_tipo_servicio_por_rol, Tarea 06,
+//     decisión 9): sin token es 401 (requisito cero); con token de rol
+//     admin/recepción/veterinario se puede anexar / crear servicio directo,
+//     pero con `recepcionista` los tipos clínicos (VACUNACION,
+//     DESPARASITACION, CIRUGIA, HOSPITALIZACION, LABORATORIO) dan 403.
 //
 // Criterio UI vs API: igual que flujo-clinico.spec.js / clinico.spec.js, la
 // regla de negocio se ejerce por API. El modal de consulta y la pantalla
@@ -76,7 +77,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
   test.afterAll(async ({ request }) => {
     // Orden inverso a las dependencias. Ninguna de estas lanza.
     for (const id of S.facturaIds) await anularTestFactura(request, id);
-    for (const id of S.servicioDirectoIds) await deleteTestServicio(request, id);
+    for (const id of S.servicioDirectoIds) await deleteTestServicio(request, id, S.token);
     for (const id of S.consultaIds) await deleteTestConsulta(request, id);
     if (S.recep?.user?.id) await deleteTestUser(request, S.token, S.recep.user.id);
     if (S.mascota?.id) await deleteTestMascota(request, S.mascota.id);
@@ -88,7 +89,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     const consulta = await createTestConsulta(request, {
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
-    });
+    }, S.token);
     S.consultaIds.push(consulta.id);
 
     // Una consulta nueva nace ABIERTA (decisión 6).
@@ -103,7 +104,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
         tipo_servicio: tipo,
         nombre_servicio: testTag(`serv_${tipo}`),
         precio_unitario: 5000,
-      });
+      }, S.token);
       expect(s.id, `anexar ${tipo} devuelve el servicio creado`).toBeTruthy();
       expect(s.consulta_id).toBe(consulta.id);
       // mascota_id se llena siempre, también con consulta (decisión 1).
@@ -126,7 +127,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
       tipo_servicio: 'ESTETICA',
       nombre_servicio: testTag('corteUnas'),
       precio_unitario: 6000,
-    });
+    }, S.token);
     S.servicioDirectoIds.push(directo.id);
 
     // Nace sin consulta, colgado de la mascota (decisión 1).
@@ -177,7 +178,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
       precio_consulta: HONORARIO,
-    });
+    }, S.token);
     S.consultaIds.push(consulta.id);
 
     const precios = { ESTETICA: 6000, PROCEDIMIENTO: 10000, INSUMO: 4000 };
@@ -187,7 +188,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
         tipo_servicio: tipo,
         nombre_servicio: testTag(`serv_${tipo}`),
         precio_unitario: precio,
-      }));
+      }, S.token));
     }
     const totalEsperado = HONORARIO + Object.values(precios).reduce((a, b) => a + b, 0);
 
@@ -225,11 +226,11 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     const consulta = await createTestConsulta(request, {
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
-    });
+    }, S.token);
     S.consultaIds.push(consulta.id);
 
     // Anexar algo y "dejarla a medias".
-    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'ESTETICA', precio_unitario: 3000 });
+    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'ESTETICA', precio_unitario: 3000 }, S.token);
 
     // Aparece en la bandeja de consultas abiertas (pantalla "Hoy").
     const abiertas = await (await request.get('/api/consultas/?estado=ABIERTA&limit=200', { headers: authHeaders(S.token) })).json();
@@ -237,7 +238,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     expect(abiertas.every((c) => c.estado === 'ABIERTA')).toBe(true);
 
     // Retomarla: anexar otro servicio y facturar.
-    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'PROCEDIMIENTO', precio_unitario: 7000 });
+    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'PROCEDIMIENTO', precio_unitario: 7000 }, S.token);
     const factura = await facturarDesdeConsulta(request, consulta.id);
     S.facturaIds.push(factura.id);
     expect(factura.detalles.length).toBe(3); // 2 servicios + honorario
@@ -255,7 +256,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     const consulta = await createTestConsulta(request, {
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
-    });
+    }, S.token);
     S.consultaIds.push(consulta.id);
 
     // Anexar una CIRUGÍA a la consulta → 403.
@@ -300,7 +301,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     const consulta = await createTestConsulta(request, {
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
-    });
+    }, S.token);
 
     const sinToken = await request.delete(`/api/consultas/${consulta.id}`);
     expect(sinToken.status()).toBe(401);
@@ -322,9 +323,9 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     const consulta = await createTestConsulta(request, {
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
-    });
+    }, S.token);
     S.consultaIds.push(consulta.id);
-    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'PROCEDIMIENTO', precio_unitario: 8000 });
+    await anexarServicioConsulta(request, consulta.id, { tipo_servicio: 'PROCEDIMIENTO', precio_unitario: 8000 }, S.token);
 
     const factura = await facturarDesdeConsulta(request, consulta.id);
     const cerrada = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(S.token) })).json();
@@ -349,8 +350,8 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
   test('la bandeja "Hoy" se puede filtrar por veterinario: cada uno ve solo lo suyo', async ({ request }) => {
     const otroVet = await createTestVeterinario(request, S.token);
 
-    const miConsulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id });
-    const suConsulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: otroVet.id });
+    const miConsulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id }, S.token);
+    const suConsulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: otroVet.id }, S.token);
     S.consultaIds.push(miConsulta.id, suConsulta.id);
 
     const mias = await (await request.get(

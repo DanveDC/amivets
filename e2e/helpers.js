@@ -134,9 +134,12 @@ async function deleteTestUser(request, token, id) {
 // These mirror the createTestUser/deleteTestUser style: the "create" helpers
 // throw loudly if the backend rejects the payload (so a broken contract fails
 // the test at the setup line), while every "delete"/cleanup helper is
-// best-effort and never throws. The clinical routers (propietarios, mascotas,
-// citas, consultas, facturas) have no auth dependency in this stack, so unlike
-// createTestUser these do NOT need a bearer token.
+// best-effort and never throws. propietarios/mascotas/citas/facturas still
+// have no auth dependency in this stack. `consultas` itself (POST/PUT) also
+// doesn't -- only DELETE (get_current_admin, unrelated to this fix) and the
+// endpoints that hang off a consulta (servicios, recetas) require a token
+// now (Tarea 06, decisión 9: `require_roles` ya no deja pasar peticiones sin
+// sesión).
 // ===========================================================================
 
 /** Creates a throwaway propietario via the API. */
@@ -236,7 +239,13 @@ async function cancelTestCita(request, id) {
 }
 
 /** Creates a consulta (/api/consultas) via the API. */
-async function createTestConsulta(request, { mascotaId, veterinarioId, ...overrides } = {}) {
+/**
+ * Creates a test consulta (POST /api/consultas/). Exige sesión con rol
+ * admin/recepción/veterinario desde Tarea 06 (decisión 9, fila 1 "abrir
+ * orden"): pasa un token real salvo que el spec esté probando deliberadamente
+ * el 401/403 del gate. Throws on rejection.
+ */
+async function createTestConsulta(request, { mascotaId, veterinarioId, ...overrides } = {}, token = null) {
   const payload = {
     mascota_id: mascotaId,
     veterinario_id: veterinarioId,
@@ -248,7 +257,10 @@ async function createTestConsulta(request, { mascotaId, veterinarioId, ...overri
     precio_consulta: 25000,
     ...overrides,
   };
-  const res = await request.post('/api/consultas/', { data: payload });
+  const res = await request.post('/api/consultas/', {
+    headers: token ? authHeaders(token) : {},
+    data: payload,
+  });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test consulta: ${res.status()} ${await res.text()}`);
   }
@@ -278,8 +290,11 @@ async function deleteTestConsulta(request, id) {
 //
 // Same convention as the rest of this file: "create"/"do" helpers throw loudly
 // so a broken contract fails at the setup line; "delete" helpers never throw.
-// The clinical routers have no auth dependency, so a bearer token is only
-// passed when the spec is deliberately exercising the role gate.
+// Anexar/editar/borrar un servicio (`crear_servicio_directo`,
+// `actualizar_servicio`, `eliminar_servicio` y sus alias en consultas.py)
+// exige sesión desde Tarea 06 (decisión 9, requisito cero de `require_roles`):
+// un token es obligatorio salvo que el spec esté probando deliberadamente el
+// 401/403 del gate.
 // ===========================================================================
 
 /**
@@ -315,8 +330,12 @@ async function createTestRecepcionista(request, adminToken, overrides = {}) {
  * Creates a "servicio directo": a ServicioConsulta with consulta_id = NULL that
  * hangs off the mascota (Tarea 09, decisión 1). Requires mascota_id. Defaults to
  * a non-clinical type in "Pendiente" so it touches no inventory.
+ *
+ * POST /api/servicios/ exige sesión con rol admin/recepción/veterinario desde
+ * Tarea 06 (decisión 9). `token` es obligatorio salvo que el spec esté
+ * probando deliberadamente el 401/403.
  */
-async function createTestServicioDirecto(request, mascotaId, overrides = {}) {
+async function createTestServicioDirecto(request, mascotaId, overrides = {}, token = null) {
   const payload = {
     mascota_id: mascotaId,
     tipo_servicio: 'ESTETICA',
@@ -326,17 +345,22 @@ async function createTestServicioDirecto(request, mascotaId, overrides = {}) {
     estado: 'Pendiente',
     ...overrides,
   };
-  const res = await request.post('/api/servicios/', { data: payload });
+  const res = await request.post('/api/servicios/', {
+    headers: token ? authHeaders(token) : {},
+    data: payload,
+  });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create servicio directo: ${res.status()} ${await res.text()}`);
   }
   return res.json();
 }
 
-/** Soft-deletes (is_deleted=True) a test servicio. Best-effort — never throws. */
-async function deleteTestServicio(request, id) {
+/** Soft-deletes (is_deleted=True) a test servicio. Best-effort — never throws.
+ * DELETE exige admin/veterinario (Tarea 06, decisión 9); pasa un token para
+ * que la limpieza realmente funcione. */
+async function deleteTestServicio(request, id, token = null) {
   try {
-    await request.delete(`/api/servicios/${id}`);
+    await request.delete(`/api/servicios/${id}`, { headers: token ? authHeaders(token) : {} });
   } catch (_) {
     // best-effort cleanup
   }
@@ -344,8 +368,10 @@ async function deleteTestServicio(request, id) {
 
 /**
  * Attaches a servicio to an open consulta (POST /api/consultas/{id}/servicios).
- * Pass a bearer token only when the spec is exercising the role gate; anonymous
- * calls are allowed by this stack. Throws on rejection.
+ * Exige sesión con rol admin/recepción/veterinario desde Tarea 06 (decisión 9):
+ * pasa un token real salvo que el spec esté probando deliberadamente el
+ * 401/403 del gate (una llamada sin token ahora devuelve 401, no pasa). Throws
+ * on rejection.
  */
 async function anexarServicioConsulta(request, consultaId, overrides = {}, token = null) {
   const payload = {
@@ -493,19 +519,22 @@ async function deleteTestNota(request, token, id) {
 
 // ===========================================================================
 // Clínica extendida: vacunación, desparasitación, hospitalización, cirugía,
-// pruebas complementarias. No auth in this stack. "create" helpers throw
-// loudly; there is no cleanup helper for the ones without a DELETE route.
+// pruebas complementarias. Todos estos POST ya usaban `require_roles("admin",
+// "veterinario")`, así que el bug de Tarea 06 (decisión 9) los dejaba pasar
+// sin token; con el fix exigen un token real de admin o veterinario. "create"
+// helpers throw loudly; there is no cleanup helper for the ones without a
+// DELETE route.
 // ===========================================================================
 
 /** Applies a vacunación against a consulta + inventory product. Throws on rejection. */
-async function createTestVacunacion(request, { consultaId, vacunaId, ...overrides } = {}) {
+async function createTestVacunacion(request, { consultaId, vacunaId, ...overrides } = {}, token) {
   const payload = {
     consulta_id: consultaId,
     vacuna_id: vacunaId,
     lote: testTag('lote').slice(0, 40),
     ...overrides,
   };
-  const res = await request.post('/api/clinico/vacunacion', { data: payload });
+  const res = await request.post('/api/clinico/vacunacion', { headers: authHeaders(token), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test vacunacion: ${res.status()} ${await res.text()}`);
   }
@@ -513,7 +542,7 @@ async function createTestVacunacion(request, { consultaId, vacunaId, ...override
 }
 
 /** Applies a desparasitación against a consulta + inventory product. Throws on rejection. */
-async function createTestDesparasitacion(request, { consultaId, productoId, ...overrides } = {}) {
+async function createTestDesparasitacion(request, { consultaId, productoId, ...overrides } = {}, token) {
   const payload = {
     consulta_id: consultaId,
     producto_id: productoId,
@@ -521,7 +550,7 @@ async function createTestDesparasitacion(request, { consultaId, productoId, ...o
     dosis: '1 ml',
     ...overrides,
   };
-  const res = await request.post('/api/clinico/desparasitacion', { data: payload });
+  const res = await request.post('/api/clinico/desparasitacion', { headers: authHeaders(token), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test desparasitacion: ${res.status()} ${await res.text()}`);
   }
@@ -529,7 +558,7 @@ async function createTestDesparasitacion(request, { consultaId, productoId, ...o
 }
 
 /** Admits a mascota to hospitalización (/api/hospitalizaciones). Throws on rejection. */
-async function createTestHospitalizacion(request, { mascotaId, ...overrides } = {}) {
+async function createTestHospitalizacion(request, { mascotaId, ...overrides } = {}, token) {
   const payload = {
     mascota_id: mascotaId,
     motivo: testTag('hosp'),
@@ -538,7 +567,7 @@ async function createTestHospitalizacion(request, { mascotaId, ...overrides } = 
     precio_aplicado: 1000,
     ...overrides,
   };
-  const res = await request.post('/api/hospitalizaciones/', { data: payload });
+  const res = await request.post('/api/hospitalizaciones/', { headers: authHeaders(token), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test hospitalizacion: ${res.status()} ${await res.text()}`);
   }
@@ -546,7 +575,7 @@ async function createTestHospitalizacion(request, { mascotaId, ...overrides } = 
 }
 
 /** Registers a cirugía report (/api/cirugias). Throws on rejection. */
-async function createTestCirugia(request, { mascotaId, ...overrides } = {}) {
+async function createTestCirugia(request, { mascotaId, ...overrides } = {}, token) {
   const payload = {
     mascota_id: mascotaId,
     tipo_procedimiento: testTag('cirugia').slice(0, 60),
@@ -554,7 +583,7 @@ async function createTestCirugia(request, { mascotaId, ...overrides } = {}) {
     precio_aplicado: 50000,
     ...overrides,
   };
-  const res = await request.post('/api/cirugias/', { data: payload });
+  const res = await request.post('/api/cirugias/', { headers: authHeaders(token), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test cirugia: ${res.status()} ${await res.text()}`);
   }
@@ -562,7 +591,7 @@ async function createTestCirugia(request, { mascotaId, ...overrides } = {}) {
 }
 
 /** Registers a prueba complementaria (/api/pruebas). Throws on rejection. */
-async function createTestPrueba(request, { mascotaId, ...overrides } = {}) {
+async function createTestPrueba(request, { mascotaId, ...overrides } = {}, token) {
   const payload = {
     mascota_id: mascotaId,
     tipo: 'Laboratorio',
@@ -570,17 +599,19 @@ async function createTestPrueba(request, { mascotaId, ...overrides } = {}) {
     precio_aplicado: 8000,
     ...overrides,
   };
-  const res = await request.post('/api/pruebas/', { data: payload });
+  const res = await request.post('/api/pruebas/', { headers: authHeaders(token), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test prueba: ${res.status()} ${await res.text()}`);
   }
   return res.json();
 }
 
-/** Hard-deletes a test prueba. Best-effort — never throws. */
-async function deleteTestPrueba(request, id) {
+/** Hard-deletes a test prueba. Best-effort — never throws.
+ * DELETE /api/pruebas/{id} exige admin/veterinario (Tarea 06, decisión 9);
+ * pasa un token para que la limpieza realmente funcione. */
+async function deleteTestPrueba(request, id, token = null) {
   try {
-    await request.delete(`/api/pruebas/${id}`);
+    await request.delete(`/api/pruebas/${id}`, { headers: token ? authHeaders(token) : {} });
   } catch (_) {
     // best-effort cleanup
   }

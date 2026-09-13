@@ -85,7 +85,10 @@ def obtener_prueba(
 def actualizar_prueba(
     prueba_id: int,
     prueba_update: PruebaComplementariaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Sin guard hasta la Tarea 06 (decisión 9): mismo criterio que
+    # POST /api/pruebas/ (registro clínico, admin/veterinario).
+    _=Depends(require_roles("admin", "veterinario")),
 ):
     """Actualiza la informacion de una prueba"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()
@@ -102,7 +105,10 @@ def actualizar_prueba(
 @router.delete("/{prueba_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_prueba(
     prueba_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Sin guard hasta la Tarea 06 (decisión 9): elimina un registro clínico,
+    # mismo criterio que el resto de este router (admin/veterinario).
+    _=Depends(require_roles("admin", "veterinario")),
 ):
     """Elimina una prueba"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()

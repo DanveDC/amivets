@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 
 from app.core.database import get_db
 from app.core import security
@@ -14,11 +14,6 @@ from app.core.config import settings
 router = APIRouter(prefix="/api/usuarios", tags=["Usuarios"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-# Variante que NO fuerza 401 cuando falta / es invalido el token: los routers
-# clinicos de este stack no exigen login (ver e2e/helpers.js), pero cuando SI
-# llega una sesion valida queremos registrar usuario_responsable_id en el ledger
-# de inventario (Tarea 07, decision 8). Si no hay usuario, queda nullable.
-oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -39,23 +34,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
-async def get_optional_current_user(
-    token: Optional[str] = Depends(oauth2_scheme_optional),
-    db: Session = Depends(get_db),
-) -> Optional[Usuario]:
-    """Devuelve el Usuario de la sesion si el token es valido; None si no hay
-    token o no valida. Nunca levanta 401."""
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        username = payload.get("sub")
-    except JWTError:
-        return None
-    if not username:
-        return None
-    return db.query(Usuario).filter(Usuario.username == username).first()
-
 async def get_current_admin(current_user: Usuario = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(
@@ -67,26 +45,29 @@ async def get_current_admin(current_user: Usuario = Depends(get_current_user)):
 
 # Roles validos del backend. `recepcionista` se introduce con la Tarea 09
 # (decision 7): puede abrir consultas y anexar servicios NO clinicos, pero no
-# vacunar, operar, hospitalizar, pedir laboratorio ni recetar.
-ROLES_VALIDOS = {"admin", "veterinario", "recepcionista", "user"}
+# vacunar, operar, hospitalizar, pedir laboratorio ni recetar. `gestor` se
+# introduce con la Tarea 06 (decision 9): recibe y ejecuta los servicios de su
+# area. La relacion gestor <-> tipo de servicio (`gestor_area`) es de una
+# etapa posterior; aca el rol solo existe como valor valido.
+ROLES_VALIDOS = {"admin", "veterinario", "recepcionista", "gestor", "user"}
 
 
 def require_roles(*roles: str):
     """Dependencia de autorizacion por rol para los routers clinicos.
 
-    LIMITACION CONOCIDA Y DELIBERADA (Tarea 09, decision 7): los routers
-    clinicos de este stack NO exigen login -- la suite e2e (ver e2e/helpers.js)
-    llama sin token y varios flujos internos tambien. Para no romper ese
-    contrato, si NO hay usuario autenticado se DEJA PASAR. El gate solo aplica
-    cuando SI hay sesion: en ese caso el rol debe estar en `roles`, si no -> 403.
-    Cuando el stack pase a exigir login, cambiar `get_optional_current_user` por
-    `get_current_user` aca y desaparece el agujero.
+    Requisito cero de la Tarea 06 (decision 9): exige sesion valida SIEMPRE.
+    Antes dependia de `get_optional_current_user`, cuya condicion
+    (`if current_user is not None and ...`) dejaba pasar sin chequear rol a
+    cualquier peticion sin token -- una request anonima nunca entraba al
+    `if` y quedaba 200 en vez de 401. Con `get_current_user` no hay forma de
+    llegar a `_dep` sin un token valido: sin token o con token invalido es
+    401 (lo levanta `get_current_user`); con token pero rol equivocado es 403.
     """
 
     async def _dep(
-        current_user: Optional[Usuario] = Depends(get_optional_current_user),
-    ) -> Optional[Usuario]:
-        if current_user is not None and current_user.role not in roles:
+        current_user: Usuario = Depends(get_current_user),
+    ) -> Usuario:
+        if current_user.role not in roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

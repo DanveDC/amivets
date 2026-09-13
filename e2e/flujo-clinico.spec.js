@@ -243,7 +243,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
       peso: 12.5,
-    });
+    }, S.token);
     expect(S.consulta.mascota_id).toBe(S.mascota.id);
     expect(S.consulta.estado_pago).toBe('POR_COBRAR');
     // Tarea 09, decisión 6: eje de ciclo de vida clínico, separado del de cobro.

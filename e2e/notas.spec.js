@@ -85,7 +85,7 @@ test.describe.serial('Notas clínicas — /api/notas', () => {
     S.propietario = await createTestPropietario(request);
     S.mascota = await createTestMascota(request, S.propietario.id);
     S.vet = await createTestVeterinario(request, S.token);
-    S.consulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id });
+    S.consulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id }, S.token);
   });
 
   test.afterAll(async ({ request }) => {
@@ -222,7 +222,7 @@ test.describe.serial('Notas clínicas — /api/notas', () => {
 
     // consulta_id de otra mascota -> 400.
     const otraMascota = await createTestMascota(request, S.propietario.id);
-    const otraConsulta = await createTestConsulta(request, { mascotaId: otraMascota.id, veterinarioId: S.vet.id });
+    const otraConsulta = await createTestConsulta(request, { mascotaId: otraMascota.id, veterinarioId: S.vet.id }, S.token);
     const mismatch = await request.post('/api/notas/', {
       headers: authHeaders(S.token),
       data: { mascota_id: S.mascota.id, texto: 'x', categoria: 'general', consulta_id: otraConsulta.id },

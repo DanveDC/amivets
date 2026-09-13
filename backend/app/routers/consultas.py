@@ -14,7 +14,7 @@ from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta,
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
 from app.services import consumo_service
-from app.routers.usuarios import get_optional_current_user, require_roles, get_current_admin
+from app.routers.usuarios import require_roles, get_current_admin
 from app.routers.servicios import (
     actualizar_servicio_impl,
     eliminar_servicio_impl,
@@ -27,7 +27,10 @@ router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
 @router.post("/", response_model=ConsultaResponse, status_code=status.HTTP_201_CREATED)
 def crear_consulta(
     consulta: ConsultaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Fila 1 de la matriz (abrir orden): admin/recepción/veterinario.
+    # `gestor` no abre consultas (Tarea 06, decisión 9).
+    _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """Crea una nueva consulta"""
     return ConsultaService.crear_consulta(db, consulta)
@@ -78,7 +81,14 @@ def listar_consultas(
 def actualizar_consulta(
     consulta_id: int,
     consulta: ConsultaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Fila 14 de la matriz (registrar diagnóstico/tratamiento): admin/
+    # veterinario. Recepción y gestor no editan datos clínicos. El payload
+    # también trae campos no clínicos (estado, veterinario_id, precio) que
+    # en la matriz completa tienen alcance distinto por fila -- ese recorte
+    # fino queda para cuando exista el modelo de orden (Fase 2); acá se
+    # cierra el hueco de autenticación con el guard más estricto del set.
+    _: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     """Actualiza una consulta existente"""
     consulta_actualizada = ConsultaService.actualizar_consulta(db, consulta_id, consulta)
@@ -179,7 +189,8 @@ def agregar_servicio_consulta(
     consulta_id: int,
     servicio_data: ServicioConsultaCreate,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    # Mismo gate que POST /api/servicios/ (Tarea 06, decisión 9, filas 7-8).
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """Agrega un ítem o servicio a la consulta clínica (Vacuna, Cirugía, Insumo, etc.).
 
@@ -233,7 +244,9 @@ def actualizar_servicio_consulta(
     servicio_id: int,
     update_data: ServicioConsultaUpdate,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    # Mismo gate que PATCH /api/servicios/{id} -- es el mismo _impl, así que
+    # el mismo guard tiene que estar en las dos rutas o esta queda de bypass.
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """Alias de PATCH /api/servicios/{id} (Tarea 09). La lógica vive en
     routers/servicios.py; este path se mantiene para no romper contratos
@@ -261,7 +274,8 @@ def descargar_consulta_pdf(
 def eliminar_servicio_consulta(
     servicio_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    # Mismo gate que DELETE /api/servicios/{id}, por la misma razón que el PATCH.
+    current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     """Alias de DELETE /api/servicios/{id} (Tarea 09). La lógica vive en
     routers/servicios.py; este path se mantiene para no romper contratos

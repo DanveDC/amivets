@@ -32,7 +32,7 @@ from app.schemas.schemas import (
 )
 from app.models.models import ServicioConsulta, Mascota, Usuario
 from app.services import consumo_service
-from app.routers.usuarios import get_optional_current_user
+from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/servicios", tags=["Servicios"])
 
@@ -47,13 +47,13 @@ TIPOS_SERVICIO_CLINICOS = {
 }
 
 
-def validar_tipo_servicio_por_rol(current_user: Optional[Usuario], tipo_servicio: Optional[str]):
+def validar_tipo_servicio_por_rol(current_user: Usuario, tipo_servicio: Optional[str]):
     """Bloquea a la recepcionista de anexar servicios clinicos.
 
-    Solo aplica cuando hay usuario autenticado con rol 'recepcionista'. admin,
-    veterinario y las llamadas sin sesion pasan sin restriccion de tipo (misma
-    limitacion documentada en usuarios.require_roles)."""
-    if current_user is None or current_user.role != "recepcionista":
+    Solo aplica al rol 'recepcionista'; admin y veterinario pasan sin
+    restriccion de tipo. Requiere sesion valida (la garantiza `require_roles`
+    en el endpoint que llama a esta funcion, Tarea 06, decision 9)."""
+    if current_user.role != "recepcionista":
         return
     if (tipo_servicio or "").strip().upper() in TIPOS_SERVICIO_CLINICOS:
         raise HTTPException(
@@ -158,12 +158,17 @@ def eliminar_servicio_impl(
 def crear_servicio_directo(
     servicio_data: ServicioConsultaCreate,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """Crea un servicio directo (sin consulta). Exige mascota_id.
 
     Misma lógica de consumo que anexar un servicio a una consulta: si entra en
     estado "Aplicado", descuenta materiales vía consumo_service.
+
+    Matriz de permisos (Tarea 06, decisión 9, filas 7-8): admin/recepción/
+    veterinario pueden anexar servicios no clínicos; los clínicos (vacuna,
+    desparasitación, cirugía, hospitalización, laboratorio) quedan bloqueados
+    para recepción por `validar_tipo_servicio_por_rol`. `gestor` no anexa.
     """
     if not servicio_data.mascota_id:
         raise HTTPException(status_code=422, detail="mascota_id es obligatorio para un servicio directo")
@@ -265,7 +270,11 @@ def actualizar_servicio(
     servicio_id: int,
     update_data: ServicioConsultaUpdate,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    # Fila 13 de la matriz (editar precio/cantidad): admin/recepción/
+    # veterinario. `gestor` no edita. La restricción "recepción solo en
+    # servicios no clínicos" queda para cuando exista el modelo de orden
+    # (Fase 2); acá solo se cierra el hueco de autenticación.
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     return actualizar_servicio_impl(servicio_id, update_data, db, current_user)
 
@@ -274,6 +283,7 @@ def actualizar_servicio(
 def eliminar_servicio(
     servicio_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[Usuario] = Depends(get_optional_current_user),
+    # Fila 12 (cancelar servicio): admin/veterinario. Recepción y gestor no.
+    current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     return eliminar_servicio_impl(servicio_id, db, current_user)

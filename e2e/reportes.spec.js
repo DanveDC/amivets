@@ -81,7 +81,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
       peso: 10.5,
-    });
+    }, S.token);
     // Factura de la consulta con una línea de PRODUCTO (producto_id): sin eso
     // /kpi/servicios no la puede contar (hace join DetalleFactura.producto_id).
     const factura = await createTestFactura(request, {

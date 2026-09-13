@@ -56,7 +56,13 @@ def listar_hospitalizados(activos: bool = True, db: Session = Depends(get_db)):
     return query.all()
 
 @router.put("/{hosp_id}/dar-alta", response_model=HospitalizacionResponse)
-def dar_alta_paciente(hosp_id: int, db: Session = Depends(get_db)):
+def dar_alta_paciente(
+    hosp_id: int,
+    db: Session = Depends(get_db),
+    # Sin guard hasta la Tarea 06 (decisión 9): mismo criterio que
+    # POST /api/hospitalizaciones/ (registro clínico, admin/veterinario).
+    _=Depends(require_roles("admin", "veterinario")),
+):
     """Registra el egreso de un paciente"""
     db_hosp = db.query(Hospitalizacion).filter(Hospitalizacion.id == hosp_id).first()
     if not db_hosp:

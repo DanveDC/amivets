@@ -78,9 +78,14 @@ async function stockOf(request, id) {
   return body.stock_actual;
 }
 
-/** Aplica un servicio de catálogo dentro de la consulta (estado directo "Aplicado"). */
-async function aplicarServicio(request, consultaId, catalogoServicioId, extra = {}) {
+/**
+ * Aplica un servicio de catálogo dentro de la consulta (estado directo
+ * "Aplicado"). POST /api/consultas/{id}/servicios exige sesión admin/
+ * recepción/veterinario desde Tarea 06 (decisión 9); `token` es obligatorio.
+ */
+async function aplicarServicio(request, consultaId, catalogoServicioId, extra = {}, token) {
   const res = await request.post(`/api/consultas/${consultaId}/servicios`, {
+    headers: authHeaders(token),
     data: {
       consulta_id: consultaId,
       tipo_servicio: 'LABORATORIO',
@@ -97,8 +102,9 @@ async function aplicarServicio(request, consultaId, catalogoServicioId, extra = 
 }
 
 /** Crea un ServicioConsulta en estado "Pendiente" (no dispara consumo todavía). */
-async function crearServicioPendiente(request, consultaId, catalogoServicioId) {
+async function crearServicioPendiente(request, consultaId, catalogoServicioId, token) {
   const res = await request.post(`/api/consultas/${consultaId}/servicios`, {
+    headers: authHeaders(token),
     data: {
       consulta_id: consultaId,
       tipo_servicio: 'LABORATORIO',
@@ -130,7 +136,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     S.propietario = await createTestPropietario(request);
     S.mascota = await createTestMascota(request, S.propietario.id);
     S.vet = await createTestVeterinario(request, S.token);
-    S.consulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id });
+    S.consulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id }, S.token);
   });
 
   test.afterAll(async ({ request }) => {
@@ -155,7 +161,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
   test('1. receta 500 sobre stock 2000 → al aplicar el material queda en 1500', async ({ request }) => {
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
 
-    const resp = await aplicarServicio(request, S.consulta.id, servicio.id);
+    const resp = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(resp.catalogo_servicio_id).toBe(servicio.id);
     expect(resp.advertencias ?? null).toBeNull();
 
@@ -167,7 +173,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
 
     for (let i = 0; i < 4; i++) {
-      const resp = await aplicarServicio(request, S.consulta.id, servicio.id);
+      const resp = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
       expect(resp.advertencias ?? null).toBeNull();
     }
 
@@ -182,7 +188,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     for (let corrida = 1; corrida <= 2; corrida++) {
       const { material, servicio } = await nuevoEscenario(request, { stock: 300, receta: 500 });
 
-      const resp = await aplicarServicio(request, S.consulta.id, servicio.id);
+      const resp = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
       expect(Array.isArray(resp.advertencias), `corrida ${corrida}: advertencias es lista`).toBe(true);
       expect(resp.advertencias.length).toBe(1);
       const a = resp.advertencias[0];
@@ -198,10 +204,11 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
   test('4. anular devuelve exactamente lo consumido (receta y override), leyendo ConsumoMaterial', async ({ request }) => {
     // 4a. receta estándar: 2000 -> 1500 -> (PATCH a Pendiente) -> 2000 exacto.
     const a = await nuevoEscenario(request, { stock: 2000, receta: 500 });
-    const servA = await aplicarServicio(request, S.consulta.id, a.servicio.id);
+    const servA = await aplicarServicio(request, S.consulta.id, a.servicio.id, {}, S.token);
     expect(Number(await stockOf(request, a.material.id))).toBe(1500);
 
     const patchRes = await request.patch(`/api/consultas/servicios/${servA.id}`, {
+      headers: authHeaders(S.token),
       data: { estado: 'Pendiente' },
     });
     expect(patchRes.ok(), await patchRes.text()).toBeTruthy();
@@ -212,10 +219,10 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     const b = await nuevoEscenario(request, { stock: 2000, receta: 500 });
     const servB = await aplicarServicio(request, S.consulta.id, b.servicio.id, {
       consumos: [{ inventario_id: b.material.id, cantidad: 123.456 }],
-    });
+    }, S.token);
     expect(Number(await stockOf(request, b.material.id))).toBe(2000 - 123.456);
 
-    const delRes = await request.delete(`/api/consultas/servicios/${servB.id}`);
+    const delRes = await request.delete(`/api/consultas/servicios/${servB.id}`, { headers: authHeaders(S.token) });
     expect(delRes.status()).toBe(204);
     expect(Number(await stockOf(request, b.material.id))).toBe(2000);
   });
@@ -223,7 +230,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
   test('5. facturar después de aplicar no descuenta dos veces', async ({ request }) => {
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
 
-    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     const stockTrasAplicar = Number(await stockOf(request, material.id));
     expect(stockTrasAplicar).toBe(1500);
 
@@ -282,10 +289,11 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     // Pendiente -> Aplicado vía PATCH, con `consumos` override. El PATCH hace
     // model_dump(), así que consumo_service recibe dicts, no modelos pydantic.
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
-    const pend = await crearServicioPendiente(request, S.consulta.id, servicio.id);
+    const pend = await crearServicioPendiente(request, S.consulta.id, servicio.id, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(2000); // Pendiente no consume
 
     const res = await request.patch(`/api/consultas/servicios/${pend.id}`, {
+      headers: authHeaders(S.token),
       data: { estado: 'Aplicado', consumos: [{ inventario_id: material.id, cantidad: 321.5 }] },
     });
     expect(res.status(), await res.text()).toBe(200);
@@ -298,14 +306,14 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
   test('9. re-aplicar después de revertir vuelve a descontar (regresión H3)', async ({ request }) => {
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
 
-    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(1500);
 
-    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Pendiente' } });
+    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Pendiente' } });
     expect(revert.ok(), await revert.text()).toBeTruthy();
     expect(Number(await stockOf(request, material.id))).toBe(2000);
 
-    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Aplicado' } });
+    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Aplicado' } });
     expect(reapply.ok(), await reapply.text()).toBeTruthy();
     // El guard cuenta SALIDA vs REVERSA: tras el ciclo el balance cierra y el
     // re-aplicar NO es un no-op silencioso.
@@ -324,39 +332,45 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     S.servicios.push(servicio.id);
 
     // Aplicar: SALIDA 3 + MERMA 7 → stock 90.
-    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(90);
 
     // Revertir: una REVERSA combinada de 10 → stock 100.
-    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Pendiente' } });
+    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Pendiente' } });
     expect(revert.ok(), await revert.text()).toBeTruthy();
     expect(Number(await stockOf(request, material.id))).toBe(100);
 
     // Re-aplicar: SALIDA 3 + MERMA 7 otra vez → stock 90 (no no-op).
-    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { estado: 'Aplicado' } });
+    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Aplicado' } });
     expect(reapply.ok(), await reapply.text()).toBeTruthy();
     expect(Number(await stockOf(request, material.id))).toBe(90);
   });
 
   test('11. editar cantidad de un servicio ya Aplicado sin revertir → 409', async ({ request }) => {
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
-    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(1500);
 
-    const res = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { cantidad: 800 } });
+    const res = await request.patch(`/api/consultas/servicios/${serv.id}`, {
+      headers: authHeaders(S.token),
+      data: { cantidad: 800 },
+    });
     expect(res.status()).toBe(409);
     // El stock no se movió: la columna cantidad tampoco.
     expect(Number(await stockOf(request, material.id))).toBe(1500);
 
     // Pero sí se puede cambiar el precio (no toca stock).
-    const okRes = await request.patch(`/api/consultas/servicios/${serv.id}`, { data: { precio_unitario: 250 } });
+    const okRes = await request.patch(`/api/consultas/servicios/${serv.id}`, {
+      headers: authHeaders(S.token),
+      data: { precio_unitario: 250 },
+    });
     expect(okRes.ok(), await okRes.text()).toBeTruthy();
   });
 
   test('12. guard real de doble-descuento al facturar (M6) + control negativo', async ({ request }) => {
     // Servicio con receta que consumió al aplicarse (SALIDA anclada al servicio).
     const { material, servicio } = await nuevoEscenario(request, { stock: 1000, receta: 400 });
-    const serv = await aplicarServicio(request, S.consulta.id, servicio.id);
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(600);
 
     // Factura (sin consulta_id, para no chocar con la factura del caso 5) con una
