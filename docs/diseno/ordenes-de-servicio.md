@@ -868,6 +868,27 @@ es la consulta que se hace en cada poll.
   `GET /api/notificaciones?no_leidas=true` desde el `fetch` que ya existe
   (`static/js/core/api.js:45-52`).
 
+### Actualización en vivo del tablero y la bandeja (aclaración post-aprobación)
+
+El usuario confirmó un requisito que estaba implícito pero no escrito: **el
+"Panel del día" (`Main.html`) y la bandeja del gestor tienen que reflejar en
+vivo lo que hacen los demás puestos del mostrador** — si recepción abre una
+orden o un gestor toma un servicio, el resto de las pantallas abiertas lo ve
+sin que nadie recargue. Esto **no cambia la Decisión 6**: se resuelve con el
+mismo poll ya aprobado (`GET /api/notificaciones?no_leidas=true` para el
+badge), extendido a refrescar también las dos listas vivas:
+
+- `GET /api/ordenes?estado=ABIERTA,EN_ATENCION` (tablero del día).
+- `GET /api/servicios?bandeja=true` (cola del gestor, Decisión 6, sección
+  "notificación ≠ bandeja").
+
+Un intervalo de poll de unos pocos segundos (a definir en la etapa de
+pantallas, etapa 7) alcanza para el volumen de un mostrador de clínica y
+respeta la restricción del enunciado: **sin websocket, sin dependencias
+nuevas de frontend**. Un websocket daría menor latencia, pero el enunciado
+prohíbe sumar dependencias de front y el volumen de esta clínica no lo
+justifica.
+
 ### La distinción que importa: notificación ≠ bandeja
 
 **La bandeja del gestor NO se lee de `notificaciones`.** Es una query sobre
