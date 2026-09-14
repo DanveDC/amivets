@@ -396,7 +396,11 @@ class ServicioConsulta(Base):
     nombre_servicio = Column(String(255))
     cantidad = Column(Float, nullable=False, default=1.0)
     precio_unitario = Column(Float, nullable=False, default=0.0)
-    estado = Column(String(50), default="Pendiente") # Pendiente, Aplicado
+    # Decision 4 (docs/diseno/ordenes-de-servicio.md): SOLICITADO, EJECUTADO,
+    # FACTURADO, CANCELADO. ASIGNADO / EN_PROCESO llegan con el despacho.
+    # EJECUTADO y FACTURADO son los dos estados "consumidos" (ver
+    # consumo_service.ESTADOS_CONSUMIDOS).
+    estado = Column(String(50), default="SOLICITADO")
     detalles_clinicos = Column(Text, nullable=True) # Datos de aplicacion (lote, dosis, hallazgos, etc)
     facturado = Column(Boolean, default=False)
     # NOT NULL + server_default (Tarea 06, decision 3): uq_orden_una_consulta es

@@ -9,12 +9,13 @@ from app.models.models import (
     Consulta, PruebaComplementaria, Vacunacion, Desparasitacion,
     Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento
 )
+from app.services import consumo_service
 
 
 def _consumo_en_ledger(db: Session, servicio_id) -> bool:
     """True si el ServicioConsulta ya descontó materiales al aplicarse y esos
     movimientos no fueron revertidos. Fuente de verdad: el ledger, no el
-    booleano estado == 'Aplicado' (Tarea 07, decisión 3).
+    estado (Tarea 07, decisión 3).
 
     Cuenta SOLO SALIDA contra REVERSA (la MERMA queda fuera: siempre acompaña a
     una SALIDA del mismo material y la reversa combina ambas en una REVERSA
@@ -34,15 +35,19 @@ def _consumo_en_ledger(db: Session, servicio_id) -> bool:
         return True
     # Fallback para filas pre-migración (Tarea 07): los servicios aplicados antes
     # de que existiera movimientos_inventario.servicio_consulta_id no tienen
-    # SALIDA anclada, así que el conteo de arriba da 0. Si el servicio está
-    # "Aplicado" asumimos que ya descontó y NO volvemos a descontar al facturar
-    # (dirección segura: evita el doble decremento de vacunas/desparasitaciones
-    # históricas). Las líneas de servicio que consumen material ya no llevan
-    # producto_id, así que este fallback no afecta al flujo nuevo.
+    # SALIDA anclada, así que el conteo de arriba da 0. Si el servicio está en un
+    # estado consumido asumimos que ya descontó y NO volvemos a descontar al
+    # facturar (dirección segura: evita el doble decremento de vacunas/
+    # desparasitaciones históricas). Las líneas de servicio que consumen material
+    # ya no llevan producto_id, así que este fallback no afecta al flujo nuevo.
+    #
+    # FACTURADO tiene que estar en el conjunto igual que EJECUTADO (Tarea 06,
+    # decisión 4): con `== "EJECUTADO"` a secas, re-facturar un servicio ya
+    # facturado volvería a descontarle el stock.
     serv = db.query(ServicioConsulta.estado).filter(
         ServicioConsulta.id == servicio_id
     ).first()
-    return bool(serv and serv[0] == "Aplicado")
+    return bool(serv and serv[0] in consumo_service.ESTADOS_CONSUMIDOS)
 from app.schemas.schemas import FacturaCreate, FacturaUpdate
 
 

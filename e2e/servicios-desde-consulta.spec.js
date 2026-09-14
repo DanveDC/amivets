@@ -95,7 +95,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     // Una consulta nueva nace ABIERTA (decisión 6).
     expect(consulta.estado).toBe('ABIERTA');
 
-    // 3 tipos distintos, todos NO clínicos y en "Pendiente" para no tocar stock:
+    // 3 tipos distintos, todos NO clínicos y en "SOLICITADO" para no tocar stock:
     // acá se prueba la asociación consulta↔servicio, no el kardex.
     const tipos = ['ESTETICA', 'PROCEDIMIENTO', 'INSUMO'];
     const anexados = [];
@@ -262,14 +262,14 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     // Anexar una CIRUGÍA a la consulta → 403.
     const cirugia = await request.post(`/api/consultas/${consulta.id}/servicios`, {
       headers: authHeaders(S.recep.token),
-      data: { tipo_servicio: 'CIRUGIA', nombre_servicio: testTag('cir'), cantidad: 1, precio_unitario: 50000, estado: 'Pendiente' },
+      data: { tipo_servicio: 'CIRUGIA', nombre_servicio: testTag('cir'), cantidad: 1, precio_unitario: 50000, estado: 'SOLICITADO' },
     });
     expect(cirugia.status(), await cirugia.text()).toBe(403);
 
     // Crear un servicio directo de tipo VACUNACION → 403.
     const vacuna = await request.post('/api/servicios/', {
       headers: authHeaders(S.recep.token),
-      data: { mascota_id: S.mascota.id, tipo_servicio: 'VACUNACION', nombre_servicio: testTag('vac'), cantidad: 1, precio_unitario: 12000, estado: 'Pendiente' },
+      data: { mascota_id: S.mascota.id, tipo_servicio: 'VACUNACION', nombre_servicio: testTag('vac'), cantidad: 1, precio_unitario: 12000, estado: 'SOLICITADO' },
     });
     expect(vacuna.status(), await vacuna.text()).toBe(403);
 
@@ -289,7 +289,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     // Pero SÍ puede anexar un servicio NO clínico (ESTÉTICA) → 201.
     const estetica = await request.post(`/api/consultas/${consulta.id}/servicios`, {
       headers: authHeaders(S.recep.token),
-      data: { tipo_servicio: 'ESTETICA', nombre_servicio: testTag('est'), cantidad: 1, precio_unitario: 6000, estado: 'Pendiente' },
+      data: { tipo_servicio: 'ESTETICA', nombre_servicio: testTag('est'), cantidad: 1, precio_unitario: 6000, estado: 'SOLICITADO' },
     });
     expect(estetica.status(), await estetica.text()).toBe(201);
     expect((await estetica.json()).tipo_servicio).toBe('ESTETICA');

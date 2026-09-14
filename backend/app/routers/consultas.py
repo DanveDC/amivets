@@ -194,9 +194,10 @@ def agregar_servicio_consulta(
 ):
     """Agrega un ítem o servicio a la consulta clínica (Vacuna, Cirugía, Insumo, etc.).
 
-    Si el servicio entra directo en estado "Aplicado", descuenta del inventario
-    los materiales que consume (receta del catálogo y/o línea INSUMO manual) a
-    través de consumo_service (Tarea 07, decisión 3).
+    Si el servicio entra directo en un estado consumido (EJECUTADO/FACTURADO,
+    consumo_service.ESTADOS_CONSUMIDOS), descuenta del inventario los materiales
+    que consume (receta del catálogo y/o línea INSUMO manual) a través de
+    consumo_service (Tarea 07, decisión 3).
     """
     consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
     if not consulta:
@@ -224,7 +225,7 @@ def agregar_servicio_consulta(
     db.flush()  # id necesario para anclar movimientos/consumos
 
     advertencias = []
-    if nuevo_servicio.estado == "Aplicado":
+    if nuevo_servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
         advertencias = consumo_service.consumir_para_servicio(
             db,
             nuevo_servicio,

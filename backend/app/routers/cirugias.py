@@ -36,7 +36,7 @@ def registrar_cirugia(
             cantidad=1.0,
             precio_unitario=db_cirugia.precio_aplicado,
             detalles_clinicos=f"Riesgo ASA: {db_cirugia.riesgo_asa or 'N/D'} | Cirujano ID: {db_cirugia.cirujano_id or 'N/D'}",
-            estado="Aplicado",
+            estado="EJECUTADO",
         ))
 
     db.commit()

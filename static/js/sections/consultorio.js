@@ -25,6 +25,12 @@ import { abrirServicioDirectoParaMascota } from './hoy.js';
 // de handlers, nunca en la evaluación del módulo.
 import { showSection } from '../core/router.js';
 
+// Estados de ServicioConsulta que ya descontaron insumos del stock (Tarea 06,
+// decisión 4 — espejo de consumo_service.ESTADOS_CONSUMIDOS en el backend).
+// El punto verde "aplicado" cubre los dos: un servicio FACTURADO sigue estando
+// del lado ejecutado de la frontera.
+const ESTADOS_SERVICIO_CONSUMIDOS = ['EJECUTADO', 'FACTURADO'];
+
 // ============ STATE MANAGEMENT ============
 export let currentMascotaId = null;
 const setCurrentMascotaId = (value) => {
@@ -420,15 +426,30 @@ export const handleConsultaSubmit = async (e) => {
     }
 };
 
+// Filtro de propietario pendiente (seteado por verMascotasPropietario antes de
+// navegar). initConsultorio lo consume una sola vez: evita la carrera donde su
+// propio fetch sin filtrar pisaba la lista ya filtrada por propietario.
+let ownerFilterId = null;
+export const setOwnerFilter = (propietarioId) => { ownerFilterId = propietarioId; };
+
 export const initConsultorio = async () => {
     const listContainer = document.getElementById('consultorioMascotasList');
     if (!listContainer) return;
+    const filtroPropietario = ownerFilterId;
+    ownerFilterId = null;
     listContainer.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Cargando pacientes...</p>';
     try {
-        const mascotas = await fetchAPI('/mascotas/?skip=0&limit=50');
+        const url = filtroPropietario
+            ? `/mascotas/?propietario_id=${filtroPropietario}`
+            : '/mascotas/?skip=0&limit=50';
+        const mascotas = await fetchAPI(url);
         // Filtrar inactivas
         const activas = mascotas.filter(m => m.activo !== false);
         renderMascotasList(activas, listContainer);
+        if (filtroPropietario && activas.length === 1) {
+            const m = activas[0];
+            seleccionarMascota(m.id, m.nombre, m.especie, m.codigo_historia);
+        }
     } catch (e) {
         listContainer.innerHTML = `<p style="color: var(--accent); text-align:center; padding: 1.5rem; font-weight: 500;">${ICONS.xCircle} Error al cargar pacientes</p>`;
     }
@@ -654,12 +675,27 @@ const renderDetalleServicios = (servicios) => {
     listDiv.innerHTML = activos.map(s => {
         const sub = (s.cantidad || 0) * (s.precio_unitario || 0);
         total += sub;
-        const aplicado = s.estado === 'Aplicado';
-        const dot = aplicado
+        const consumido = ESTADOS_SERVICIO_CONSUMIDOS.includes(s.estado);
+        const facturado = s.estado === 'FACTURADO';
+        const dot = consumido
             ? '<span class="av-ca-dot av-ca-dot--on" aria-hidden="true"></span>'
             : '<span class="av-ca-dot" aria-hidden="true"></span>';
         const det = s.detalles_clinicos
             ? `<p class="av-ca-srow-det">${s.detalles_clinicos}</p>` : '';
+        // Un servicio FACTURADO no se edita desde este select: EJECUTADO y
+        // FACTURADO comparten "consumido" (ESTADOS_SERVICIO_CONSUMIDOS), y el
+        // select solo ofrece SOLICITADO/EJECUTADO -- si se mostrara editable,
+        // elegir SOLICITADO revertiria stock de un servicio ya facturado
+        // (hallazgo de revision, etapa 2b de la Tarea 06).
+        const estadoControl = facturado
+            ? `<span class="av-ca-srow-estado av-ca-srow-estado--fija" title="Ya facturado: el estado no se edita desde acá">FACTURADO</span>`
+            : `<label class="av-ca-srow-estado">
+                        <span class="av-visually-hidden">Estado del servicio ${s.nombre_servicio || s.tipo_servicio}</span>
+                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)">
+                            <option value="SOLICITADO" ${!consumido ? 'selected' : ''}>SOLICITADO</option>
+                            <option value="EJECUTADO" ${consumido ? 'selected' : ''}>EJECUTADO</option>
+                        </select>
+                    </label>`;
         return `
             <div class="av-ca-srow" data-servicio-id="${s.id}">
                 <div class="av-ca-srow-main">
@@ -669,13 +705,7 @@ const renderDetalleServicios = (servicios) => {
                 </div>
                 <div class="av-ca-srow-right">
                     <span class="av-ca-srow-amount">$${sub.toFixed(2)}</span>
-                    <label class="av-ca-srow-estado">
-                        <span class="av-visually-hidden">Estado del servicio ${s.nombre_servicio || s.tipo_servicio}</span>
-                        <select onchange="cambiarEstadoServicio(${s.id}, this.value)">
-                            <option value="Pendiente" ${!aplicado ? 'selected' : ''}>Pendiente</option>
-                            <option value="Aplicado" ${aplicado ? 'selected' : ''}>Aplicado</option>
-                        </select>
-                    </label>
+                    ${estadoControl}
                     <button type="button" class="av-iconbtn" aria-label="Editar servicio" title="Editar"
                             onclick="editarServicioConsulta(${s.id})">${ICONS.edit}</button>
                     <button type="button" class="av-iconbtn av-iconbtn--danger" aria-label="Quitar servicio" title="Quitar"
@@ -1156,7 +1186,7 @@ document.getElementById('formAgregarServicio')?.addEventListener('submit', async
         cantidad: parseFloat(document.getElementById('addServicioCantidad').value) || 1.0,
         precio_unitario: parseFloat(document.getElementById('addServicioPrecio').value) || 0,
         detalles_clinicos: detallesExtra + document.getElementById('addServicioDetalles').value,
-        estado: 'Aplicado'
+        estado: 'EJECUTADO'
     };
 
     // Servicio anclado al catálogo: su receta se consume al aplicar. Cada input
@@ -1615,9 +1645,10 @@ export const cargarServiciosPet = async (mascotaId) => {
                 <label for="servFiltroEstado">Estado</label>
                 <select id="servFiltroEstado">
                     <option value="">Todos</option>
-                    <option value="Pendiente">Pendiente</option>
-                    <option value="Aplicado">Aplicado</option>
-                    <option value="Cancelado">Cancelado</option>
+                    <option value="SOLICITADO">SOLICITADO</option>
+                    <option value="EJECUTADO">EJECUTADO</option>
+                    <option value="FACTURADO">FACTURADO</option>
+                    <option value="CANCELADO">CANCELADO</option>
                 </select>
             </div>
             <div class="serv-filtro-field">
@@ -1721,12 +1752,12 @@ const _renderServiciosFeedFromState = () => {
 
 const _renderServicioRow = (s) => {
     const meta = _servTipoMeta(s.tipo_servicio);
-    const aplicado = s.estado === 'Aplicado';
-    const cancelado = s.estado === 'Cancelado';
+    const consumido = ESTADOS_SERVICIO_CONSUMIDOS.includes(s.estado);
+    const cancelado = s.estado === 'CANCELADO';
     const estadoDot = cancelado
         ? '<span class="serv-dot serv-dot--off" aria-hidden="true"></span>'
-        : (aplicado ? '<span class="serv-dot serv-dot--on" aria-hidden="true"></span>'
-                    : '<span class="serv-dot" aria-hidden="true"></span>');
+        : (consumido ? '<span class="serv-dot serv-dot--on" aria-hidden="true"></span>'
+                     : '<span class="serv-dot" aria-hidden="true"></span>');
     const sub = `${Number(s.cantidad || 0)} × ${_money(s.precio_unitario)}`;
     const factTag = s.facturado ? ' <span class="serv-row-fact" title="Ya facturado">facturado</span>' : '';
     return `
@@ -1735,7 +1766,7 @@ const _renderServicioRow = (s) => {
             <span><span class="serv-badge serv-badge--${meta.cls}">${meta.label}</span></span>
             <span class="serv-row-name">${s.nombre_servicio || meta.label}${s.consulta_id ? ' <span class="serv-row-origin">· Consulta</span>' : ''}${factTag}</span>
             <span class="serv-row-qty">${sub}</span>
-            <span class="serv-row-estado">${estadoDot}${s.estado || 'Pendiente'}</span>
+            <span class="serv-row-estado">${estadoDot}${s.estado || 'SOLICITADO'}</span>
         </button>
         <div class="serv-detail" id="serv-detail-${s.id}" hidden></div>`;
 };

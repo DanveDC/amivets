@@ -267,7 +267,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
       nombre_servicio: testTag('servicio'),
       cantidad: 1,
       precio_unitario: 15000,
-      estado: 'Pendiente',
+      estado: 'SOLICITADO',
     };
     const servRes = await request.post(`/api/consultas/${S.consulta.id}/servicios`, {
       headers: authHeaders(S.token),
@@ -276,7 +276,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     expect(servRes.status(), await servRes.text()).toBe(201);
     const servicio = await servRes.json();
     S.servicioId = servicio.id;
-    expect(servicio.estado).toBe('Pendiente');
+    expect(servicio.estado).toBe('SOLICITADO');
 
     // --- Agregar una receta ---
     const recetaRes = await request.post(`/api/consultas/${S.consulta.id}/recetas`, {
@@ -302,14 +302,14 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     // --- Cambiar el estado del servicio (PATCH) y verificar ---
     const patchRes = await request.patch(`/api/consultas/servicios/${S.servicioId}`, {
       headers: authHeaders(S.token),
-      data: { estado: 'Aplicado' },
+      data: { estado: 'EJECUTADO' },
     });
     expect(patchRes.ok(), await patchRes.text()).toBeTruthy();
-    expect((await patchRes.json()).estado).toBe('Aplicado');
+    expect((await patchRes.json()).estado).toBe('EJECUTADO');
 
     const consultaFull = await (await request.get(`/api/consultas/${S.consulta.id}`, { headers: authHeaders(S.token) })).json();
     const servicioEnConsulta = consultaFull.servicios.find((s) => s.id === S.servicioId);
-    expect(servicioEnConsulta.estado).toBe('Aplicado');
+    expect(servicioEnConsulta.estado).toBe('EJECUTADO');
   });
 
   test('factura (/api/facturas): emitir desde la consulta, abonar y anular', async ({ request }) => {

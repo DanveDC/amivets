@@ -44,7 +44,7 @@ def registrar_prueba(
             cantidad=1.0,
             precio_unitario=nueva_prueba.precio_aplicado,
             detalles_clinicos=f"Resultado: {(nueva_prueba.resultado or 'Pendiente')[:100]}",
-            estado="Aplicado",
+            estado="EJECUTADO",
         ))
 
     db.commit()

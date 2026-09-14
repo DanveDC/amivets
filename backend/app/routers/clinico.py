@@ -80,7 +80,7 @@ def crear_vacunacion(
         cantidad=1.0,
         precio_unitario=precio_aplicado,
         detalles_clinicos=f"Lote: {vacunacion.lote or 'N/D'} | Refuerzo: {vacunacion.fecha_refuerzo or 'No programado'}",
-        estado="Aplicado"
+        estado="EJECUTADO"
     )
     db.add(servicio)
     db.flush()  # id del servicio para anclar el movimiento al ledger
@@ -159,7 +159,7 @@ def crear_desparasitacion(
         cantidad=1.0,
         precio_unitario=precio_aplicado,
         detalles_clinicos=f"Tipo: {desp.tipo} | Dosis: {desp.dosis}",
-        estado="Aplicado"
+        estado="EJECUTADO"
     )
     db.add(servicio)
     db.flush()  # id del servicio para anclar el movimiento al ledger
@@ -219,7 +219,7 @@ def crear_hospitalizacion(
             cantidad=float(hosp.dias_cama or 1),
             precio_unitario=hosp.precio_aplicado,
             detalles_clinicos=f"Ingreso: {hosp.fecha_ingreso or 'Justo ahora'} | Egreso: {hosp.fecha_egreso or 'En curso'} | Jaula: {hosp.jaula_nro or 'N/A'} | Estado: {hosp.estado_paciente or 'Estable'}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         )
         db.add(servicio)
 
@@ -266,7 +266,7 @@ def crear_cirugia(
             cantidad=1.0,
             precio_unitario=cir.precio_aplicado,
             detalles_clinicos=f"Riesgo ASA: {cir.riesgo_asa or 'N/D'} | Cirujano ID: {cir.cirujano_id or 'N/D'}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         )
         db.add(servicio)
 
@@ -312,7 +312,7 @@ def crear_prueba_complementaria(
             cantidad=1.0,
             precio_unitario=prueba.precio_aplicado,
             detalles_clinicos=f"Resultado: {prueba.resultado[:100] if prueba.resultado else 'Pendiente'} | Obs: {prueba.observaciones[:50] if prueba.observaciones else 'N/A'}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         )
         db.add(servicio)
 

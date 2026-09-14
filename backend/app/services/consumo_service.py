@@ -3,7 +3,8 @@
 Tarea 07 (inventario fraccionado), slice B. Reglas de negocio:
 
 - Decision 3: el stock se descuenta cuando un ServicioConsulta entra en
-  estado == "Aplicado" (no al facturar). Guard anti-doble-descuento basado en
+  un estado consumido -- EJECUTADO, el viejo "Aplicado" (no al facturar; ver
+  ESTADOS_CONSUMIDOS abajo). Guard anti-doble-descuento basado en
   el ledger (movimientos + filas de consumo_material), no en un booleano.
 - Decision 4: sin stock suficiente -> si settings.STRICT_INVENTORY se bloquea
   con 400; si no, se permite (stock puede quedar negativo), se registra el
@@ -37,6 +38,19 @@ from app.models.models import (
 
 TRES_DEC = Decimal("0.001")
 UNIDAD_DEFAULT = "unidad"
+
+# Decision 4 (docs/diseno/ordenes-de-servicio.md): los estados en los que el
+# servicio YA descontó sus materiales del stock. EJECUTADO es el viejo
+# "Aplicado"; FACTURADO está del MISMO lado de la frontera, así que
+# EJECUTADO -> FACTURADO no consume ni revierte nada.
+#
+# La condición hay que escribirla siempre como pertenencia a este conjunto,
+# nunca como `== "EJECUTADO"`: con dos estados consumidos, un `!=` devolvería el
+# stock al facturar (Riesgo 2 del doc de diseño, el punto más fácil de romper).
+#
+#     if old not in ESTADOS_CONSUMIDOS and new in ESTADOS_CONSUMIDOS: consume
+#     elif old in ESTADOS_CONSUMIDOS and new not in ESTADOS_CONSUMIDOS: revierte
+ESTADOS_CONSUMIDOS = frozenset({"EJECUTADO", "FACTURADO"})
 
 
 def _q(valor) -> Decimal:

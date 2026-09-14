@@ -77,9 +77,14 @@ def actualizar_servicio_impl(
 ) -> ServicioConsultaResponse:
     """Actualiza estado, precio o cantidad de un servicio.
 
-    Al pasar de "no Aplicado" -> "Aplicado" consume materiales; al pasar de
-    "Aplicado" -> otro estado los revierte (lee consumo_material, no la receta).
-    Unificado en consumo_service (Tarea 07, decisión 3).
+    Al entrar a un estado consumido (consumo_service.ESTADOS_CONSUMIDOS =
+    EJECUTADO/FACTURADO) consume materiales; al salir de esos estados los
+    revierte (lee consumo_material, no la receta). Unificado en consumo_service
+    (Tarea 07, decisión 3; renombre de estados: Tarea 06, decisión 4).
+
+    La condición es pertenencia al conjunto, no igualdad contra un literal:
+    EJECUTADO -> FACTURADO se queda del mismo lado de la frontera y NO debe
+    devolver stock (Riesgo 2 de docs/diseno/ordenes-de-servicio.md).
     """
     servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
     if not servicio:
@@ -90,18 +95,30 @@ def actualizar_servicio_impl(
     update_dict = update_data.model_dump(exclude_unset=True)
     consumos_override = update_dict.pop("consumos", None)
 
-    # M2: editar cantidad/consumos de un servicio que sigue en "Aplicado"
-    # cambiaria solo la columna, sin tocar el ledger ni ConsumoMaterial -> la
-    # reversa posterior devolveria un monto distinto al consumido (drift). Se
-    # exige revertir el estado primero. Con estado Pendiente/Cancelado el edit
-    # es libre.
+    # M2: editar cantidad/consumos de un servicio que se queda del lado
+    # consumido cambiaria solo la columna, sin tocar el ledger ni
+    # ConsumoMaterial -> la reversa posterior devolveria un monto distinto al
+    # consumido (drift). Se exige revertir el estado primero. Con estado
+    # SOLICITADO/CANCELADO el edit es libre.
+    #
+    # El criterio es pertenencia al conjunto en AMBOS extremos, no solo
+    # EJECUTADO: el drift existe igual si el servicio queda en FACTURADO
+    # (EJECUTADO->FACTURADO, FACTURADO->FACTURADO, FACTURADO->EJECUTADO), porque
+    # en los tres casos el consumo sigue vivo en el ledger. Es la traduccion
+    # exacta del guard viejo (`Aplicado` -> `Aplicado`), sin agregar una regla
+    # nueva: prohibir tambien FACTURADO -> SOLICITADO con cambio de cantidad
+    # seria politica de facturacion, no parte del renombre.
     nuevo_estado = update_dict.get("estado", servicio.estado)
     toca_cantidad = "cantidad" in update_dict and update_dict["cantidad"] != servicio.cantidad
     toca_consumos = consumos_override is not None
-    if servicio.estado == "Aplicado" and nuevo_estado == "Aplicado" and (toca_cantidad or toca_consumos):
+    sigue_consumido = (
+        servicio.estado in consumo_service.ESTADOS_CONSUMIDOS
+        and nuevo_estado in consumo_service.ESTADOS_CONSUMIDOS
+    )
+    if sigue_consumido and (toca_cantidad or toca_consumos):
         raise HTTPException(
             status_code=409,
-            detail="No se puede cambiar la cantidad de un servicio ya aplicado; revertí el estado primero",
+            detail="No se puede cambiar la cantidad de un servicio en EJECUTADO/FACTURADO; revertí el estado primero",
         )
 
     for k, v in update_dict.items():
@@ -110,15 +127,19 @@ def actualizar_servicio_impl(
     new_estado = servicio.estado
     uid = current_user.id if current_user else None
 
+    # Frontera de consumo: se cruza hacia adentro (consume) o hacia afuera
+    # (revierte). Moverse DENTRO del conjunto (EJECUTADO <-> FACTURADO) no toca
+    # stock. Ver consumo_service.ESTADOS_CONSUMIDOS.
+    consumidos = consumo_service.ESTADOS_CONSUMIDOS
     advertencias = []
-    if old_estado != "Aplicado" and new_estado == "Aplicado":
+    if old_estado not in consumidos and new_estado in consumidos:
         advertencias = consumo_service.consumir_para_servicio(
             db,
             servicio,
             overrides=consumo_service.overrides_from_payload(consumos_override),
             usuario_id=uid,
         )
-    elif old_estado == "Aplicado" and new_estado != "Aplicado":
+    elif old_estado in consumidos and new_estado not in consumidos:
         consumo_service.revertir_para_servicio(db, servicio, usuario_id=uid)
 
     db.commit()
@@ -140,13 +161,13 @@ def eliminar_servicio_impl(
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
-    if servicio.estado == "Aplicado":
+    if servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
         consumo_service.revertir_para_servicio(
             db, servicio, usuario_id=current_user.id if current_user else None
         )
 
     servicio.is_deleted = True
-    servicio.estado = "Cancelado"
+    servicio.estado = "CANCELADO"
     db.commit()
     return None
 
@@ -163,7 +184,8 @@ def crear_servicio_directo(
     """Crea un servicio directo (sin consulta). Exige mascota_id.
 
     Misma lógica de consumo que anexar un servicio a una consulta: si entra en
-    estado "Aplicado", descuenta materiales vía consumo_service.
+    un estado consumido (EJECUTADO/FACTURADO), descuenta materiales vía
+    consumo_service.
 
     Matriz de permisos (Tarea 06, decisión 9, filas 7-8): admin/recepción/
     veterinario pueden anexar servicios no clínicos; los clínicos (vacuna,
@@ -197,7 +219,7 @@ def crear_servicio_directo(
     db.flush()  # id necesario para anclar movimientos/consumos
 
     advertencias = []
-    if nuevo_servicio.estado == "Aplicado":
+    if nuevo_servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
         advertencias = consumo_service.consumir_para_servicio(
             db,
             nuevo_servicio,
@@ -233,7 +255,7 @@ def listar_servicios_mascota(
       - `consulta`: solo los anexados a alguna consulta.
 
     Filtros opcionales para el timeline: `tipo_servicio`, `estado`
-    (Pendiente / Aplicado / Cancelado), `facturado`, y rango `fecha_desde` /
+    (SOLICITADO / EJECUTADO / FACTURADO / CANCELADO), `facturado`, y rango `fecha_desde` /
     `fecha_hasta` (YYYY-MM-DD, sobre `created_at`).
     """
     q = db.query(ServicioConsulta).filter(

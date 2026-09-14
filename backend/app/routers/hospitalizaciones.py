@@ -40,7 +40,7 @@ def ingresar_paciente(
             cantidad=float(db_hosp.dias_cama or 1),
             precio_unitario=db_hosp.precio_aplicado,
             detalles_clinicos=f"Jaula: {db_hosp.jaula_nro or 'N/A'} | Estado: {db_hosp.estado_paciente or 'Estable'}",
-            estado="Aplicado",
+            estado="EJECUTADO",
         ))
 
     db.commit()

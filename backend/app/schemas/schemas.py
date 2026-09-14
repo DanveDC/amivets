@@ -180,13 +180,13 @@ class ServicioConsultaBase(BaseModel):
     nombre_servicio: Optional[str] = Field(None, max_length=255)
     cantidad: Optional[float] = Field(default=1.0)
     precio_unitario: Optional[float] = Field(default=0.0)
-    estado: Optional[str] = Field(default="Pendiente", max_length=50)
+    estado: Optional[str] = Field(default="SOLICITADO", max_length=50)
     detalles_clinicos: Optional[str] = None
     is_deleted: Optional[bool] = False
 
 class ServicioConsultaCreate(ServicioConsultaBase):
     # Overrides opcionales de consumo real por material (Decision 6). Solo se
-    # aplican si el servicio entra en estado "Aplicado".
+    # aplican si el servicio entra en un estado consumido (EJECUTADO/FACTURADO).
     consumos: Optional[List[ConsumoMaterialOverride]] = None
 
 class ServicioConsultaUpdate(BaseModel):

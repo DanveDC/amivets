@@ -4,13 +4,13 @@
 // fraccionados.md, todos por API (fixture `request` + helpers), en serie porque
 // comparten backend. Contrato ejercitado (slices A/B/C/D):
 //
-//   - Un ServicioConsulta que entra en estado "Aplicado" con `catalogo_servicio_id`
+//   - Un ServicioConsulta que entra en estado "EJECUTADO" con `catalogo_servicio_id`
 //     descuenta la receta de ese servicio del stock (Numeric(12,3), exacto).
 //   - `consumos: [{inventario_id, cantidad}]` sobreescribe la cantidad de la
 //     receta por material; las líneas sin override usan la cantidad estándar.
 //   - Sin stock suficiente y con STRICT_INVENTORY=false (default): HTTP 200/201,
 //     `advertencias: [{material, faltante, unidad}]`, el stock puede quedar negativo.
-//   - Revertir (PATCH estado != "Aplicado" o DELETE) devuelve EXACTAMENTE lo
+//   - Revertir (PATCH estado != "EJECUTADO" o DELETE) devuelve EXACTAMENTE lo
 //     consumido, leyendo ConsumoMaterial (no recalcula la receta).
 //   - Facturar después de aplicar no vuelve a descontar (la línea lleva
 //     servicio_id, nunca producto_id).
@@ -80,7 +80,7 @@ async function stockOf(request, id) {
 
 /**
  * Aplica un servicio de catálogo dentro de la consulta (estado directo
- * "Aplicado"). POST /api/consultas/{id}/servicios exige sesión admin/
+ * "EJECUTADO"). POST /api/consultas/{id}/servicios exige sesión admin/
  * recepción/veterinario desde Tarea 06 (decisión 9); `token` es obligatorio.
  */
 async function aplicarServicio(request, consultaId, catalogoServicioId, extra = {}, token) {
@@ -92,7 +92,7 @@ async function aplicarServicio(request, consultaId, catalogoServicioId, extra = 
       nombre_servicio: testTag('servAplic'),
       cantidad: 1,
       precio_unitario: 100,
-      estado: 'Aplicado',
+      estado: 'EJECUTADO',
       catalogo_servicio_id: catalogoServicioId,
       ...extra,
     },
@@ -101,7 +101,7 @@ async function aplicarServicio(request, consultaId, catalogoServicioId, extra = 
   return res.json();
 }
 
-/** Crea un ServicioConsulta en estado "Pendiente" (no dispara consumo todavía). */
+/** Crea un ServicioConsulta en estado "SOLICITADO" (no dispara consumo todavía). */
 async function crearServicioPendiente(request, consultaId, catalogoServicioId, token) {
   const res = await request.post(`/api/consultas/${consultaId}/servicios`, {
     headers: authHeaders(token),
@@ -111,7 +111,7 @@ async function crearServicioPendiente(request, consultaId, catalogoServicioId, t
       nombre_servicio: testTag('servPend'),
       cantidad: 1,
       precio_unitario: 100,
-      estado: 'Pendiente',
+      estado: 'SOLICITADO',
       catalogo_servicio_id: catalogoServicioId,
     },
   });
@@ -209,7 +209,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
 
     const patchRes = await request.patch(`/api/consultas/servicios/${servA.id}`, {
       headers: authHeaders(S.token),
-      data: { estado: 'Pendiente' },
+      data: { estado: 'SOLICITADO' },
     });
     expect(patchRes.ok(), await patchRes.text()).toBeTruthy();
     expect(Number(await stockOf(request, a.material.id))).toBe(2000);
@@ -286,7 +286,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
   // ---- Casos agregados en la revisión adversaria de la Tarea 07 ----
 
   test('8. aplicar por PATCH con override de consumos (regresión H1: no 500)', async ({ request }) => {
-    // Pendiente -> Aplicado vía PATCH, con `consumos` override. El PATCH hace
+    // SOLICITADO -> EJECUTADO vía PATCH, con `consumos` override. El PATCH hace
     // model_dump(), así que consumo_service recibe dicts, no modelos pydantic.
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
     const pend = await crearServicioPendiente(request, S.consulta.id, servicio.id, S.token);
@@ -294,7 +294,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
 
     const res = await request.patch(`/api/consultas/servicios/${pend.id}`, {
       headers: authHeaders(S.token),
-      data: { estado: 'Aplicado', consumos: [{ inventario_id: material.id, cantidad: 321.5 }] },
+      data: { estado: 'EJECUTADO', consumos: [{ inventario_id: material.id, cantidad: 321.5 }] },
     });
     expect(res.status(), await res.text()).toBe(200);
     const body = await res.json();
@@ -309,11 +309,11 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(1500);
 
-    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Pendiente' } });
+    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'SOLICITADO' } });
     expect(revert.ok(), await revert.text()).toBeTruthy();
     expect(Number(await stockOf(request, material.id))).toBe(2000);
 
-    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Aplicado' } });
+    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'EJECUTADO' } });
     expect(reapply.ok(), await reapply.text()).toBeTruthy();
     // El guard cuenta SALIDA vs REVERSA: tras el ciclo el balance cierra y el
     // re-aplicar NO es un no-op silencioso.
@@ -336,17 +336,17 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     expect(Number(await stockOf(request, material.id))).toBe(90);
 
     // Revertir: una REVERSA combinada de 10 → stock 100.
-    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Pendiente' } });
+    const revert = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'SOLICITADO' } });
     expect(revert.ok(), await revert.text()).toBeTruthy();
     expect(Number(await stockOf(request, material.id))).toBe(100);
 
     // Re-aplicar: SALIDA 3 + MERMA 7 otra vez → stock 90 (no no-op).
-    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'Aplicado' } });
+    const reapply = await request.patch(`/api/consultas/servicios/${serv.id}`, { headers: authHeaders(S.token), data: { estado: 'EJECUTADO' } });
     expect(reapply.ok(), await reapply.text()).toBeTruthy();
     expect(Number(await stockOf(request, material.id))).toBe(90);
   });
 
-  test('11. editar cantidad de un servicio ya Aplicado sin revertir → 409', async ({ request }) => {
+  test('11. editar cantidad de un servicio ya EJECUTADO sin revertir → 409', async ({ request }) => {
     const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
     const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
     expect(Number(await stockOf(request, material.id))).toBe(1500);
@@ -412,5 +412,55 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
   // backend y correr este archivo.
   test.skip('13. STRICT_INVENTORY=true bloquea el consumo sin stock con 400', async () => {
     // Intencionalmente vacío: ver comentario arriba.
+  });
+
+  // Riesgo 2 de docs/diseno/ordenes-de-servicio.md — "el punto más fácil de
+  // romper de toda la tarea". Con el renombre de la Decisión 4 hay DOS estados
+  // del lado consumido (EJECUTADO y FACTURADO), así que la condición de reversa
+  // tiene que ser pertenencia a un conjunto. Escrita como igualdad
+  // (`old == "EJECUTADO" and new != "EJECUTADO"`), facturar devolvería al stock
+  // insumos que ya salieron del estante.
+  test('14. EJECUTADO → FACTURADO no revierte ni re-consume stock (Riesgo 2)', async ({ request }) => {
+    const { material, servicio } = await nuevoEscenario(request, { stock: 2000, receta: 500 });
+
+    // a) Aplicar: el servicio entra EJECUTADO y descuenta la receta.
+    const serv = await aplicarServicio(request, S.consulta.id, servicio.id, {}, S.token);
+    expect(serv.estado).toBe('EJECUTADO');
+    const stockEjecutado = Number(await stockOf(request, material.id));
+    expect(stockEjecutado).toBe(1500);
+
+    // b) Facturarlo con crear_factura (POST /api/facturas/). La factura NO lleva
+    //    consulta_id para no chocar con la del caso 5, que ya ocupa S.consulta.
+    const factura = await createTestFactura(request, {
+      propietarioId: S.propietario.id,
+      detalles: [
+        { descripcion: 'PWTEST riesgo2 facturar ejecutado', cantidad: 1, precio_unitario: 100, servicio_id: serv.id },
+      ],
+    });
+    S.facturas.push(factura.id);
+    expect(Number(await stockOf(request, material.id))).toBe(stockEjecutado);
+
+    // c) Y la transición de estado que la facturación representa en la máquina
+    //    de la Decisión 4: EJECUTADO -> FACTURADO. Se queda del lado consumido,
+    //    así que el stock no se mueve NI hacia arriba (reversa: 2000) NI hacia
+    //    abajo (doble consumo: 1000). Este es el assert que atrapa el bug.
+    const facturar = await request.patch(`/api/consultas/servicios/${serv.id}`, {
+      headers: authHeaders(S.token),
+      data: { estado: 'FACTURADO' },
+    });
+    expect(facturar.ok(), await facturar.text()).toBeTruthy();
+    expect((await facturar.json()).estado).toBe('FACTURADO');
+    expect(Number(await stockOf(request, material.id))).toBe(1500);
+
+    // d) Control negativo: la frontera sigue siendo una frontera. Salir del
+    //    conjunto consumido (FACTURADO -> SOLICITADO) SÍ devuelve exactamente lo
+    //    consumido. Sin esto, "arreglar" el bug metiendo todos los estados en el
+    //    conjunto pasaría el punto (c) igual.
+    const revertir = await request.patch(`/api/consultas/servicios/${serv.id}`, {
+      headers: authHeaders(S.token),
+      data: { estado: 'SOLICITADO' },
+    });
+    expect(revertir.ok(), await revertir.text()).toBeTruthy();
+    expect(Number(await stockOf(request, material.id))).toBe(2000);
   });
 });

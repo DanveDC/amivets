@@ -219,7 +219,7 @@ def seed_data():
                     consulta_id=consulta.id, tipo_servicio="HOSPITALIZACION", referencia_id=hosp.id, 
                     nombre_servicio=f"HOSPITALIZACIÓN: {hosp.motivo.upper()}", cantidad=float(hosp.dias_cama), precio_unitario=40.0, 
                     detalles_clinicos=f"Ingreso: {hosp.fecha_ingreso.strftime('%d/%m/%Y')} | Egreso: {(hosp.fecha_ingreso + timedelta(days=hosp.dias_cama)).strftime('%d/%m/%Y')} | Jaula: {hosp.jaula_nro} | Estado: {hosp.estado_paciente}",
-                    estado="Aplicado"
+                    estado="EJECUTADO"
                 ))
 
             # --- 3. Cirugías (5% prob) ---
@@ -236,7 +236,7 @@ def seed_data():
                     consulta_id=consulta.id, tipo_servicio="CIRUGIA", referencia_id=ciru.id, 
                     nombre_servicio=f"CIRUGÍA: {ciru.tipo_procedimiento.upper()}", cantidad=1.0, precio_unitario=250.0, 
                     detalles_clinicos=f"Riesgo ASA: {ciru.riesgo_asa} | Cirujano: Dr. {dr.username.split('_')[1].capitalize()}",
-                    estado="Aplicado"
+                    estado="EJECUTADO"
                 ))
 
             # --- 4. Vacunaciones (25% prob) ---
@@ -251,7 +251,7 @@ def seed_data():
                     consulta_id=consulta.id, tipo_servicio="VACUNACION", referencia_id=vac.id,
                     nombre_servicio=f"VACUNA: {v_prod.nombre.upper()}", cantidad=1.0, precio_unitario=35.0,
                     detalles_clinicos=f"Lote: {v_lote} | Refuerzo: {refu.strftime('%d/%m/%Y')}",
-                    estado="Aplicado"
+                    estado="EJECUTADO"
                 ))
 
             # --- 5. Laboratorio (10% prob) ---
@@ -268,7 +268,7 @@ def seed_data():
                     consulta_id=consulta.id, tipo_servicio="LABORATORIO", referencia_id=prue.id,
                     nombre_servicio=f"ESTUDIO: {prue.tipo.upper()}", cantidad=1.0, precio_unitario=prue.precio_aplicado,
                     detalles_clinicos=f"Resultado: {prue.resultado[:50]}... | Obs: {prue.observaciones[:30]}",
-                    estado="Aplicado"
+                    estado="EJECUTADO"
                 ))
 
             # --- 6. Desparasitación (20% prob) ---
@@ -281,7 +281,7 @@ def seed_data():
                     consulta_id=consulta.id, tipo_servicio="DESPARASITACION", referencia_id=desp.id,
                     nombre_servicio=f"DESPARASITACIÓN: {d_prod.nombre.upper()}", cantidad=1.0, precio_unitario=15.0,
                     detalles_clinicos=f"Tipo: {desp.tipo} | Dosis: {desp.dosis}",
-                    estado="Aplicado"
+                    estado="EJECUTADO"
                 ))
 
             if c_idx % 50 == 0:

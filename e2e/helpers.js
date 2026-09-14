@@ -329,7 +329,7 @@ async function createTestRecepcionista(request, adminToken, overrides = {}) {
 /**
  * Creates a "servicio directo": a ServicioConsulta with consulta_id = NULL that
  * hangs off the mascota (Tarea 09, decisión 1). Requires mascota_id. Defaults to
- * a non-clinical type in "Pendiente" so it touches no inventory.
+ * a non-clinical type in "SOLICITADO" so it touches no inventory.
  *
  * POST /api/servicios/ exige sesión con rol admin/recepción/veterinario desde
  * Tarea 06 (decisión 9). `token` es obligatorio salvo que el spec esté
@@ -342,7 +342,7 @@ async function createTestServicioDirecto(request, mascotaId, overrides = {}, tok
     nombre_servicio: testTag('servDirecto'),
     cantidad: 1,
     precio_unitario: 6000,
-    estado: 'Pendiente',
+    estado: 'SOLICITADO',
     ...overrides,
   };
   const res = await request.post('/api/servicios/', {
@@ -379,7 +379,7 @@ async function anexarServicioConsulta(request, consultaId, overrides = {}, token
     nombre_servicio: testTag('servAnexado'),
     cantidad: 1,
     precio_unitario: 10000,
-    estado: 'Pendiente',
+    estado: 'SOLICITADO',
     ...overrides,
   };
   const res = await request.post(`/api/consultas/${consultaId}/servicios`, {
