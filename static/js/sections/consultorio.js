@@ -767,7 +767,7 @@ export const editarServicioConsulta = (servicioId) => {
 };
 
 export const eliminarServicioConsulta = async (servicioId) => {
-    if (!confirm('¿Quitar este servicio? Se revierte el stock si estaba Aplicado.')) return;
+    if (!confirm('¿Quitar este servicio? Se revierte el stock si estaba EJECUTADO o FACTURADO.')) return;
     try {
         await fetchAPI(`/servicios/${servicioId}`, { method: 'DELETE' });
         _refrescarConsultaAbierta();
