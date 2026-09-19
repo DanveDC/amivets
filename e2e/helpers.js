@@ -238,17 +238,85 @@ async function cancelTestCita(request, id) {
   }
 }
 
+/**
+ * Opens an orden de servicio (POST /api/ordenes/, Tarea 06 etapa 4).
+ * `propietarioId` is mandatory server-side; `mascotaId` is optional (venta de
+ * mostrador sin paciente). Roles admin/recepción/veterinario — needs a token.
+ * Throws on rejection.
+ */
+async function createTestOrden(
+  request,
+  { propietarioId, mascotaId = null, veterinarioId = null, ...overrides } = {},
+  token = null,
+) {
+  const payload = {
+    propietario_id: propietarioId,
+    mascota_id: mascotaId,
+    veterinario_id: veterinarioId,
+    motivo_visita: testTag('orden').slice(0, 60),
+    ...overrides,
+  };
+  const res = await request.post('/api/ordenes/', {
+    headers: token ? authHeaders(token) : {},
+    data: payload,
+  });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to create test orden: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** Closes an orden. Best-effort — never throws. */
+async function cerrarTestOrden(request, id, token = null) {
+  try {
+    await request.post(`/api/ordenes/${id}/cerrar`, { headers: token ? authHeaders(token) : {} });
+  } catch (_) {
+    // best-effort cleanup
+  }
+}
+
 /** Creates a consulta (/api/consultas) via the API. */
 /**
  * Creates a test consulta (POST /api/consultas/). Exige sesión con rol
  * admin/recepción/veterinario desde Tarea 06 (decisión 9, fila 1 "abrir
  * orden"): pasa un token real salvo que el spec esté probando deliberadamente
  * el 401/403 del gate. Throws on rejection.
+ *
+ * Desde la etapa 4 de Tarea 06 `orden_id` es OBLIGATORIO: no hay consulta
+ * fuera de una orden. Para no tocar los ~13 specs que ya usan este helper, la
+ * orden se abre acá cuando el caller no pasa `orden_id` explícito: se resuelve
+ * el tutor desde la mascota (GET /api/mascotas/{id} ya devuelve
+ * propietario_id) y se abre una orden con ese tutor, ese paciente y el mismo
+ * veterinario. Un spec que necesite controlar la orden (por ejemplo para
+ * probar el candado de cierre) pasa `orden_id` en los overrides.
  */
 async function createTestConsulta(request, { mascotaId, veterinarioId, ...overrides } = {}, token = null) {
+  let ordenId = overrides.orden_id;
+  if (!ordenId) {
+    const mascotaRes = await request.get(`/api/mascotas/${mascotaId}`);
+    if (!mascotaRes.ok()) {
+      throw new Error(
+        `[amivets-e2e] Could not resolve propietario of mascota ${mascotaId} to open an orden: ` +
+        `${mascotaRes.status()} ${await mascotaRes.text()}`
+      );
+    }
+    const mascota = await mascotaRes.json();
+    // POST /api/ordenes/ exige sesión; si el spec no pasó token (caso raro),
+    // se usa el de admin para que el fallo que se quiera probar sea el de
+    // /api/consultas/, no el de la orden.
+    const ordenToken = token || (await getAdminToken(request));
+    const orden = await createTestOrden(
+      request,
+      { propietarioId: mascota.propietario_id, mascotaId, veterinarioId },
+      ordenToken,
+    );
+    ordenId = orden.id;
+  }
+
   const payload = {
     mascota_id: mascotaId,
     veterinario_id: veterinarioId,
+    orden_id: ordenId,
     motivo: testTag('consulta'),
     sintomas: 'PWTEST sintomas',
     diagnostico: 'PWTEST diagnostico',
@@ -334,10 +402,35 @@ async function createTestRecepcionista(request, adminToken, overrides = {}) {
  * POST /api/servicios/ exige sesión con rol admin/recepción/veterinario desde
  * Tarea 06 (decisión 9). `token` es obligatorio salvo que el spec esté
  * probando deliberadamente el 401/403.
+ *
+ * Desde la etapa 4 de Tarea 06 `orden_id` es OBLIGATORIO acá también (decisión
+ * 1: no hay trabajo fuera de una orden). Mismo criterio que createTestConsulta:
+ * si el caller no pasa `orden_id` en overrides, se abre una orden nueva
+ * resolviendo el tutor desde la mascota.
  */
 async function createTestServicioDirecto(request, mascotaId, overrides = {}, token = null) {
+  let ordenId = overrides.orden_id;
+  if (!ordenId) {
+    const mascotaRes = await request.get(`/api/mascotas/${mascotaId}`);
+    if (!mascotaRes.ok()) {
+      throw new Error(
+        `[amivets-e2e] Could not resolve propietario of mascota ${mascotaId} to open an orden: ` +
+        `${mascotaRes.status()} ${await mascotaRes.text()}`
+      );
+    }
+    const mascota = await mascotaRes.json();
+    const ordenToken = token || (await getAdminToken(request));
+    const orden = await createTestOrden(
+      request,
+      { propietarioId: mascota.propietario_id, mascotaId },
+      ordenToken,
+    );
+    ordenId = orden.id;
+  }
+
   const payload = {
     mascota_id: mascotaId,
+    orden_id: ordenId,
     tipo_servicio: 'ESTETICA',
     nombre_servicio: testTag('servDirecto'),
     cantidad: 1,
@@ -351,6 +444,53 @@ async function createTestServicioDirecto(request, mascotaId, overrides = {}, tok
   });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create servicio directo: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/**
+ * Attaches a servicio directly to an orden, without a consulta (Tarea 06,
+ * etapa 4: POST /api/ordenes/{id}/servicios). It's the sibling of
+ * anexarServicioConsulta for orders that have no consulta (venta de
+ * mostrador, orden solo de estética). `tipo_servicio` defaults to a
+ * non-clinical type without `catalogo_servicio_id`, so the atajo sin
+ * despacho (decisión 4) lands it in EJECUTADO. Throws on rejection.
+ */
+async function anexarServicioOrden(request, ordenId, overrides = {}, token = null) {
+  const payload = {
+    tipo_servicio: 'ESTETICA',
+    nombre_servicio: testTag('servOrden'),
+    cantidad: 1,
+    precio_unitario: 6000,
+    ...overrides,
+  };
+  const res = await request.post(`/api/ordenes/${ordenId}/servicios`, {
+    headers: token ? authHeaders(token) : {},
+    data: payload,
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to anexar servicio to orden ${ordenId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/**
+ * Confirms the SOLICITADO services of an orden (Tarea 06, etapa 4:
+ * POST /api/ordenes/{id}/confirmar). Returns the parsed JSON body regardless
+ * of status — callers check `.status()`-sensitive assertions themselves via
+ * the raw response when needed; this helper is for the happy path. Throws on
+ * rejection.
+ */
+async function confirmarServiciosOrden(request, ordenId, token = null) {
+  const res = await request.post(`/api/ordenes/${ordenId}/confirmar`, {
+    headers: token ? authHeaders(token) : {},
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to confirmar servicios of orden ${ordenId}: ${res.status()} ${await res.text()}`
+    );
   }
   return res.json();
 }
@@ -701,12 +841,16 @@ module.exports = {
   createTestVeterinario,
   createTestCita,
   cancelTestCita,
+  createTestOrden,
+  cerrarTestOrden,
   createTestConsulta,
   deleteTestConsulta,
   createTestRecepcionista,
   createTestServicioDirecto,
   deleteTestServicio,
   anexarServicioConsulta,
+  anexarServicioOrden,
+  confirmarServiciosOrden,
   facturarDesdeConsulta,
   createTestFactura,
   anularTestFactura,

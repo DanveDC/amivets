@@ -112,11 +112,17 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
       anexados.push(s);
     }
 
-    // GET /api/consultas/{id} → servicios tiene exactamente los 3.
+    // GET /api/consultas/{id} → servicios tiene exactamente los 3 anexados,
+    // más la línea CONSULTA que el backend crea solo desde Tarea 06 (etapa 4,
+    // decisión 3: el honorario es una línea de la orden como cualquier otra).
     const full = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(S.token) })).json();
     const vivos = (full.servicios || []).filter((s) => !s.is_deleted);
-    expect(vivos.length).toBe(3);
-    expect(new Set(vivos.map((s) => s.tipo_servicio))).toEqual(new Set(tipos));
+    const lineasConsulta = vivos.filter((s) => s.tipo_servicio === 'CONSULTA');
+    expect(lineasConsulta.length).toBe(1);
+    expect(lineasConsulta[0].estado).toBe('EJECUTADO');
+    const anexadosVivos = vivos.filter((s) => s.tipo_servicio !== 'CONSULTA');
+    expect(anexadosVivos.length).toBe(3);
+    expect(new Set(anexadosVivos.map((s) => s.tipo_servicio))).toEqual(new Set(tipos));
     for (const s of vivos) {
       expect(s.consulta_id).toBe(consulta.id);
     }
