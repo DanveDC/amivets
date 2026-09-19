@@ -138,6 +138,10 @@ class ConsultaCreate(ConsultaBase):
     # Requerido desde ahora: una consulta sin veterinario asignado queda
     # impagable en Liquidaciones (Unidad E), ver decision de Daniel.
     veterinario_id: int = Field(..., gt=0)
+    # Obligatorio desde Tarea 06 (decision 3): toda consulta nace DENTRO de una
+    # orden. El backend le anexa a esa orden la linea tipo_servicio='CONSULTA'
+    # que representa el honorario, y pasa la orden a EN_ATENCION.
+    orden_id: int = Field(..., gt=0)
 
 
 class ConsultaUpdate(BaseModel):
@@ -174,6 +178,13 @@ class ServicioConsultaBase(BaseModel):
     # de la DB exige que haya al menos uno.
     consulta_id: Optional[int] = None
     mascota_id: Optional[int] = None
+    # Tarea 06 (decisión 1 y 3): la orden a la que cuelga el servicio. Opcional
+    # en el schema porque este mismo modelo lo usa POST /api/consultas/{id}/
+    # servicios, donde el backend lo DERIVA de la consulta (nunca lo acepta del
+    # cliente); crear_servicio_directo (POST /api/servicios/, sin consulta) en
+    # cambio lo exige a nivel de endpoint -- mismo criterio que ya usa acá
+    # mascota_id, que tampoco es NOT NULL en el schema.
+    orden_id: Optional[int] = Field(None, gt=0)
     tipo_servicio: Optional[str] = Field(None, max_length=50)
     referencia_id: Optional[int] = None
     catalogo_servicio_id: Optional[int] = Field(None, gt=0)
@@ -200,6 +211,11 @@ class ServicioConsultaUpdate(BaseModel):
 
 class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
+    # orden_id ya está en ServicioConsultaBase (Tarea 06, decisión 3): acá solo
+    # se documenta que en la RESPUESTA es de solo lectura -- el cliente no
+    # elige la orden de un servicio anexado a una consulta, la fija el backend
+    # desde la línea CONSULTA (orden_de_consulta). crear_servicio_directo es la
+    # única excepción: ahí sí lo exige del cliente (ver ServicioConsultaBase).
     # Fecha del servicio para la historia unificada del paciente (Tarea 09).
     created_at: Optional[datetime] = None
     # Ya facturado sí/no — para el timeline de la ficha (el endpoint ya filtra
@@ -868,6 +884,110 @@ class LiquidacionResponse(BaseModel):
     fecha_calculo: datetime
     total: Decimal
     detalles: List[LiquidacionDetalleResponse] = []
+
+
+# ========== ORDEN DE SERVICIO SCHEMAS (Tarea 06, decisiones 1 y 9) ==========
+class OrdenServicioCreate(BaseModel):
+    """Abrir una orden (fila 1 de la matriz: admin / recepción / veterinario).
+
+    propietario_id es obligatorio y mascota_id opcional, no al revés: una venta
+    de mostrador tiene pagador y puede no tener paciente (decisión 1).
+    """
+    propietario_id: int = Field(..., gt=0)
+    mascota_id: Optional[int] = Field(None, gt=0)
+    veterinario_id: Optional[int] = Field(None, gt=0)
+    motivo_visita: Optional[str] = Field(None, max_length=255)
+    observaciones: Optional[str] = None
+
+
+class OrdenServicioAsignarVeterinario(BaseModel):
+    veterinario_id: int = Field(..., gt=0)
+
+
+class OrdenServicioAnexarServicio(BaseModel):
+    """Anexa un servicio directo a la orden, sin pasar por una consulta
+    (Tarea 06, decisión 1: venta de mostrador, orden solo de estética).
+
+    Es la hermana de ServicioConsultaCreate para POST /api/ordenes/{id}/
+    servicios: mismos campos de contenido, menos consulta_id/mascota_id/
+    orden_id, que el backend fija desde la orden del path, y menos `estado`,
+    que decide el propio endpoint por el área del ítem (decisión 4, atajo sin
+    despacho) en vez de aceptarlo del cliente.
+
+    `tipo_servicio='CONSULTA'` está reservado a POST /api/consultas/ (decisión
+    3, índice único uq_orden_una_consulta): el endpoint lo rechaza con 400.
+    """
+    tipo_servicio: str = Field(..., max_length=50)
+    referencia_id: Optional[int] = None
+    catalogo_servicio_id: Optional[int] = Field(None, gt=0)
+    nombre_servicio: Optional[str] = Field(None, max_length=255)
+    cantidad: float = Field(default=1.0, gt=0)
+    precio_unitario: float = Field(default=0.0, ge=0)
+    detalles_clinicos: Optional[str] = None
+    # Overrides opcionales de consumo real por material (decisión 6, Tarea 07).
+    # Solo se usan si el atajo sin despacho deja el servicio en EJECUTADO.
+    consumos: Optional[List[ConsumoMaterialOverride]] = None
+
+
+class OrdenServicioAnular(BaseModel):
+    # Obligatorio: anular una orden sin decir por qué deja un agujero en la
+    # auditoría justo donde más importa (decisión 1, regla 5). Falta el campo
+    # o viene vacío -> 422 de Pydantic.
+    motivo_anulacion: str = Field(..., min_length=1, max_length=255)
+
+
+class OrdenServicioResponse(BaseModel):
+    """Cabecera de la orden. La usa el listado del panel del día."""
+    id: int
+    numero: str
+    propietario_id: int
+    mascota_id: Optional[int] = None
+    veterinario_id: Optional[int] = None
+    estado: str
+    abierta_por_id: int
+    fecha_apertura: datetime
+    fecha_cierre: Optional[datetime] = None
+    cerrada_por_id: Optional[int] = None
+    motivo_visita: Optional[str] = None
+    observaciones: Optional[str] = None
+    anulada_por_id: Optional[int] = None
+    motivo_anulacion: Optional[str] = None
+    origen: Optional[str] = None
+    # Denormalizados para que el tablero no tenga que pedir tutor/paciente/
+    # veterinario aparte por cada fila (mismo criterio que NotaClinicaResponse).
+    propietario_nombre: Optional[str] = None
+    mascota_nombre: Optional[str] = None
+    veterinario_nombre: Optional[str] = None
+
+    @model_validator(mode='before')
+    def _adjuntar_nombres(cls, data):
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                prop = getattr(data, 'propietario', None)
+                if prop:
+                    data.propietario_nombre = f"{prop.nombre} {prop.apellido}"
+                mascota = getattr(data, 'mascota', None)
+                if mascota:
+                    data.mascota_nombre = mascota.nombre
+                vet = getattr(data, 'veterinario', None)
+                if vet:
+                    data.veterinario_nombre = vet.username
+            except Exception:
+                pass
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrdenServicioDetalleResponse(OrdenServicioResponse):
+    """La orden completa: cabecera + sus servicios (fila 4 de la matriz).
+
+    Incluye las líneas borradas lógicamente con su `is_deleted`, igual que
+    ConsultaResponse.servicios — el filtro fino es del consumidor.
+    """
+    servicios: List[ServicioConsultaResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ========== NOTA CLINICA SCHEMAS (Unidad B, tarea 05) ==========
