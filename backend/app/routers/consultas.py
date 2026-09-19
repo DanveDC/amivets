@@ -13,7 +13,7 @@ from app.schemas.schemas import (
 from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion, Usuario
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
-from app.services import consumo_service
+from app.services import consumo_service, orden_service
 from app.routers.usuarios import require_roles, get_current_admin
 from app.routers.servicios import (
     actualizar_servicio_impl,
@@ -32,8 +32,16 @@ def crear_consulta(
     # `gestor` no abre consultas (Tarea 06, decisión 9).
     _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
-    """Crea una nueva consulta"""
-    return ConsultaService.crear_consulta(db, consulta)
+    """Crea una consulta dentro de una orden (Tarea 06, decisiones 1 y 3).
+
+    `orden_id` es obligatorio: no hay consulta fuera de una orden. La orden
+    tiene que estar ABIERTA o EN_ATENCION (409 si ya está CERRADA / FACTURADA /
+    ANULADA). El alta también anexa la línea `tipo_servicio='CONSULTA'` con el
+    honorario y pasa la orden a EN_ATENCION si estaba ABIERTA.
+    """
+    orden = orden_service.obtener_orden(db, consulta.orden_id)
+    orden_service.asegurar_recibe_trabajo(orden)
+    return ConsultaService.crear_consulta(db, consulta, orden)
 
 
 @router.get("/{consulta_id}", response_model=ConsultaResponse)
@@ -206,7 +214,17 @@ def agregar_servicio_consulta(
     # Tarea 09, decisión 7: la recepcionista no puede anexar servicios clínicos.
     validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
 
+    # La consulta ya vive dentro de una orden (Tarea 06, decisión 3): sus
+    # servicios cuelgan de la MISMA orden, o el candado de cierre (decisión 1,
+    # regla 2) no los vería y la orden se podría cerrar con trabajo pendiente.
+    # La orden se navega por la línea CONSULTA, no por una columna en
+    # `consultas` (que sería una segunda fuente de verdad).
+    orden = orden_service.orden_de_consulta(db, consulta_id)
+    if orden is not None:
+        orden_service.asegurar_recibe_trabajo(orden)
+
     nuevo_servicio = ServicioConsulta(
+        orden_id=orden.id if orden is not None else None,
         consulta_id=consulta_id,
         # mascota_id se llena siempre (también con consulta) para simplificar
         # las queries de historia (Tarea 09, decisión 1).

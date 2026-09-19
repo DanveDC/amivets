@@ -406,6 +406,18 @@ class FacturacionService:
             
         # 2. Servicios
         for s in consulta.servicios:
+            # Puente de la etapa 4 (Tarea 06, decisión 3): desde ahora cada
+            # consulta lleva además una línea tipo_servicio='CONSULTA' con su
+            # honorario dentro de la orden. Este preview sigue emitiendo el
+            # honorario como ítem sintético (bloque 1 de arriba), así que contar
+            # también la línea lo duplicaría. Cuando la facturación pase a
+            # trabajar por orden (obtener_items_pendientes_orden) se invierte:
+            # desaparece el ítem sintético y la línea CONSULTA se factura como
+            # cualquier otra. Hasta entonces, la línea se salta acá y el
+            # `facturado = True` se lo pone igual crear_factura al recorrer
+            # consulta.servicios.
+            if s.tipo_servicio == "CONSULTA":
+                continue
             if not s.facturado and not s.is_deleted:
                 prod_id = None
                 if s.tipo_servicio == 'INSUMO':
