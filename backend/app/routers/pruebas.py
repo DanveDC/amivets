@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.models.models import PruebaComplementaria, Mascota, Consulta, ServicioConsulta
 from app.schemas.schemas import PruebaComplementariaCreate, PruebaComplementariaUpdate, PruebaComplementariaResponse
 from app.routers.usuarios import require_roles
+from app.services import orden_service
 
 router = APIRouter(prefix="/api/pruebas", tags=["Laboratorio y Diagnostico"])
 
@@ -23,10 +24,14 @@ def registrar_prueba(
 
     # Validar consulta si se proporciona
     consulta = None
+    orden = None
     if prueba.consulta_id:
         consulta = db.query(Consulta).filter(Consulta.id == prueba.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, prueba.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     nueva_prueba = PruebaComplementaria(**prueba.dict())
     db.add(nueva_prueba)
@@ -36,6 +41,7 @@ def registrar_prueba(
     if consulta is not None:
         db.flush()
         db.add(ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=nueva_prueba.consulta_id,
             mascota_id=consulta.mascota_id,
             tipo_servicio="LABORATORIO" if "Lab" in (nueva_prueba.tipo or "") else "DIAGNOSTICO",

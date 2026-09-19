@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.models.models import Hospitalizacion, Mascota, Consulta, ServicioConsulta
 from app.schemas.schemas import HospitalizacionCreate, HospitalizacionResponse
 from app.routers.usuarios import require_roles
+from app.services import orden_service
 
 router = APIRouter(prefix="/api/hospitalizaciones", tags=["Hospitalización"])
 
@@ -30,8 +31,12 @@ def ingresar_paciente(
         consulta = db.query(Consulta).filter(Consulta.id == db_hosp.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, db_hosp.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
         db.flush()
         db.add(ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=db_hosp.consulta_id,
             mascota_id=consulta.mascota_id,
             tipo_servicio="HOSPITALIZACION",

@@ -350,6 +350,10 @@ class ServicioConsulta(Base):
         # Ampliado en f2a3b4c5d6e1 (Tarea 06, decision 3): orden_id es el tercer
         # ancla valido. Una orden de mostrador sin paciente (mascota_id NULL) y
         # sin consulta violaria la version anterior del CHECK.
+        # Desde c5d6e1f2a3b4 (etapa 4) orden_id es NOT NULL, asi que esta
+        # condicion queda siempre verdadera para filas nuevas -- se conserva
+        # tal cual (no se dropea) porque sigue documentando la regla y porque
+        # dropear/recrear un CHECK en Postgres no gana nada sobre dejarlo.
         CheckConstraint(
             "orden_id IS NOT NULL OR consulta_id IS NOT NULL OR mascota_id IS NOT NULL",
             name="ck_servicio_consulta_scope",
@@ -368,13 +372,16 @@ class ServicioConsulta(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    # Contenedor de la visita (Tarea 06, decision 3). NULLABLE POR AHORA: pasa a
-    # NOT NULL recien en la revision de backfill, cuando toda fila viva tenga su
+    # Contenedor de la visita (Tarea 06, decision 3). NOT NULL desde la
+    # revision c5d6e1f2a3b4 (etapa 4): el backfill (b4c5d6e1f2a3, etapa 3)
+    # engancho toda fila historica, y los endpoints de la etapa 4 (servicios.py,
+    # clinico.py, cirugias.py, hospitalizaciones.py, pruebas.py,
+    # POST /api/ordenes/{id}/servicios) garantizan que TODA fila nueva nace con
     # orden. La tabla NO se renombra a servicios_orden: el nombre fisico aparece
     # en dos migraciones aplicadas, tres FK que lo apuntan, el CHECK, dos indices
     # y las queries de _consumo_en_ledger; renombrar es churn sin ganancia de
     # comportamiento. El nombre queda historico; el modelo, correcto.
-    orden_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True, index=True)
+    orden_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=False, index=True)
     # nullable desde Tarea 09 (decision 1): un "servicio directo" (corte de unas,
     # venta de mostrador) no cuelga de ninguna consulta. El CHECK
     # ck_servicio_consulta_scope (migracion d0e1f2a3b4c5) exige que haya al menos

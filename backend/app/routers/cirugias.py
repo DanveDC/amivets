@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.models.models import Cirugia, Mascota, Consulta, ServicioConsulta
 from app.schemas.schemas import CirugiaCreate, CirugiaResponse
 from app.routers.usuarios import require_roles
+from app.services import orden_service
 
 router = APIRouter(prefix="/api/cirugias", tags=["Quirófano"])
 
@@ -26,8 +27,14 @@ def registrar_cirugia(
         consulta = db.query(Consulta).filter(Consulta.id == db_cirugia.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        # Tarea 06 (decisión 1): la línea de servicio cuelga de la misma orden
+        # que la consulta, navegada por la línea CONSULTA.
+        orden = orden_service.orden_de_consulta(db, db_cirugia.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
         db.flush()
         db.add(ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=db_cirugia.consulta_id,
             mascota_id=consulta.mascota_id,
             tipo_servicio="CIRUGIA",

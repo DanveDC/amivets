@@ -31,7 +31,7 @@ from app.schemas.schemas import (
     ServicioConsultaResponse,
 )
 from app.models.models import ServicioConsulta, Mascota, Usuario
-from app.services import consumo_service
+from app.services import consumo_service, orden_service
 from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/servicios", tags=["Servicios"])
@@ -181,7 +181,7 @@ def crear_servicio_directo(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
-    """Crea un servicio directo (sin consulta). Exige mascota_id.
+    """Crea un servicio directo (sin consulta). Exige mascota_id y orden_id.
 
     Misma lógica de consumo que anexar un servicio a una consulta: si entra en
     un estado consumido (EJECUTADO/FACTURADO), descuenta materiales vía
@@ -191,6 +191,13 @@ def crear_servicio_directo(
     veterinario pueden anexar servicios no clínicos; los clínicos (vacuna,
     desparasitación, cirugía, hospitalización, laboratorio) quedan bloqueados
     para recepción por `validar_tipo_servicio_por_rol`. `gestor` no anexa.
+
+    `orden_id` es obligatorio desde Tarea 06 etapa 4 (decisión 1: no hay
+    trabajo fuera de una orden -- un servicio directo es trabajo igual que
+    cualquier otro). Se valida a nivel de endpoint y no en el schema porque
+    `ServicioConsultaCreate` también lo usa POST /api/consultas/{id}/servicios,
+    donde el backend lo DERIVA de la consulta y nunca lo acepta del cliente
+    (mismo criterio que ya se aplica acá con `mascota_id`).
     """
     if not servicio_data.mascota_id:
         raise HTTPException(status_code=422, detail="mascota_id es obligatorio para un servicio directo")
@@ -201,7 +208,21 @@ def crear_servicio_directo(
 
     validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
 
+    if not servicio_data.orden_id:
+        raise HTTPException(
+            status_code=422,
+            detail="orden_id es obligatorio para un servicio directo (Tarea 06, decisión 1: no hay trabajo fuera de una orden)",
+        )
+    orden = orden_service.obtener_orden(db, servicio_data.orden_id)
+    orden_service.asegurar_recibe_trabajo(orden)
+    if orden.mascota_id and orden.mascota_id != servicio_data.mascota_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La mascota del servicio no coincide con la mascota de la orden",
+        )
+
     nuevo_servicio = ServicioConsulta(
+        orden_id=orden.id,
         consulta_id=None,
         mascota_id=servicio_data.mascota_id,
         tipo_servicio=servicio_data.tipo_servicio,
@@ -226,6 +247,11 @@ def crear_servicio_directo(
             overrides=consumo_service.overrides_from_payload(servicio_data.consumos),
             usuario_id=current_user.id if current_user else None,
         )
+
+    # Decisión 1, regla 1: la transición ABIERTA -> EN_ATENCION es automática
+    # la primera vez que alguien toma trabajo sobre la orden, no un botón
+    # aparte -- mismo criterio que crear_linea_consulta.
+    orden_service.marcar_en_atencion(orden)
 
     db.commit()
     db.refresh(nuevo_servicio)

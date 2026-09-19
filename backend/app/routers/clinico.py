@@ -5,6 +5,7 @@ from ..core.database import get_db
 from ..core.config import settings
 from ..models import models
 from ..schemas import schemas
+from ..services import orden_service
 from .usuarios import require_roles
 
 router = APIRouter(
@@ -39,6 +40,13 @@ def crear_vacunacion(
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
+    # Tarea 06 (decisión 1): no se anexa trabajo nuevo a una orden que ya no
+    # lo admite. La línea de servicio cuelga de la misma orden que la
+    # consulta, navegada por la línea CONSULTA (orden_service.orden_de_consulta).
+    orden = orden_service.orden_de_consulta(db, consulta.id)
+    if orden is not None:
+        orden_service.asegurar_recibe_trabajo(orden)
+
     # Verify vaccine in inventory (row-lock para concurrencia, Tarea 07 decisión 6)
     producto = db.query(models.Inventario).filter(
         models.Inventario.id == vacunacion.vacuna_id
@@ -72,6 +80,7 @@ def crear_vacunacion(
 
     # Create Service record for the consultation cart
     servicio = models.ServicioConsulta(
+        orden_id=orden.id if orden is not None else None,
         consulta_id=vacunacion.consulta_id,
         mascota_id=consulta.mascota_id,
         tipo_servicio="VACUNACION",
@@ -126,6 +135,10 @@ def crear_desparasitacion(
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
+    orden = orden_service.orden_de_consulta(db, consulta.id)
+    if orden is not None:
+        orden_service.asegurar_recibe_trabajo(orden)
+
     producto = db.query(models.Inventario).filter(
         models.Inventario.id == desp.producto_id
     ).with_for_update().first()
@@ -151,6 +164,7 @@ def crear_desparasitacion(
 
     # Create Service record
     servicio = models.ServicioConsulta(
+        orden_id=orden.id if orden is not None else None,
         consulta_id=desp.consulta_id,
         mascota_id=consulta.mascota_id,
         tipo_servicio="DESPARASITACION",
@@ -188,10 +202,14 @@ def crear_hospitalizacion(
     db: Session = Depends(get_db),
     _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
 ):
+    orden = None
     if hosp.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == hosp.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, hosp.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     db_hosp = models.Hospitalizacion(
         mascota_id=hosp.mascota_id,
@@ -211,6 +229,7 @@ def crear_hospitalizacion(
     if hosp.consulta_id:
         db.flush()
         servicio = models.ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=hosp.consulta_id,
             mascota_id=consulta.mascota_id,
             tipo_servicio="HOSPITALIZACION",
@@ -237,10 +256,14 @@ def crear_cirugia(
     db: Session = Depends(get_db),
     _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
 ):
+    orden = None
     if cir.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == cir.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, cir.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     db_cir = models.Cirugia(
         mascota_id=cir.mascota_id,
@@ -258,6 +281,7 @@ def crear_cirugia(
     if cir.consulta_id:
         db.flush()
         servicio = models.ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=cir.consulta_id,
             mascota_id=consulta.mascota_id,
             tipo_servicio="CIRUGIA",
@@ -284,10 +308,14 @@ def crear_prueba_complementaria(
     db: Session = Depends(get_db),
     _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
 ):
+    orden = None
     if prueba.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == prueba.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, prueba.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     db_prueba = models.PruebaComplementaria(
         tipo=prueba.tipo,
@@ -304,6 +332,7 @@ def crear_prueba_complementaria(
     if prueba.consulta_id:
         db.flush()
         servicio = models.ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=prueba.consulta_id,
             mascota_id=consulta.mascota_id,
             tipo_servicio="LABORATORIO" if "Lab" in (prueba.tipo or "") else "DIAGNOSTICO",
