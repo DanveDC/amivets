@@ -669,6 +669,51 @@ async function listarNotificaciones(request, token, params = {}) {
 }
 
 // ===========================================================================
+// Adjuntos (/api/servicios/{id}/adjuntos, /api/adjuntos/{id}) — Tarea 06,
+// etapa 6. Todos los helpers devuelven la respuesta cruda: varios specs
+// prueban deliberadamente 403/404/415, y el que quiere el recorrido feliz
+// llama `.json()` él mismo.
+// ===========================================================================
+
+/** Un PDF mínimo real: alcanza para pasar la firma `%PDF-` de adjunto_service. */
+function pdfBufferValido() {
+  return Buffer.from('%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n');
+}
+
+/** Texto plano cualquiera: no matchea ninguna firma de la lista blanca. */
+function bufferNoReconocido() {
+  return Buffer.from('esto no es un PDF ni ninguna firma reconocida, es texto plano');
+}
+
+/** POST /api/servicios/{id}/adjuntos (multipart real). */
+async function subirAdjunto(request, servicioId, token, overrides = {}) {
+  const {
+    buffer = pdfBufferValido(),
+    filename = 'resultado.pdf',
+    mimeType = 'application/pdf',
+  } = overrides;
+  return request.post(`/api/servicios/${servicioId}/adjuntos`, {
+    headers: authHeaders(token),
+    multipart: { archivo: { name: filename, mimeType, buffer } },
+  });
+}
+
+/** GET /api/adjuntos/{id}. */
+async function descargarAdjunto(request, adjuntoId, token) {
+  return request.get(`/api/adjuntos/${adjuntoId}`, { headers: authHeaders(token) });
+}
+
+/** DELETE /api/adjuntos/{id} (soft delete). */
+async function borrarAdjunto(request, adjuntoId, token) {
+  return request.delete(`/api/adjuntos/${adjuntoId}`, { headers: authHeaders(token) });
+}
+
+/** GET /api/servicios/{id}/adjuntos. */
+async function listarAdjuntosServicio(request, servicioId, token) {
+  return request.get(`/api/servicios/${servicioId}/adjuntos`, { headers: authHeaders(token) });
+}
+
+// ===========================================================================
 // Facturación helper: pay a factura in full so it reaches estado PAGADA
 // (Liquidaciones only counts consultas whose factura is PAGADA).
 // ===========================================================================
@@ -942,6 +987,12 @@ module.exports = {
   tomarServicio,
   listarBandeja,
   listarNotificaciones,
+  pdfBufferValido,
+  bufferNoReconocido,
+  subirAdjunto,
+  descargarAdjunto,
+  borrarAdjunto,
+  listarAdjuntosServicio,
   pagarFacturaCompleta,
   setTarifaConsulta,
   createTestNota,

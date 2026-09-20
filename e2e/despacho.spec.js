@@ -21,17 +21,17 @@
 //   - POST   /api/servicios/{id}/tomar           → ASIGNADO -> EN_PROCESO; 403 si
 //     el usuario no es gestor de esa área; 409 si ya lo tomó otro.
 //   - PATCH  /api/servicios/{id}                 → EN_PROCESO -> EJECUTADO (fila 11);
-//     409 si el área exige adjunto y no hay ninguno vivo.
+//     422 si el área exige adjunto y no hay ninguno vivo (decisión 7: "la
+//     transición devuelve 422 con el mensaje exacto de qué falta" -- esta
+//     unidad usaba 409 hasta que existió el endpoint de upload de etapa 6;
+//     ver e2e/adjuntos.spec.js para el detalle de la corrección).
 //   - GET    /api/servicios/bandeja               → cola del gestor logueado.
 //   - GET    /api/notificaciones/, PATCH .../leer, PATCH .../leer-todas.
 //
-// Pendiente de etapa 6 (upload de adjuntos), documentado y NO saltado con
-// skip: el candado de requiere_adjunto solo se prueba en su rama de rechazo
-// (sin ningún Adjunto vivo) porque no existe todavía un endpoint de upload
-// para crear uno real. El recorrido feliz completo usa a propósito un área
-// SIN requiere_adjunto para no depender de ese hueco (mismo criterio que usó
-// la etapa 4 con la advertencia de "sin gestor": se documenta la dependencia,
-// no se fabrica un endpoint fuera de alcance ni se esconde el caso).
+// El endpoint de upload real (POST /api/servicios/{id}/adjuntos, etapa 6)
+// vive en e2e/adjuntos.spec.js, que reutiliza el criterio de fixtures de
+// esta unidad. Acá, ambas ramas del candado de requiere_adjunto: rechazo
+// (sin ningún Adjunto vivo) y éxito (con un adjunto real subido).
 
 const { test, expect } = require('@playwright/test');
 const {
@@ -58,6 +58,7 @@ const {
   listarBandeja,
   listarNotificaciones,
   authHeaders,
+  subirAdjunto,
 } = require('./helpers');
 
 test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
@@ -246,7 +247,7 @@ test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
     expect(segundo.status()).toBe(409);
   });
 
-  test('ejecutar sin el adjunto requerido rechaza con 409', async ({ request }) => {
+  test('ejecutar sin el adjunto requerido rechaza con 422', async ({ request }) => {
     const orden = await createTestOrden(request, { propietarioId: S.propietario.id, mascotaId: S.mascota.id }, S.vetToken);
     const servicio = await anexarServicioOrden(
       request,
@@ -263,7 +264,38 @@ test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
       headers: authHeaders(S.gestorA.token),
       data: { estado: 'EJECUTADO', detalles_clinicos: 'Resultado sin adjuntar' },
     });
-    expect(resEjecutar.status()).toBe(409);
+    // Decisión 7: entidad inválida para la transición pedida (falta un dato
+    // que exige), no un conflicto de estado -- 422, no 409.
+    expect(resEjecutar.status()).toBe(422);
+    const body = await resEjecutar.json();
+    expect(body.detail).toMatch(/adjunto/i);
+  });
+
+  test('ejecutar CON el adjunto requerido, ya subido, sí pasa a EJECUTADO', async ({ request }) => {
+    const orden = await createTestOrden(request, { propietarioId: S.propietario.id, mascotaId: S.mascota.id }, S.vetToken);
+    const servicio = await anexarServicioOrden(
+      request,
+      orden.id,
+      { tipo_servicio: 'IMAGEN', catalogo_servicio_id: S.catalogoConAdjunto.id },
+      S.vetToken,
+    );
+    await confirmarServiciosOrden(request, orden.id, S.vetToken);
+
+    const tomado = await tomarServicio(request, servicio.id, S.gestorA.token);
+    expect(tomado.ok()).toBe(true);
+
+    // Etapa 6: el gestor que tomó el servicio sube el resultado real antes
+    // de ejecutar (fila 16 de la matriz).
+    const subida = await subirAdjunto(request, servicio.id, S.gestorA.token);
+    expect(subida.ok()).toBe(true);
+
+    const resEjecutar = await request.patch(`/api/servicios/${servicio.id}`, {
+      headers: authHeaders(S.gestorA.token),
+      data: { estado: 'EJECUTADO', detalles_clinicos: 'Resultado adjuntado' },
+    });
+    expect(resEjecutar.ok()).toBe(true);
+    const body = await resEjecutar.json();
+    expect(body.estado).toBe('EJECUTADO');
   });
 
   test('recorrido feliz completo: anexar -> confirmar -> notifica -> bandeja -> tomar -> ejecutar', async ({ request }) => {
@@ -294,9 +326,9 @@ test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
     const tomado = await tomarServicio(request, servicio.id, S.gestorA.token);
     expect(tomado.ok()).toBe(true);
 
-    // areaConGestor NO exige adjunto (a propósito, ver header del archivo:
-    // el candado de requiere_adjunto se prueba solo en su rama de rechazo
-    // porque no existe todavía un endpoint de upload -- etapa 6).
+    // areaConGestor NO exige adjunto (a propósito): este recorrido prueba el
+    // camino sin candado; las dos ramas del candado de requiere_adjunto
+    // (rechazo y éxito con adjunto real) están cubiertas arriba.
     const ejecutado = await request.patch(`/api/servicios/${servicio.id}`, {
       headers: authHeaders(S.gestorA.token),
       data: { estado: 'EJECUTADO', detalles_clinicos: 'Resultado OK' },
