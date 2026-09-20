@@ -26,13 +26,13 @@
 //     obligatorio (422 sin él, 409 si la orden ya no admite trabajo, 400 si la
 //     mascota del servicio no es la de la orden).
 //
-// Fuera de alcance (etapa 5): despacho al área, bandeja del gestor, la vista
-// acotada del gestor sobre la orden, y las notificaciones que dispara
-// confirmar. También fuera de alcance: no existe todavía un endpoint para
-// crear `AreaServicio` / setear `CatalogoServicio.area_id`, así que la rama
-// SOLICITADO -> ASIGNADO de confirmar (ítem CON área) no se puede ejercer por
-// API hoy -- se revisó por lectura de código, no por e2e. Ver el reporte de
-// la etapa 4 para el detalle.
+// Actualización (etapa 5, e2e/despacho.spec.js): el hueco de "no hay endpoint
+// para crear AreaServicio / setear CatalogoServicio.area_id" que dejaba
+// muerta la rama SOLICITADO -> ASIGNADO ya se cerró (POST /api/areas, PUT
+// /api/catalogo/{id} con area_id). Ese archivo cubre despacho al área,
+// notificaciones, bandeja del gestor y tomar/ejecutar; acá se deja el resto
+// tal como estaba (vista acotada del gestor sobre la orden completa sigue
+// pendiente -- no forma parte de la etapa 5, ver docs/tareas/06-...).
 //
 // Criterio UI vs API: igual que el resto de las unidades clínicas, la regla de
 // negocio se ejerce por API — la pantalla de órdenes llega en la etapa 7.

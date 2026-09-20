@@ -590,6 +590,85 @@ async function deleteTestCatalogoServicio(request, id) {
 }
 
 // ===========================================================================
+// Despacho y bandejas (/api/areas, /api/servicios/{id}/tomar,
+// /api/servicios/bandeja, /api/notificaciones) — Tarea 06, etapa 5.
+// ===========================================================================
+
+/** Creates a throwaway área de despacho (admin-only). Throws on rejection. */
+async function createTestArea(request, adminToken, overrides = {}) {
+  const payload = {
+    codigo: testTag('AREA').toUpperCase(),
+    nombre: testTag('Área'),
+    requiere_adjunto: false,
+    activo: true,
+    ...overrides,
+  };
+  const res = await request.post('/api/areas/', { headers: authHeaders(adminToken), data: payload });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to create test área: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** Deactivates a test área (PUT activo=false). Best-effort — never throws. */
+async function desactivarTestArea(request, adminToken, id) {
+  try {
+    await request.put(`/api/areas/${id}`, { headers: authHeaders(adminToken), data: { activo: false } });
+  } catch (_) {
+    // best-effort cleanup
+  }
+}
+
+/** Adds a usuario as gestor of an área (admin-only). Throws on rejection
+ * (a spec that wants to assert the 409 duplicate should catch it itself). */
+async function agregarGestorArea(request, adminToken, areaId, usuarioId) {
+  const res = await request.post(`/api/areas/${areaId}/gestores`, {
+    headers: authHeaders(adminToken),
+    data: { usuario_id: usuarioId },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to add gestor ${usuarioId} to área ${areaId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/**
+ * Creates a throwaway user with the `gestor` role and logs in as them.
+ * Returns { user, token }, same shape as createTestRecepcionista.
+ */
+async function createTestGestor(request, adminToken, overrides = {}) {
+  const user = await createTestUser(request, adminToken, { role: 'gestor', ...overrides });
+  const token = await loginAs(request, user.username, TEST_USER_PASSWORD);
+  return { user, token };
+}
+
+/** POST /api/servicios/{id}/tomar. Returns the raw response — callers assert
+ * on `.status()` themselves, since several specs deliberately expect 403/409. */
+async function tomarServicio(request, servicioId, token) {
+  return request.post(`/api/servicios/${servicioId}/tomar`, { headers: authHeaders(token) });
+}
+
+/** GET /api/servicios/bandeja?area_id=&usuario_id=. Throws on rejection. */
+async function listarBandeja(request, token, params = {}) {
+  const res = await request.get('/api/servicios/bandeja', { headers: authHeaders(token), params });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to list bandeja: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** GET /api/notificaciones?no_leidas=. Throws on rejection. */
+async function listarNotificaciones(request, token, params = {}) {
+  const res = await request.get('/api/notificaciones/', { headers: authHeaders(token), params });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to list notificaciones: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+// ===========================================================================
 // Facturación helper: pay a factura in full so it reaches estado PAGADA
 // (Liquidaciones only counts consultas whose factura is PAGADA).
 // ===========================================================================
@@ -856,6 +935,13 @@ module.exports = {
   anularTestFactura,
   createTestCatalogoServicio,
   deleteTestCatalogoServicio,
+  createTestArea,
+  desactivarTestArea,
+  agregarGestorArea,
+  createTestGestor,
+  tomarServicio,
+  listarBandeja,
+  listarNotificaciones,
   pagarFacturaCompleta,
   setTarifaConsulta,
   createTestNota,
