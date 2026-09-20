@@ -790,7 +790,12 @@ class CatalogoServicioBase(BaseModel):
 
 
 class CatalogoServicioCreate(CatalogoServicioBase):
-    pass
+    # Despacho y adjuntos (Tarea 06, decisiones 5 y 7, etapa 5). area_id=None
+    # es el atajo sin despacho (decisión 4); requiere_adjunto=None hereda del
+    # área. Ambos campos son admin-only (fila 23 de la matriz) -- el router
+    # valida el rol igual que ya hace con precio_ref.
+    area_id: Optional[int] = Field(None, gt=0)
+    requiere_adjunto: Optional[bool] = None
 
 
 class CatalogoServicioUpdate(BaseModel):
@@ -803,11 +808,18 @@ class CatalogoServicioUpdate(BaseModel):
     # Motivo opcional del cambio de precio (Tarea 08). No es una columna: el
     # router lo saca del loop generico y lo pasa a registrar_cambio_precio().
     motivo: Optional[str] = Field(None, max_length=200, exclude=True)
+    # Despacho y adjuntos (etapa 5, ver CatalogoServicioCreate). gt=0 en vez de
+    # nullable directo porque "sin área" se expresa mandando area_id=None
+    # explícito o simplemente no mandando el campo (exclude_unset lo respeta).
+    area_id: Optional[int] = Field(None, gt=0)
+    requiere_adjunto: Optional[bool] = None
 
 
 class CatalogoServicioResponse(CatalogoServicioBase):
     id: int
     created_at: datetime
+    area_id: Optional[int] = None
+    requiere_adjunto: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -986,6 +998,77 @@ class OrdenServicioDetalleResponse(OrdenServicioResponse):
     ConsultaResponse.servicios — el filtro fino es del consumidor.
     """
     servicios: List[ServicioConsultaResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== ÁREAS DE SERVICIO Y GESTORES (Tarea 06, decisiones 5 y 9, etapa 5) ==========
+class AreaServicioCreate(BaseModel):
+    """Alta de un área de despacho (fila 23 de la matriz: solo admin).
+
+    `codigo` es el identificador estable que referencia CatalogoServicio.area_id
+    (ej. 'LABORATORIO'); se normaliza a mayúsculas para no depender de que el
+    cliente lo mande consistente.
+    """
+    codigo: str = Field(..., min_length=1, max_length=50)
+    nombre: str = Field(..., min_length=1, max_length=100)
+    requiere_adjunto: bool = False
+    activo: bool = True
+
+    @field_validator("codigo")
+    @classmethod
+    def _normalizar_codigo(cls, v: str) -> str:
+        return v.strip().upper()
+
+
+class AreaServicioUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+    requiere_adjunto: Optional[bool] = None
+    activo: Optional[bool] = None
+
+
+class AreaServicioResponse(BaseModel):
+    id: int
+    codigo: str
+    nombre: str
+    requiere_adjunto: bool
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GestorAreaCreate(BaseModel):
+    """Suma un usuario a `gestor_area` (fila 24 de la matriz: solo admin).
+
+    No exige `role='gestor'`: la decisión 5 resuelve el multi-rol con datos
+    (`gestor_area`), no con el string de rol -- un veterinario puede tener
+    también una fila acá (ej. el veterinario que hace la ecografía).
+    """
+    usuario_id: int = Field(..., gt=0)
+
+
+class GestorAreaResponse(BaseModel):
+    id: int
+    usuario_id: int
+    area_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== NOTIFICACIONES (Tarea 06, decisión 6, etapa 5) ==========
+class NotificacionResponse(BaseModel):
+    id: int
+    destinatario_id: int
+    tipo: str
+    titulo: str
+    cuerpo: Optional[str] = None
+    orden_id: Optional[int] = None
+    servicio_id: Optional[int] = None
+    created_at: datetime
+    leida_at: Optional[datetime] = None
+    canal: str
+    enviado_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -6,7 +6,7 @@ from sqlalchemy import or_
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
+from app.models.models import AreaServicio, CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
 from app.routers.usuarios import get_current_user
 from app.schemas.schemas import (
     CatalogoServicioCreate,
@@ -20,6 +20,20 @@ from app.schemas.schemas import (
 from app.services.precio_service import registrar_cambio_precio, cuantizar_precio
 
 router = APIRouter(prefix="/api/catalogo", tags=["Catalogo de Servicios"])
+
+
+def _validar_area_activa(db: Session, area_id: Optional[int]) -> None:
+    """area_id=None es válido (atajo sin despacho, decisión 4). Si viene con
+    valor, el área tiene que existir y estar activa -- despachar a un área de
+    baja dejaría trabajo en una cola que nadie mira."""
+    if area_id is None:
+        return
+    area = db.query(AreaServicio).filter(AreaServicio.id == area_id).first()
+    if not area or not area.activo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El área indicada no existe o no está activa",
+        )
 
 
 @router.get("/categorias", response_model=List[str])
@@ -65,8 +79,21 @@ def crear_servicio(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
-    """Create a new service in the catalog"""
-    nuevo = CatalogoServicio(**servicio.model_dump())
+    """Create a new service in the catalog.
+
+    `area_id` / `requiere_adjunto` (Tarea 06, decisiones 5 y 7) son admin-only
+    (fila 23 de la matriz de permisos) -- mismo criterio que ya aplica
+    `actualizar_servicio` sobre `precio_ref`.
+    """
+    payload = servicio.model_dump()
+    if (payload.get("area_id") is not None or payload.get("requiere_adjunto") is not None) and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador puede asignar área o requiere_adjunto",
+        )
+    _validar_area_activa(db, payload.get("area_id"))
+
+    nuevo = CatalogoServicio(**payload)
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
@@ -115,6 +142,16 @@ def actualizar_servicio(
             usuario_id=current_user.id,
             motivo=data.motivo,
         )
+
+    # area_id / requiere_adjunto (Tarea 06, decisiones 5 y 7, etapa 5):
+    # admin-only, mismo criterio que precio_ref arriba (fila 23 de la matriz).
+    if ("area_id" in payload or "requiere_adjunto" in payload) and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador puede editar área o requiere_adjunto",
+        )
+    if "area_id" in payload:
+        _validar_area_activa(db, payload["area_id"])
 
     for key, value in payload.items():
         setattr(servicio, key, value)
