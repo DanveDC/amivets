@@ -1145,4 +1145,19 @@ class NotaClinicaResponse(NotaClinicaBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# ========== ADJUNTOS (Tarea 06, decisiones 7 y 8, etapa 6) ==========
+class AdjuntoResponse(BaseModel):
+    id: int
+    servicio_id: int
+    nombre_original: str
+    # El DETECTADO por los bytes al subir, no lo que declaró el cliente.
+    content_type: str
+    tamano_bytes: int
+    sha256: str
+    subido_por_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
     model_config = ConfigDict(from_attributes=True)

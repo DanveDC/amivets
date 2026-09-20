@@ -216,12 +216,18 @@ def actualizar_servicio_impl(
                 ),
             )
         _validar_permiso_ejecutar(db, servicio, current_user)
-        # Decision 7 (candado de adjunto): bloqueado en lectura hasta que
-        # exista la etapa 6 (upload) para items que lo exigen -- documentado
-        # en el header del spec e2e, no es un bug de esta pieza.
+        # Decision 7: "la transicion devuelve 422 con el mensaje exacto de
+        # qué falta" (docs/diseno/ordenes-de-servicio.md ~956). Etapa 5 usaba
+        # 409 porque todavía no existía el endpoint de upload (etapa 6) para
+        # probar la rama de éxito -- con el candado ya resuelto en los dos
+        # sentidos, se corrige al código de estado que pide el diseño: esto
+        # NO es un conflicto de estado (como el 409 de arriba, "tomalo
+        # primero"), es una entidad inválida para la transición pedida (falta
+        # un dato que la transición exige), que es exactamente el caso de uso
+        # de 422 Unprocessable Entity.
         if _requiere_adjunto(db, servicio) and not _tiene_adjunto_vivo(db, servicio.id):
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Este servicio exige un adjunto antes de poder ejecutarse; cargá el resultado primero.",
             )
 

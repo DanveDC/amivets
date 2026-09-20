@@ -48,7 +48,15 @@ class Settings(BaseSettings):
     # servicio con stock insuficiente vuelve a bloquear con HTTP 400. Por
     # defecto False: se permite, se avisa y se registra el faltante en el ledger.
     STRICT_INVENTORY: bool = False
-    
+
+    # Adjuntos (Tarea 06, decision 8). Raiz DENTRO del volumen nombrado
+    # `adjuntos_data` (docker-compose.yml) -- nunca bajo static/, que nginx
+    # sirve sin pasar por FastAPI. Techo alineado a proposito con
+    # `client_max_body_size 20M` de nginx.conf: pedir mas generaria un 413 de
+    # nginx que la app jamas veria.
+    ADJUNTOS_ROOT: str = "/app/data/adjuntos"
+    ADJUNTOS_MAX_BYTES: int = 20 * 1024 * 1024
+
     class Config:
         env_file = ".env"
         case_sensitive = True
