@@ -430,6 +430,11 @@ class ServicioConsulta(Base):
     # el servicio queda ASIGNADO con asignado_a_id = NULL y lo toma el primero
     # que esta libre; un segundo que lo intente recibe 409.
     asignado_a_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)
+    # Ambiguedad resuelta en etapa 5: asignado_at sella CUANDO ENTRO A
+    # ASIGNADO (el despacho al area, en orden_service.confirmar_servicios),
+    # no cuando un gestor lo toma -- ese momento ya lo identifica el propio
+    # estado EN_PROCESO + asignado_a_id != NULL, sin necesitar timestamp
+    # propio (ver routers/servicios.py::tomar_servicio).
     asignado_at = Column(DateTime(timezone=True), nullable=True)
     ejecutado_at = Column(DateTime(timezone=True), nullable=True)
 

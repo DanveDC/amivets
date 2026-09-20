@@ -265,7 +265,9 @@ def actualizar_servicio_consulta(
     db: Session = Depends(get_db),
     # Mismo gate que PATCH /api/servicios/{id} -- es el mismo _impl, así que
     # el mismo guard tiene que estar en las dos rutas o esta queda de bypass.
-    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
+    # `gestor` se suma en la etapa 5: ver actualizar_servicio_impl para el
+    # gate fino (solo puede ejecutar EN_PROCESO -> EJECUTADO del que tomó).
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario", "gestor")),
 ):
     """Alias de PATCH /api/servicios/{id} (Tarea 09). La lógica vive en
     routers/servicios.py; este path se mantiene para no romper contratos

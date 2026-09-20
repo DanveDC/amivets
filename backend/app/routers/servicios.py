@@ -8,7 +8,7 @@ PATCH/DELETE de un servicio individual viven aca; routers/consultas.py mantiene
 los paths /api/consultas/servicios/{id} como alias que delegan a estas mismas
 funciones (para no romper e2e/flujo-clinico.spec.js).
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -30,8 +30,8 @@ from app.schemas.schemas import (
     ServicioConsultaUpdate,
     ServicioConsultaResponse,
 )
-from app.models.models import ServicioConsulta, Mascota, Usuario
-from app.services import consumo_service, orden_service
+from app.models.models import Adjunto, AreaServicio, GestorArea, ServicioConsulta, Mascota, Usuario
+from app.services import consumo_service, notificacion_service, orden_service
 from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/servicios", tags=["Servicios"])
@@ -63,6 +63,71 @@ def validar_tipo_servicio_por_rol(current_user: Usuario, tipo_servicio: Optional
                 "(vacunación, desparasitación, cirugía, hospitalización o laboratorio)."
             ),
         )
+
+
+# ---------------------------------------------------------------------------
+# Despacho al area (Tarea 06, decisiones 5, 7 y 9; etapa 5)
+# ---------------------------------------------------------------------------
+def _es_gestor_del_area(db: Session, usuario_id: int, area_id: int) -> bool:
+    """True si el usuario tiene una fila en gestor_area para esa area.
+
+    Es la respuesta al multi-rol (decision 9.2): sirve igual para un
+    'gestor' que para un 'veterinario' con gestor_area(esa_area).
+    """
+    return (
+        db.query(GestorArea)
+        .filter(GestorArea.usuario_id == usuario_id, GestorArea.area_id == area_id)
+        .first()
+        is not None
+    )
+
+
+def _requiere_adjunto(db: Session, servicio: ServicioConsulta) -> bool:
+    """Decision 7: sin area no exige (atajo sin despacho, decision 4). Con
+    area, el item de catalogo puede sobrescribir (NULL = hereda del area)."""
+    if servicio.area_id is None:
+        return False
+    item = servicio.catalogo_servicio
+    if item is not None and item.requiere_adjunto is not None:
+        return bool(item.requiere_adjunto)
+    area = db.query(AreaServicio).filter(AreaServicio.id == servicio.area_id).first()
+    return bool(area.requiere_adjunto) if area else False
+
+
+def _tiene_adjunto_vivo(db: Session, servicio_id: int) -> bool:
+    return (
+        db.query(Adjunto)
+        .filter(Adjunto.servicio_id == servicio_id, Adjunto.is_deleted == False)  # noqa: E712
+        .first()
+        is not None
+    )
+
+
+def _validar_permiso_ejecutar(db: Session, servicio: ServicioConsulta, current_user: Optional[Usuario]) -> None:
+    """Fila 11 de la matriz: admin siempre; gestor solo el que tomo (asignado_a_id
+    == el); veterinario solo si tiene el area (gestor_area). Recepcion no ejecuta."""
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Se requiere sesión")
+    if current_user.role == "admin":
+        return
+    if current_user.role == "gestor":
+        if servicio.asignado_a_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo el gestor que tomó este servicio puede ejecutarlo.",
+            )
+        return
+    if current_user.role == "veterinario":
+        if not _es_gestor_del_area(db, current_user.id, servicio.area_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Necesitás estar habilitado como gestor de esa área para ejecutar este servicio.",
+            )
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Tu rol no puede ejecutar un servicio despachado a un área.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +186,45 @@ def actualizar_servicio_impl(
             detail="No se puede cambiar la cantidad de un servicio en EJECUTADO/FACTURADO; revertí el estado primero",
         )
 
+    # --- Fila 11 de la matriz (etapa 5): EN_PROCESO -> EJECUTADO de un
+    # servicio despachado a un area es una transicion con gate propio, mas
+    # fino que el require_roles del endpoint (que solo filtra por rol, no por
+    # "es EL gestor que lo tomo" ni "tiene esa area"). ---
+    transicion_area_a_ejecutado = (
+        servicio.area_id is not None
+        and old_estado != "EJECUTADO"
+        and nuevo_estado == "EJECUTADO"
+    )
+
+    if current_user is not None and current_user.role == "gestor":
+        # Fila 13: un gestor no edita precio/cantidad de un servicio. Su unico
+        # uso legitimo de este PATCH es ejecutar el que tomo (fila 11); todo
+        # lo demas queda 403, aunque require_roles ya lo dejo pasar por rol.
+        if not transicion_area_a_ejecutado:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Un gestor solo puede ejecutar (EN_PROCESO → EJECUTADO) los servicios de su área.",
+            )
+
+    if transicion_area_a_ejecutado:
+        if old_estado != "EN_PROCESO":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Un servicio despachado a un área solo se ejecuta desde EN_PROCESO; "
+                    "tomalo primero con POST /api/servicios/{id}/tomar."
+                ),
+            )
+        _validar_permiso_ejecutar(db, servicio, current_user)
+        # Decision 7 (candado de adjunto): bloqueado en lectura hasta que
+        # exista la etapa 6 (upload) para items que lo exigen -- documentado
+        # en el header del spec e2e, no es un bug de esta pieza.
+        if _requiere_adjunto(db, servicio) and not _tiene_adjunto_vivo(db, servicio.id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este servicio exige un adjunto antes de poder ejecutarse; cargá el resultado primero.",
+            )
+
     for k, v in update_dict.items():
         setattr(servicio, k, v)
 
@@ -139,6 +243,13 @@ def actualizar_servicio_impl(
             overrides=consumo_service.overrides_from_payload(consumos_override),
             usuario_id=uid,
         )
+        if new_estado == "EJECUTADO":
+            servicio.ejecutado_at = datetime.now(timezone.utc)
+        if transicion_area_a_ejecutado:
+            # Solo para el camino despachado: en el atajo sin despacho
+            # (decision 4) el mismo usuario que anexa el servicio lo ejecuta,
+            # avisarle a si mismo no aporta nada (ver notificacion_service).
+            notificacion_service.notificar_ejecucion(db, servicio)
     elif old_estado in consumidos and new_estado not in consumidos:
         consumo_service.revertir_para_servicio(db, servicio, usuario_id=uid)
 
@@ -319,10 +430,13 @@ def actualizar_servicio(
     update_data: ServicioConsultaUpdate,
     db: Session = Depends(get_db),
     # Fila 13 de la matriz (editar precio/cantidad): admin/recepción/
-    # veterinario. `gestor` no edita. La restricción "recepción solo en
-    # servicios no clínicos" queda para cuando exista el modelo de orden
-    # (Fase 2); acá solo se cierra el hueco de autenticación.
-    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
+    # veterinario. La restricción "recepción solo en servicios no clínicos"
+    # queda para cuando exista el modelo de orden (Fase 2); acá solo se
+    # cierra el hueco de autenticación.
+    # `gestor` se suma en la etapa 5 (fila 11): SOLO puede usar este PATCH
+    # para ejecutar (EN_PROCESO -> EJECUTADO) el servicio que tomó -- el gate
+    # fino vive en actualizar_servicio_impl, que rechaza cualquier otro uso.
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario", "gestor")),
 ):
     return actualizar_servicio_impl(servicio_id, update_data, db, current_user)
 
@@ -335,3 +449,120 @@ def eliminar_servicio(
     current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     return eliminar_servicio_impl(servicio_id, db, current_user)
+
+
+@router.post("/{servicio_id}/tomar", response_model=ServicioConsultaResponse)
+def tomar_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    # Fila 10 de la matriz: admin siempre; gestor/veterinario solo si tienen
+    # gestor_area para el area del servicio (se verifica abajo, es alcance
+    # por datos -- decision 9.2 -- no por rol).
+    current_user: Usuario = Depends(require_roles("admin", "veterinario", "gestor")),
+):
+    """ASIGNADO -> EN_PROCESO: el gestor se apropia del servicio (decisión 5,
+    "el primero que lo toma se lo apropia").
+
+    El despacho va al área, no a una persona (`asignado_a_id` nace NULL en
+    ASIGNADO); el primero que lo toma queda dueño. Un segundo que lo intente
+    recibe 409 -- se resuelve con un UPDATE condicional (`estado='ASIGNADO'
+    AND asignado_a_id IS NULL`) para cerrar la carrera entre dos tomas
+    simultáneas, no solo con un chequeo en Python que deja una ventana entre
+    el SELECT y el UPDATE.
+    """
+    servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    if servicio.area_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este servicio no tiene área de despacho; no hay nada que tomar.",
+        )
+    if current_user.role != "admin" and not _es_gestor_del_area(db, current_user.id, servicio.area_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No estás habilitado como gestor del área de este servicio.",
+        )
+    if servicio.estado != "ASIGNADO":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"El servicio está {servicio.estado}; solo se puede tomar un servicio ASIGNADO.",
+        )
+
+    filas = (
+        db.query(ServicioConsulta)
+        .filter(
+            ServicioConsulta.id == servicio_id,
+            ServicioConsulta.estado == "ASIGNADO",
+            ServicioConsulta.asignado_a_id.is_(None),
+        )
+        .update({"estado": "EN_PROCESO", "asignado_a_id": current_user.id}, synchronize_session=False)
+    )
+    db.commit()
+
+    if filas == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este servicio ya fue tomado por otro gestor.",
+        )
+
+    db.refresh(servicio)
+    return ServicioConsultaResponse.model_validate(servicio)
+
+
+@router.get("/bandeja", response_model=List[ServicioConsultaResponse])
+def listar_bandeja(
+    db: Session = Depends(get_db),
+    # Fila 4 (alcance recortado del gestor) + multi-rol (decision 9.2): un
+    # veterinario con area tambien puede pedir su propia bandeja.
+    current_user: Usuario = Depends(require_roles("admin", "veterinario", "gestor")),
+    area_id: Optional[int] = None,
+    usuario_id: Optional[int] = None,
+):
+    """La cola de trabajo del gestor logueado (decisión 6, "notificación ≠
+    bandeja"): NO se lee de `notificaciones`, es una query directa sobre
+    `servicios_consulta` -- la notificación es el empujón, la bandeja es la
+    verdad.
+
+    Ruta propia (en vez de `?bandeja=true` sobre `listar_servicios_mascota`,
+    ver deviación en el reporte de apply): esa función exige `mascota_id` y
+    no tiene ningún `current_user`, y la bandeja no filtra por mascota sino
+    por área del usuario logueado -- forzarla adentro habría significado
+    volver `mascota_id` opcional y agregarle autenticación a un endpoint que
+    hoy no la tiene, dos cambios de contrato sobre código que no es mío en
+    esta etapa.
+
+    `area_id` / `usuario_id` (solo admin): para que el admin pueda auditar la
+    cola de un área o de un gestor puntual sin tener que loguearse como él.
+    Para `veterinario` / `gestor` se ignoran -- su bandeja es siempre la
+    propia, exactamente como filtra la query de la decisión 6.
+    """
+    if current_user.role == "admin":
+        if area_id is not None:
+            areas_ids = [area_id]
+        else:
+            filas = (
+                db.query(GestorArea.area_id)
+                .filter(GestorArea.usuario_id == (usuario_id or current_user.id))
+                .all()
+            )
+            areas_ids = [r[0] for r in filas]
+        gestor_objetivo = usuario_id
+    else:
+        filas = db.query(GestorArea.area_id).filter(GestorArea.usuario_id == current_user.id).all()
+        areas_ids = [r[0] for r in filas]
+        gestor_objetivo = current_user.id
+
+    if not areas_ids:
+        return []
+
+    q = db.query(ServicioConsulta).filter(
+        ServicioConsulta.area_id.in_(areas_ids),
+        ServicioConsulta.estado.in_(("ASIGNADO", "EN_PROCESO")),
+        ServicioConsulta.is_deleted == False,  # noqa: E712
+    )
+    if gestor_objetivo is not None:
+        q = q.filter(
+            (ServicioConsulta.asignado_a_id.is_(None)) | (ServicioConsulta.asignado_a_id == gestor_objetivo)
+        )
+    return q.order_by(ServicioConsulta.created_at.asc()).all()
