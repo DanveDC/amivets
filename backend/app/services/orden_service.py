@@ -16,7 +16,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.models import CatalogoServicio, Consulta, OrdenServicio, ServicioConsulta, Usuario
-from app.services import consumo_service
+from app.services import consumo_service, notificacion_service
 
 # La orden todavia recibe trabajo: se le pueden anexar servicios y abrir la
 # consulta. CERRADA / FACTURADA / ANULADA ya no.
@@ -137,28 +137,34 @@ def tomar_orden(db: Session, orden: OrdenServicio, current_user: Usuario) -> Ord
     return orden
 
 
-def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario) -> OrdenServicio:
+def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario) -> tuple:
     """Despacha los servicios SOLICITADO de la orden (decision 4, fila 9 de la
     matriz de permisos): es el paso "el veterinario confirma los servicios"
     del diagrama de estados.
 
     - Si el item tiene area de ejecucion (area_id no nulo, snapshot tomado al
-      anexar): pasa a ASIGNADO. Queda a la espera de que un gestor lo tome
-      (POST /api/servicios/{id}/tomar, etapa 5).
+      anexar): pasa a ASIGNADO y se notifica a cada gestor activo del area
+      (Notificacion tipo SERVICIO_ASIGNADO). Si el area no tiene NINGUN
+      gestor activo, se notifica a los admins (SERVICIO_SIN_GESTOR) en su
+      lugar y la linea se suma a `advertencias` (decision 5, defensas 1 y 2)
+      -- ver notificacion_service.notificar_asignacion. Queda a la espera de
+      que un gestor lo tome (POST /api/servicios/{id}/tomar, etapa 5).
     - Si no tiene area (atajo sin despacho de la decision 4 -- CONSULTA,
       INSUMO, o cualquier item de catalogo con area_id NULL): pasa directo a
       EJECUTADO y dispara consumo_service.consumir_para_servicio, exactamente
       como hace actualizar_servicio_impl al cruzar hacia un estado consumido.
+      No se notifica nada acá: no hay area, no hay gestor a quien avisarle.
 
     Idempotente: si no queda ninguna linea en SOLICITADO no es un error --
     confirmar una orden ya confirmada es un 200 sin cambios, no un 409. No hay
     nada que "reconfirmar": una vez que una linea sale de SOLICITADO, este
     endpoint ya no vuelve a tocarla.
 
-    Fuera de alcance a proposito (etapa 5, despacho y bandejas): no crea
-    `Notificacion` para el gestor del area ni calcula advertencias de "area
-    sin gestor" (decision 5, defensas 1 y 2). Ese seam se agrega en la etapa 5
-    sin tocar esta funcion salvo para sumar esos efectos.
+    Devuelve (orden, advertencias): `advertencias` es una lista de dicts
+    {"servicio_id", "mensaje"} -- el router (routers/ordenes.py) los adjunta
+    a `ServicioConsultaResponse.advertencias` de la linea correspondiente
+    dentro de la respuesta de la orden, reusando el mismo campo que ya usan
+    POST /api/servicios/ y PATCH /api/servicios/{id}.
     """
     asegurar_recibe_trabajo(orden)
 
@@ -173,14 +179,20 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
     )
 
     ahora = _ahora()
+    advertencias = []
     for servicio in solicitados:
         if servicio.area_id is not None:
             servicio.estado = "ASIGNADO"
+            # asignado_at marca CUANDO ENTRO A ASIGNADO (el despacho al area),
+            # no cuando un gestor lo toma -- ese momento lo marca el propio
+            # estado EN_PROCESO, sin una columna propia (ver
+            # routers/servicios.py::tomar_servicio). Ninguna otra funcion
+            # escribe ASIGNADO, así que este es el único punto que necesita
+            # sellarlo.
             servicio.asignado_at = ahora
-            # TODO(etapa 5): notificar a los gestores del area (Notificacion
-            # tipo SERVICIO_ASIGNADO); si el area no tiene ningun gestor
-            # activo, notificar a los admins (SERVICIO_SIN_GESTOR) y sumar el
-            # servicio a un advertencias[] en la respuesta del endpoint.
+            advertencia = notificacion_service.notificar_asignacion(db, servicio)
+            if advertencia:
+                advertencias.append(advertencia)
         else:
             servicio.estado = "EJECUTADO"
             servicio.ejecutado_at = ahora
@@ -188,7 +200,7 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
 
     db.commit()
     db.refresh(orden)
-    return orden
+    return orden, advertencias
 
 
 def crear_servicio_en_orden(

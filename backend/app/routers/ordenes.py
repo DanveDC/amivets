@@ -276,14 +276,27 @@ def confirmar_servicios(
     current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     """Confirma los servicios SOLICITADO de la orden (decisión 4): a ASIGNADO
-    los que tienen área de ejecución (despacho, a la espera de un gestor); a
-    EJECUTADO directo los que no la tienen (atajo sin despacho).
+    los que tienen área de ejecución (despacho, con notificación a los
+    gestores del área -- etapa 5); a EJECUTADO directo los que no la tienen
+    (atajo sin despacho).
 
     Idempotente: si no queda ninguna línea en SOLICITADO, devuelve 200 sin
     cambios -- confirmar una orden ya confirmada no es un error.
+
+    Si algún área despachada no tiene ningún gestor activo (decisión 5,
+    defensa 1), la línea correspondiente vuelve con `advertencias` seteado
+    dentro de `servicios[]` -- mismo campo que ya usa `ServicioConsultaResponse`
+    en el resto de la API, no un canal nuevo.
     """
     orden = orden_service.obtener_orden(db, orden_id)
-    return orden_service.confirmar_servicios(db, orden, current_user)
+    orden, advertencias = orden_service.confirmar_servicios(db, orden, current_user)
+    resp = OrdenServicioDetalleResponse.model_validate(orden)
+    if advertencias:
+        por_servicio = {a["servicio_id"]: a for a in advertencias}
+        for linea in resp.servicios:
+            if linea.id in por_servicio:
+                linea.advertencias = [por_servicio[linea.id]]
+    return resp
 
 
 @router.post("/{orden_id}/cerrar", response_model=OrdenServicioDetalleResponse)

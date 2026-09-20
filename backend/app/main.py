@@ -13,7 +13,7 @@ from app.core.limiter import limiter
 from app.core.price_history_backfill import backfill_initial_price_history
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo, liquidaciones, notas, servicios, ordenes, areas
+from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo, liquidaciones, notas, servicios, ordenes, areas, notificaciones
 import time
 import logging
 import subprocess
@@ -177,6 +177,7 @@ app.include_router(notas.router)
 app.include_router(servicios.router)
 app.include_router(ordenes.router)
 app.include_router(areas.router)
+app.include_router(notificaciones.router)
 
 
 @app.get("/", response_class=HTMLResponse)
