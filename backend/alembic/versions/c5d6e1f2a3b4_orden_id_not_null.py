@@ -1,7 +1,7 @@
 """servicios_consulta.orden_id pasa a NOT NULL (Tarea 06, FASE 2 etapa 4)
 
 Revision ID: c5d6e1f2a3b4
-Revises: b4c5d6e1f2a3
+Revises: f7a8b9c0d1e2
 Create Date: 2026-09-19 00:00:00.000000
 
 Cierra el diferido explícito que dejó b4c5d6e1f2a3 (backfill, etapa 3) y que
@@ -47,7 +47,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'c5d6e1f2a3b4'
-down_revision: Union[str, None] = 'b4c5d6e1f2a3'
+down_revision: Union[str, None] = 'f7a8b9c0d1e2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
