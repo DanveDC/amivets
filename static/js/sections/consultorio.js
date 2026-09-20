@@ -1794,6 +1794,12 @@ export const verServicioDetalle = async (servicioId) => {
     }
 };
 
+// Escapa texto que va a insertarse vía innerHTML (Tarea 06, decisión 7 --
+// fix del XSS almacenado de PruebaComplementaria.archivo_url).
+const _escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[c]));
+
 // Trae la fila clínica de detalle (por tipo) y devuelve una tabla clave→valor.
 const _detalleClinicoPorTipo = async (tipo, referenciaId, mascotaId) => {
     const endpoints = {
@@ -1840,7 +1846,13 @@ const _detalleClinicoPorTipo = async (tipo, referenciaId, mascotaId) => {
     } else { // LABORATORIO / DIAGNOSTICO
         add('Tipo de estudio', d.tipo);
         add('Resultado', d.resultado);
-        add('Archivo', d.archivo_url ? `<a href="${d.archivo_url}" target="_blank" rel="noopener">Ver documento</a>` : null);
+        // Tarea 06, decisión 7: archivo_url es texto histórico (no se dropea,
+        // tiene datos reales), pero ya no se ofrece como link -- interpolarlo
+        // crudo en un href es XSS almacenado (una URL "javascript:" tipeada a
+        // mano se ejecuta al hacer clic). Se muestra como texto plano; el
+        // adjunto real de esta etapa en adelante se sube y descarga por
+        // /api/adjuntos, no por esta columna.
+        add('Archivo (histórico)', d.archivo_url ? _escapeHtml(d.archivo_url) : null);
         add('Fecha', d.fecha ? new Date(d.fecha).toLocaleDateString() : null);
     }
     if (!rows.length) return null;
@@ -1994,8 +2006,11 @@ const buildClinicoForm = (type) => {
         ${comboConsultas}
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
             <div class="form-group"><label>Tipo</label><select name="tipo" class="form-control"><option>Laboratorio</option><option>Rayos X</option><option>Ecografía</option></select></div>
-            <div class="form-group"><label>URL Resultado</label><input type="text" name="archivo_url" class="form-control"></div>
         </div>
+        <!-- Tarea 06, decisión 7: ya no se ofrece cargar por URL -- el
+             resultado se sube como adjunto real (POST /api/servicios/{id}/adjuntos)
+             una vez que el servicio de LABORATORIO/IMAGEN pasa por el despacho. -->
+
         <div class="form-group"><label>Resultados</label><input type="text" name="resultado" class="form-control" required></div>
         <button type="submit" class="btn-primary">Guardar Registro</button>
     </form>`;
