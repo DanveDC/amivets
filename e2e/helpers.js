@@ -928,15 +928,60 @@ async function deleteHorario(request, id) {
 
 /**
  * Navigates the shell to a section by its id (e.g. "sec-inventario").
- * The 1A shell (etapa 2b) replaced the `.menu-item` sidebar with a `.av-tab`
- * bar for the 6 primary sections; the rest live in the `.av-usermenu`
- * dropdown. This helper tries the tab first, then falls back to the menu.
+ * The etapa 7 shell (Tarea 06) replaced the flat `.av-tab` bar with a
+ * sidebar of 6 modules (`.av-nav-item` / `.av-nav-sub`, `#avSidebar`) plus a
+ * launcher (`sec-inicio`, `.av-launcher-card`) that shows once per session.
+ * A handful of sections (Usuarios, Mi perfil, Citas web/QR) still live only
+ * in the `.av-usermenu` dropdown.
+ *
+ * Order of attempts:
+ *   1. The sidebar already shows `target` (most direct navigations, and any
+ *      module-default section once inside a module screen).
+ *   2. We're on the launcher: click the module card that targets `target`
+ *      directly, or — if `target` is a sub-item of some OTHER module (e.g.
+ *      "sec-bandeja-gestor" hangs off "Servicios") — open each visible
+ *      module card in turn until the sidebar reveals it.
+ *   3. Fall back to the user-menu dropdown.
  * @param {import('@playwright/test').Page} page
  * @param {string} target section id
  */
 async function gotoSection(page, target) {
-  const tab = page.locator(`.av-tab[data-target="${target}"]`);
-  if (await tab.count()) { await tab.click(); return; }
+  const trySidebar = async () => {
+    const item = page.locator(`.av-sidebar [data-target="${target}"]`).first();
+    if (await item.count() && await item.isVisible()) {
+      await item.click();
+      return true;
+    }
+    return false;
+  };
+  if (await trySidebar()) return;
+
+  const launcherCards = page.locator('.av-launcher-card[data-target]');
+  const n = await launcherCards.count();
+  if (n) {
+    for (let i = 0; i < n; i++) {
+      if ((await launcherCards.nth(i).getAttribute('data-target')) === target) {
+        await launcherCards.nth(i).click();
+        return;
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      await launcherCards.nth(i).click();
+      if (await trySidebar()) return;
+      if (await page.locator(`#${target}`).isVisible().catch(() => false)) return;
+      // Not the right module — back to the launcher for the next attempt.
+      // No silent catch acá a propósito: si este click falla (el sidebar no
+      // está visible, por ejemplo porque la navegación real se rompió), el
+      // error real de Playwright tiene que propagarse ahora — antes un
+      // `.catch(() => {})` lo tragaba y el loop seguía clickeando
+      // `.av-launcher-card` contra una página que todavía mostraba la
+      // sección anterior, lo que terminaba en un timeout confuso de
+      // "elemento no encontrado" varias líneas más abajo, sin señalar la
+      // falla de navegación real (hallazgo de revisión, etapa 7).
+      await page.locator('.av-sidebar-brand').click();
+    }
+  }
+
   await page.locator('.av-usermenu > summary').click();
   await page.locator(`.av-usermenu [data-target="${target}"]`).click();
 }
