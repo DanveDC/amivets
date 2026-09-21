@@ -16,7 +16,7 @@ import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { ICONS, showNotification, openModal, closeModal, debounce, escapeHtml } from '../core/ui.js';
 import { createPrettySelect, initSearchableSelect } from '../core/select.js';
 import { cargarFacturasMascota } from './facturacion.js';
-import { cargarBadgeOrdenes } from './ordenes.js';
+import { cargarBadgeOrdenes } from './citas-pendientes.js';
 // Relación cíclica segura con hoy.js (hoy.js importa de este módulo). Sólo se usa
 // dentro de un handler ("+ Servicio directo" en la pestaña Servicios).
 import { abrirServicioDirectoParaMascota } from './hoy.js';

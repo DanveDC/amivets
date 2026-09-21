@@ -8,7 +8,7 @@ import { ICONS, openModal, closeModal } from '../core/ui.js';
 import { showSection } from '../core/router.js';
 import { getRole, getUserId, whenReady } from '../core/session.js';
 import { seleccionarMascotaBasica, switchPetTab } from './consultorio.js';
-import { cargarBadgeOrdenes } from './ordenes.js';
+import { cargarBadgeOrdenes } from './citas-pendientes.js';
 
 // ============ AGENDA MODULE ============
 let calendarInstance = null;
@@ -147,7 +147,11 @@ export const loadAgenda = async () => {
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 },
                 locale: 'es',
-                height: 'auto',
+                // Shell nuevo (etapa 7): altura fija, #sec-agenda fija su
+                // propia cadena de altura al 100% en shell.css — 'auto' era
+                // el parche del shell 1A (content-height, bridge.css), que ya
+                // no se carga (navegacion-v2.md, Decisión 5, hallazgo 4).
+                height: '100%',
                 events: allEvents,
                 eventClick: function (info) {
                     mostrarResumenDia(info.event.startStr.split('T')[0], calendarInstance.getEvents());

@@ -1,14 +1,20 @@
-// sections/ordenes.js — shim post-Tarea 09 (etapa 5).
+// sections/citas-pendientes.js — shim post-Tarea 09 (etapa 5), renombrado en
+// la Tarea 06 etapa 7 (navegacion-v2.md, Decisión 5, hallazgo 1).
 //
-// La sección sec-ordenes-medico se eliminó: la bandeja de trabajo del
-// veterinario (consultas ABIERTA + turnos en sala) vive ahora en "Hoy"
-// (sections/hoy.js). Este módulo queda como shim porque todavía lo importan
-// app.js (window.atenderOrden, arranque del badge), agenda.js y consultorio.js
-// (refrescan el contador tras un alta de cita/consulta).
+// Este archivo se llamaba sections/ordenes.js y no tenía nada que ver con las
+// ÓRDENES DE SERVICIO de la Tarea 06 (colisión de nombre con el nuevo
+// contenedor de facturación del paciente): es un shim sobre CITAS agendadas
+// que cuenta las PENDIENTE para un badge y expone atenderOrden(citaId,
+// mascotaId), que abre el consultorio. Se renombra para dejar
+// sections/ordenes.js libre; el concepto NO se fusiona con Orden de servicio.
+//
+// Todavía lo importan app.js (window.atenderOrden, arranque del badge),
+// agenda.js y consultorio.js (refrescan el contador tras un alta de
+// cita/consulta).
 //
 // cargarBadgeOrdenes() ahora sólo:
 //   1. actualiza el stub #badgeOrdenesMedico (oculto, sin regresión de null),
-//   2. emite 'av:hoy-refresh' para que la pantalla Hoy, si está montada, se
+//   2. emite 'av:hoy-refresh' para que el panel del día, si está montado, se
 //      vuelva a pintar.
 
 import { fetchAPI } from '../core/api.js';
