@@ -5,7 +5,7 @@
 import { fetchAPI } from '../core/api.js';
 import { ICONS, openModal, closeModal } from '../core/ui.js';
 import { showSection } from '../core/router.js';
-import { renderMascotasList, seleccionarMascota } from './consultorio.js';
+import { setOwnerFilter } from './consultorio.js';
 
 // ============ PROPIETARIOS MODULE ============
 export const loadPropietarios = async (filter = '') => {
@@ -76,28 +76,25 @@ export const confirmEliminarPropietario = async (id, nombre) => {
     }
 };
 
-export const verMascotasPropietario = async (propietarioId, nombre) => {
-    try {
-        const mascotas = await fetchAPI(`/mascotas/?propietario_id=${propietarioId}`);
-        // Redirect to Consultorio and filter
-        const listContainer = document.getElementById('consultorioMascotasList');
-        const searchInput = document.getElementById('consultorioSearchMascota');
+export const verMascotasPropietario = (propietarioId, nombre) => {
+    // Deja pendiente el filtro para que initConsultorio (disparado por el
+    // router al navegar) haga el único fetch, ya filtrado por propietario.
+    setOwnerFilter(propietarioId);
 
-        // Navegación por el router del shell (oculta el resto con [hidden]).
-        showSection('sec-consultorio');
+    // Si había una mascota abierta en el panel de detalle, ese panel se
+    // queda visible aunque cambiemos de sección — sin esto, "Mascotas" de
+    // otro propietario mostraba la mascota vieja en lugar de la lista.
+    const patientWrapper = document.getElementById('patientWrapper');
+    const emptyPatientWrapper = document.getElementById('emptyPatientWrapper');
+    if (patientWrapper) patientWrapper.style.display = 'none';
+    if (emptyPatientWrapper) emptyPatientWrapper.style.display = 'flex';
 
-        if (searchInput) {
-            searchInput.value = `ID Propietario: ${propietarioId}`; // UI feedback
-        }
+    // Navegación por el router del shell (oculta el resto con [hidden]).
+    showSection('sec-consultorio');
 
-        renderMascotasList(mascotas, listContainer);
-
-        if (mascotas.length === 1) {
-            const m = mascotas[0];
-            seleccionarMascota(m.id, m.nombre, m.especie, m.codigo_historia);
-        }
-    } catch (e) {
-        alert("Error cargando mascotas del propietario");
+    const searchInput = document.getElementById('consultorioSearchMascota');
+    if (searchInput) {
+        searchInput.value = `ID Propietario: ${propietarioId}`; // UI feedback
     }
 };
 
