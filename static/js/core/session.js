@@ -13,14 +13,27 @@ import { fetchAPI } from './api.js';
 
 let currentRole = null;
 let currentUserId = null;
+let currentUsername = null;
 try { currentRole = localStorage.getItem('role') || null; } catch (_) { /* private mode */ }
 try { currentUserId = Number(localStorage.getItem('userId')) || null; } catch (_) { /* private mode */ }
+try { currentUsername = localStorage.getItem('username') || null; } catch (_) { /* private mode */ }
 
 let resolveReady;
 export const whenReady = new Promise((resolve) => { resolveReady = resolve; });
 
 export const getRole = () => currentRole;
 export const getUserId = () => currentUserId;
+export const getUsername = () => currentUsername;
+
+// Etiqueta legible del rol para la barra lateral y el lanzador
+// (navegacion-v2.md, Decisión 2 — mismos nombres que la tabla de módulos).
+const ROLE_LABELS = {
+    admin: 'Administrador',
+    recepcionista: 'Recepción',
+    veterinario: 'Veterinario',
+    gestor: 'Gestor de servicio',
+};
+export const getRoleLabel = () => ROLE_LABELS[currentRole] || currentRole || '';
 
 export const initSession = async () => {
     try {
@@ -34,9 +47,10 @@ export const initSession = async () => {
                 currentUserId = user.id;
                 try { localStorage.setItem('userId', String(user.id)); } catch (_) { /* ignore */ }
             }
-
-            const display = document.getElementById('userNameDisplay');
-            if (display) display.textContent = `Hola, ${user.username}`;
+            if (user.username) {
+                currentUsername = user.username;
+                try { localStorage.setItem('username', currentUsername); } catch (_) { /* ignore */ }
+            }
 
             // Non-navigation admin blocks (e.g. #liqSeccion). The router gates
             // sections/tabs; this only ungates content inside a section.

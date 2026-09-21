@@ -5,57 +5,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AmiVets - Sistema de Gestión Veterinaria</title>
-    <script>
-        /* no-FOUC theme: stamp data-theme before the first paint.
-           "system" (or unset) leaves the attribute off so themes.css's
-           prefers-color-scheme block decides. */
-        (function () {
-            try {
-                var t = localStorage.getItem('amivets-theme');
-                if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
-            } catch (e) { }
-        })();
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
-    <!-- CSS cascade during the 1A migration:
-         1. styles.css   — legacy sheet, still styles the un-migrated section
-            bodies (and .modal). Token-driven; deleted in etapa 5.
-         2. nocturne.css — design-system primitives (wins shared tokens).
-         3. themes.css   — light-theme token overrides ([data-theme] + system).
-         4. amivets.css  — the 1A shell + composed patterns.
-         5. bridge.css   — remaps styles.css's legacy tokens onto Nocturne so
-            un-migrated sections render in-theme. Transitional. -->
-    <link rel="stylesheet" href="/static/css/styles.css?v=29">
-    <link rel="stylesheet" href="/static/css/nocturne.css">
-    <link rel="stylesheet" href="/static/css/themes.css?v=1">
-    <link rel="stylesheet" href="/static/css/amivets.css?v=3">
-    <link rel="stylesheet" href="/static/css/bridge.css?v=2">
+    <!-- Etapa 7 (Tarea 06): se retira la piel 1A (nocturne.css / themes.css /
+         amivets.css / bridge.css). styles.css vuelve a ser la hoja base — ya
+         declara el sistema de superficies, texto, bordes, radios y las tres
+         familias tipográficas; shell.css agrega el shell nuevo (barra
+         lateral, cabecera, lanzador, bandeja) sobre esos mismos tokens.
+         Ver docs/diseno/navegacion-v2.md, Decisión 1. -->
+    <link rel="stylesheet" href="/static/css/styles.css?v=30">
+    <link rel="stylesheet" href="/static/css/shell.css?v=1">
 </head>
 
 <body>
-    <div class="av-app">
-        <!-- Top bar -->
-        <header class="av-topbar">
-            <a class="av-brand" href="#sec-hoy">
-                <i class="ph ph-paw-print" aria-hidden="true"></i>AmiVets
-            </a>
-            <button type="button" class="av-search" id="cmdkTrigger"
-                    aria-label="Buscar paciente, dueño o factura" aria-keyshortcuts="Control+K">
-                <i class="ph ph-magnifying-glass" aria-hidden="true"></i>
-                <span>Buscar paciente, dueño o factura</span>
+    <div class="av-app" id="avApp">
+      <div class="av-shell-body">
+        <!-- Barra lateral 248px — renderizada por core/router.js según el rol
+             (navegacion-v2.md, Decisión 1 y 2). Oculta por completo en el
+             lanzador (sec-inicio) vía .av-app--launcher. -->
+        <aside class="av-sidebar" id="avSidebar"></aside>
+
+        <div class="av-shell-col">
+          <!-- Cabecera 68px -->
+          <header class="av-header" id="avHeader">
+            <div class="av-header-title">
+                <strong id="avHeaderTitleText">AmiVets</strong>
+                <span id="avHeaderSubtitleText"></span>
+            </div>
+            <div class="av-header-spacer"></div>
+            <button type="button" class="av-search" id="cmdkTrigger" data-hide-for-role="gestor"
+                    aria-label="Buscar mascota o tutor" aria-keyshortcuts="Control+K">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <span class="av-search-label">Buscar mascota o tutor</span>
                 <span class="av-kbd" aria-hidden="true">⌘K</span>
             </button>
-            <div class="av-user av-row av-spacer">
-                <span id="userNameDisplay"></span>
-                <details class="av-newmenu" id="avNewMenu">
-                    <summary class="btn btn-primary">
-                        <i class="ph ph-plus" aria-hidden="true"></i>Nuevo
-                        <i class="ph ph-caret-down" aria-hidden="true"></i>
+            <div class="av-header-actions">
+                <details class="av-newmenu" id="avNewMenu" data-hide-for-role="gestor">
+                    <summary class="av-btn av-btn--primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                        Nuevo
                     </summary>
                     <div class="av-newmenu-panel" role="menu">
                         <button type="button" class="av-usermenu-item" role="menuitem" id="btnNuevoConsulta">Agregar consulta</button>
@@ -64,26 +56,33 @@
                         <button type="button" class="av-usermenu-item" role="menuitem" id="btnRegistrarPropietario">Agregar propietario</button>
                     </div>
                 </details>
+                <div class="av-notif" id="avNotif">
+                    <button type="button" class="av-iconbutton" id="notifTrigger" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 7H3s3 0 3-7"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+                        <span class="av-count" id="notifCount" hidden>0</span>
+                    </button>
+                    <div class="av-notif-panel" id="notifPanel" role="menu" hidden>
+                        <div class="av-notif-head">
+                            <strong>Notificaciones</strong>
+                            <button type="button" id="notifMarkAll">Marcar todas leídas</button>
+                        </div>
+                        <div id="notifList"></div>
+                    </div>
+                </div>
                 <details class="av-usermenu">
                     <summary class="av-usermenu-trigger" aria-label="Menú de usuario">
                         <i class="ph ph-list" aria-hidden="true"></i>
                     </summary>
                     <div class="av-usermenu-panel" role="menu">
-                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-catalogo">Catálogo de servicios</button>
                         <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-citas-web">Citas web / QR</button>
                         <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-usuarios" data-role="admin">Usuarios</button>
                         <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-perfil">Mi perfil</button>
                         <div class="av-usermenu-sep" role="separator"></div>
-                        <button type="button" class="av-usermenu-item" role="menuitem" id="themeToggle" aria-pressed="false">
-                            <i class="ph ph-moon" aria-hidden="true" data-theme-icon></i>
-                            <span data-theme-label>Tema oscuro</span>
-                        </button>
                         <button type="button" class="av-usermenu-item" role="menuitem" onclick="logout()">Cerrar sesión</button>
                     </div>
                 </details>
             </div>
-        </header>
-        <nav class="av-tabs" id="avTabs" role="tablist" aria-label="Secciones"></nav>
+          </header>
 
         <!-- Modal Registrar Propietario -->
         <div id="modalPropietario" class="modal">
@@ -921,35 +920,230 @@
         <!-- Main Content -->
         <main class="av-main">
 
-            <!-- Content Area: Hoy (Tarea 09, etapa 4) -->
-            <section id="sec-hoy" class="spa-section av-hoy" role="tabpanel" aria-labelledby="tab-sec-hoy" hidden>
-                <div class="content-header">
-                    <h2>Hoy</h2>
-                </div>
-
-                <div class="av-hoy-actions">
-                    <button type="button" class="btn-primary" id="btnHoyNuevaConsulta">+ Agregar consulta</button>
-                    <button type="button" class="btn-secondary" id="btnHoyServicioDirecto">+ Agregar servicio directo</button>
-                </div>
-
-                <div class="av-hoy-section">
-                    <h3>Consultas abiertas</h3>
-                    <div id="hoyConsultasList" class="av-hoy-list" aria-live="polite">
-                        <p class="av-muted" style="padding: 12px 16px;">Cargando…</p>
+            <!-- sec-inicio — el lanzador de los seis módulos (Tarea 06, etapa 7).
+                 Entrada de SESIÓN: se ve una vez, DEFAULT_SECTION. Sin barra
+                 lateral (core/router.js agrega .av-app--launcher al montarla).
+                 Ver docs/diseno/navegacion-v2.md, Decisión 2. -->
+            <section id="sec-inicio" class="spa-section" hidden>
+                <div class="av-launcher-canvas">
+                    <div class="av-launcher-head">
+                        <div>
+                            <h1 id="inicioSaludo">Bienvenida</h1>
+                            <p id="inicioFecha"></p>
+                        </div>
+                        <span class="av-eyebrow" id="inicioContador"></span>
                     </div>
+                    <div class="av-launcher-grid" id="inicioGrid"></div>
                 </div>
+            </section>
 
-                <div class="av-hoy-section">
-                    <h3>Turnos en sala</h3>
-                    <div id="hoyTurnosList" class="av-hoy-list" aria-live="polite">
-                        <p class="av-muted" style="padding: 12px 16px;">Cargando…</p>
+            <!-- sec-hoy — Panel del día, portada del módulo 1 (Admisión). Antes
+                 mostraba consultas; ahora es la bandeja de ÓRDENES DE SERVICIO
+                 del día (Tarea 06, etapa 7). tab:false lo reemplaza el sidebar
+                 (módulo Admisión). -->
+            <section id="sec-hoy" class="spa-section" hidden>
+                <div class="pd-canvas">
+                    <div class="pd-body">
+                        <div class="pd-kpis" id="pdKpis">
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">Órdenes abiertas</span>
+                                <span class="pd-kpi-value" id="pdKpiOrdenes">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiOrdenesSub"></span>
+                            </div>
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">En sala de espera</span>
+                                <span class="pd-kpi-value" id="pdKpiSala">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiSalaSub"></span>
+                            </div>
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">Por cobrar hoy</span>
+                                <span class="pd-kpi-value pd-kpi-value--warn" id="pdKpiCobrar">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiCobrarSub"></span>
+                            </div>
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">Facturado hoy</span>
+                                <span class="pd-kpi-value pd-kpi-value--ok" id="pdKpiFacturado">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiFacturadoSub"></span>
+                            </div>
+                        </div>
+
+                        <div class="pd-columns">
+                            <section class="pd-panel pd-waiting">
+                                <div class="pd-waiting-head">
+                                    <strong>Sala de espera</strong>
+                                    <span id="pdWaitingCount"></span>
+                                </div>
+                                <div id="pdWaitingList" aria-live="polite">
+                                    <p class="av-muted" style="padding: 12px 16px;">Cargando…</p>
+                                </div>
+                            </section>
+
+                            <section class="pd-panel pd-orders">
+                                <div class="pd-orders-head">
+                                    <strong>Órdenes de servicio</strong>
+                                    <div class="av-spacer"></div>
+                                    <div class="pd-orders-filters" id="pdOrdersFilters">
+                                        <button type="button" class="pd-filter" data-filtro="todas" aria-pressed="true">Todas</button>
+                                        <button type="button" class="pd-filter" data-filtro="abiertas" aria-pressed="false">Abiertas</button>
+                                        <button type="button" class="pd-filter" data-filtro="cobrar" aria-pressed="false">Por cobrar</button>
+                                        <button type="button" class="pd-filter" data-filtro="cerradas" aria-pressed="false">Cerradas</button>
+                                    </div>
+                                    <div class="av-row-actions">
+                                        <button type="button" class="av-btn" id="btnHoyServicioDirecto">+ Servicio directo</button>
+                                        <button type="button" class="av-btn av-btn--primary" id="btnHoyNuevaOrden">+ Nueva orden</button>
+                                    </div>
+                                </div>
+                                <table class="pd-table">
+                                    <thead>
+                                        <tr><th>Orden</th><th>Paciente</th><th>Tutor</th><th>Servicios</th><th>Total</th><th>Estado</th></tr>
+                                    </thead>
+                                    <tbody id="pdOrdersBody">
+                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Content Area: Consulta abierta (Tarea 09, etapa 3) -->
-            <section id="sec-consulta-abierta" class="spa-section av-ca" role="tabpanel"
-                     aria-labelledby="caHeading" hidden>
+            <!-- sec-orden-abierta — Orden de servicio abierta (Tarea 06, etapa 7).
+                 tab:false: se abre desde el panel del día, la ficha del
+                 paciente, la búsqueda global y la bandeja del gestor. La barra
+                 lateral queda con Admisión activo (navegacion-v2.md, Decisión 3). -->
+            <section id="sec-orden-abierta" class="spa-section" hidden>
+                <div class="oa-body">
+                    <main class="oa-canvas" id="oaCanvas">
+                        <div class="oa-stack">
+                            <section class="oa-patient" id="oaPatient">
+                                <p class="av-muted">Cargando datos de la orden…</p>
+                            </section>
+
+                            <section class="oa-services">
+                                <div class="oa-services-head">
+                                    <strong>Servicios anexados</strong>
+                                    <span id="oaServiciosCount"></span>
+                                    <div class="av-spacer"></div>
+                                    <span id="oaServiciosResumen" style="font-size:12.5px;color:var(--text-secondary);"></span>
+                                </div>
+                                <table class="oa-table">
+                                    <thead>
+                                        <tr><th>Servicio / insumos que consume</th><th>Categoría</th><th>Cant.</th><th>Precio</th><th>Estado</th><th></th></tr>
+                                    </thead>
+                                    <tbody id="oaServiciosBody">
+                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                                <button type="button" class="oa-anexar-row" id="btnOaAnexar">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                    <span>Anexar servicio a esta orden</span>
+                                </button>
+                            </section>
+                        </div>
+
+                        <div class="oa-side">
+                            <section class="oa-summary">
+                                <strong class="oa-summary-title">Resumen</strong>
+                                <div class="oa-summary-line"><span>Servicios</span><span id="oaResumenServicios">$0.00</span></div>
+                                <div class="oa-summary-line"><span>Insumos consumidos</span><span>incluidos</span></div>
+                                <div class="oa-hr"></div>
+                                <div class="oa-total"><strong>Total</strong><strong id="oaTotal">$0.00</strong></div>
+                                <div class="oa-actions">
+                                    <button type="button" class="av-btn av-btn--primary" id="btnOaConfirmar">Confirmar servicios</button>
+                                    <button type="button" class="av-btn" id="btnOaFacturar">Facturar orden</button>
+                                    <button type="button" class="av-btn" id="btnOaCerrar">Cerrar orden</button>
+                                    <button type="button" class="av-btn" id="btnOaAnular" style="color:var(--accent);border-color:var(--accent-subtle);">Anular orden</button>
+                                </div>
+                            </section>
+
+                            <section class="oa-meta">
+                                <strong class="oa-meta-title">Datos de la orden</strong>
+                                <div class="oa-meta-line"><span>Número</span><span id="oaMetaNumero">—</span></div>
+                                <div class="oa-meta-line"><span>Apertura</span><span id="oaMetaApertura">—</span></div>
+                                <div class="oa-meta-line"><span>Veterinario</span><span id="oaMetaVeterinario">—</span></div>
+                                <div class="oa-meta-line"><span>Estado</span><span id="oaMetaEstado">—</span></div>
+                            </section>
+                        </div>
+                    </main>
+
+                    <!-- Panel "Anexar servicio" — hermano flex del contenido de la
+                         orden, 452px, comprime en vez de tapar (Decisión 3). -->
+                    <aside class="oa-anexar-panel" id="oaAnexarPanel" hidden aria-label="Anexar servicio">
+                        <div class="oa-anexar-head">
+                            <strong>Anexar servicio</strong>
+                            <button type="button" class="oa-anexar-close" id="btnOaAnexarClose" aria-label="Cerrar">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div class="oa-anexar-body">
+                            <input type="text" id="oaAnexarSearch" class="oa-anexar-search" placeholder="Buscar en el catálogo de servicios" autocomplete="off">
+                            <div class="oa-anexar-grid">
+                                <div class="oa-cat-list" id="oaCatList"></div>
+                                <div class="oa-svc-list" id="oaSvcList"></div>
+                            </div>
+                            <div id="oaConsumosWrap" hidden>
+                                <div class="oa-consumos-head">
+                                    <strong>Insumos que consume</strong>
+                                    <span>editable</span>
+                                </div>
+                                <div id="oaConsumosList"></div>
+                            </div>
+                            <div class="oa-anexar-footer">
+                                <div id="oaAnexarWarning" hidden class="oa-anexar-warning"></div>
+                                <div class="oa-anexar-footer-row">
+                                    <button type="button" class="av-btn av-btn--primary" id="btnOaAnexarConfirmar">Anexar a la orden</button>
+                                    <button type="button" class="av-btn" id="btnOaAnexarCancelar">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- sec-bandeja-gestor — Módulo 2 · Mi bandeja (Tarea 06, etapa 7). -->
+            <section id="sec-bandeja-gestor" class="spa-section" hidden>
+                <div class="bg-canvas">
+                    <div class="bg-filters">
+                        <div class="av-row-actions" id="bgFilters"></div>
+                        <input type="text" id="bgFiltroLocal" class="av-search av-search--local" placeholder="Filtrar en mi bandeja" autocomplete="off" style="cursor:text;">
+                        <div class="av-spacer"></div>
+                        <span style="font-size:12.5px;color:var(--text-secondary);">Ordenadas por tiempo de espera</span>
+                    </div>
+                    <div class="bg-columns">
+                        <section class="bg-queue">
+                            <div class="bg-queue-head">
+                                <strong class="ser">Servicios asignados a mí</strong>
+                                <span id="bgEsperaAviso"></span>
+                            </div>
+                            <table class="bg-table">
+                                <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
+                                <tbody id="bgQueueBody">
+                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="bg-queue-note">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                                <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
+                            </div>
+                        </section>
+
+                        <section class="bg-detail" id="bgDetail">
+                            <div class="bg-empty">
+                                <svg class="bg-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                <strong>Nada en proceso</strong>
+                                <span>Tomá un servicio de tu bandeja para verlo acá y cargar su resultado.</span>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Area: Consulta abierta (Tarea 09, etapa 3). Se conserva
+                 tal cual en esta etapa — ver desviación documentada en el
+                 reporte de aplicación de la etapa 7 (navegacion-v2.md la
+                 marca para reemplazo, pero consultorio.js todavía depende de
+                 ella de punta a punta). -->
+            <section id="sec-consulta-abierta" class="spa-section av-ca" hidden>
                 <div class="av-ca-topbar">
                     <div class="av-ca-titlewrap">
                         <h2 id="caHeading"><span id="detalleConsultaTitle">Consulta</span></h2>
@@ -1115,7 +1309,7 @@
             </section>
 
             <!-- Content Area: Consultorio -->
-            <section id="sec-consultorio" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-consultorio">
+            <section id="sec-consultorio" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Consultorio Clínico</h2>
                 </div>
@@ -1252,7 +1446,7 @@
             </section>
 
             <!-- Content Area: Agenda -->
-            <section id="sec-agenda" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-agenda">
+            <section id="sec-agenda" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Agenda y Calendario Médico</h2>
                     <div style="display: flex; gap: 0.75rem;">
@@ -1276,7 +1470,7 @@
             </section>
 
             <!-- Content Area: Propietarios -->
-            <section id="sec-propietarios" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-propietarios">
+            <section id="sec-propietarios" class="content-area spa-section">
                 <div class="content-header"
                     style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 1.5rem;">
                     <h2>Listado de Propietarios</h2>
@@ -1305,7 +1499,7 @@
             </section>
 
             <!-- Content Area: Usuarios (Admin) -->
-            <section id="sec-usuarios" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-usuarios">
+            <section id="sec-usuarios" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Gestión de Usuarios</h2>
                     <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
@@ -1330,7 +1524,7 @@
             </section>
 
             <!-- Content Area: Inventario -->
-            <section id="sec-inventario" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-inventario">
+            <section id="sec-inventario" class="content-area spa-section">
                 <div class="content-header" style="flex-wrap:wrap; gap:0.75rem;">
                     <div>
                         <h2 style="margin:0;">Inventario y Farmacia</h2>
@@ -1454,7 +1648,7 @@
 
 
             <!-- Content Area: Facturación -->
-            <section id="sec-facturacion" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-facturacion">
+            <section id="sec-facturacion" class="content-area spa-section">
                 <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 2rem;">
                     <div>
                         <h2 style="margin:0;">Historial de Facturación</h2>
@@ -1494,7 +1688,7 @@
             </section>
 
             <!-- Content Area: Reportes -->
-            <section id="sec-reportes" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-reportes">
+            <section id="sec-reportes" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Reportes y KPIs</h2>
                 </div>
@@ -1659,7 +1853,7 @@
                  (sec-hoy), que lista consultas ABIERTA y turnos en sala. -->
 
             <!-- Content Area: Mi Perfil -->
-            <section id="sec-perfil" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-perfil">
+            <section id="sec-perfil" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Mi Perfil</h2>
                 </div>
@@ -1738,7 +1932,7 @@
             </section>
 
             <!-- Content Area: Citas Web / QR -->
-            <section id="sec-citas-web" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-citas-web">
+            <section id="sec-citas-web" class="content-area spa-section">
                 <div class="content-header" style="margin-bottom: 1.5rem;">
                     <h2>Citas Web / QR</h2>
                 </div>
@@ -1828,7 +2022,7 @@
             </section>
 
             <!-- Catalogo de Servicios -->
-            <section id="sec-catalogo" class="content-area spa-section" role="tabpanel" aria-labelledby="tab-sec-catalogo">
+            <section id="sec-catalogo" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Catálogo de Servicios</h2>
                 </div>
@@ -1865,6 +2059,31 @@
             </section>
 
         </main>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Anular orden (Tarea 06, etapa 7) -->
+    <div id="modalAnularOrden" class="modal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <h2>Anular orden</h2>
+                <span class="close" data-modal="modalAnularOrden" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <form id="formAnularOrden" style="padding:1.5rem;">
+                <p style="margin:0 0 1rem; color:var(--text-secondary); font-size:0.9rem;">
+                    Esta acción revierte el consumo de insumos ya aplicado y no se puede deshacer.
+                </p>
+                <div class="form-group">
+                    <label for="anularOrdenMotivo">Motivo *</label>
+                    <textarea id="anularOrdenMotivo" rows="3" required maxlength="255" placeholder="Ej: solicitado por el tutor, error de carga…"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalAnularOrden">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="background:var(--accent); border-color:var(--accent-dark);">Anular orden</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- Modal: Catalogo Servicio -->

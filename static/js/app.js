@@ -18,7 +18,7 @@ import { initSearchableSelect } from './core/select.js';
 import { initSession } from './core/session.js';
 import * as router from './core/router.js';
 import * as cmdk from './core/cmdk.js';
-import * as theme from './core/theme.js';
+import * as notificaciones from './core/notificaciones.js';
 
 import * as consultorio from './sections/consultorio.js';
 import * as hoy from './sections/hoy.js';
@@ -27,12 +27,14 @@ import * as propietarios from './sections/propietarios.js';
 import * as inventario from './sections/inventario.js';
 import * as facturacion from './sections/facturacion.js';
 import * as reportes from './sections/reportes.js';
-import * as ordenes from './sections/ordenes.js';
+import * as ordenes from './sections/citas-pendientes.js';
 import * as citasWeb from './sections/citas-web.js';
 import * as catalogo from './sections/catalogo.js';
 import * as usuarios from './sections/usuarios.js';
 import * as perfil from './sections/perfil.js';
 import * as historialPrecios from './sections/historial-precios.js';
+import * as ordenAbierta from './sections/orden-abierta.js';
+import * as bandejaGestor from './sections/bandeja-gestor.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // window.* — handlers referenciados por atributos on*= inline. En el monolito
@@ -118,7 +120,7 @@ window.currentMascotaId = consultorio.currentMascotaId;
 document.addEventListener('DOMContentLoaded', () => {
     router.init();
     cmdk.init();
-    theme.init();
+    notificaciones.init();
     initSession();
     historialPrecios.initHistorialPreciosModal();
     consultorio.setupRazasPerro();
@@ -127,6 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
     consultorio.initConsultorio();
     consultorio.initConsultaAbierta();
     hoy.initHoy();
+    ordenAbierta.initOrdenAbierta();
+    bandejaGestor.initBandejaGestor();
 
     // Initialize custom selects logic
     consultorio.initCustomSelects();

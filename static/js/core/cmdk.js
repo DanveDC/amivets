@@ -67,7 +67,7 @@ function open() {
     inputEl.setAttribute('aria-expanded', 'true');
     inputEl.setAttribute('aria-autocomplete', 'list');
     inputEl.setAttribute('aria-controls', 'avCmdkList');
-    inputEl.setAttribute('placeholder', 'Buscar paciente, dueño o factura');
+    inputEl.setAttribute('placeholder', 'Buscar mascota o tutor');
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
 

@@ -82,7 +82,7 @@ const CHART_TOKENS = () => {
     const css = getComputedStyle(document.documentElement);
     const pick = (name, fallback) => (css.getPropertyValue(name).trim() || fallback);
     return {
-        venta: pick('--primary', '#3F6B4F'),
+        venta: pick('--primary', '#0C7A89'),
         costo: pick('--info', '#1F6C9F'),
         grid: pick('--border', '#EAEAEA'),
         text: pick('--text-secondary', '#787774'),
