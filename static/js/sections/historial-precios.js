@@ -16,6 +16,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { getRole } from '../core/session.js';
+import { escapeHtml } from '../core/ui.js';
 
 // ── Helpers de formato ──────────────────────────────────────────────────────
 
@@ -26,10 +27,6 @@ export const formatMoney = (n) => {
     if (!Number.isFinite(v)) return '—';
     return '$' + v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
-
-const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-));
 
 const fmtFechaCorta = (iso) => (iso
     ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })

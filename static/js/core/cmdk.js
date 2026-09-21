@@ -8,6 +8,7 @@
 
 import { fetchAPI } from './api.js';
 import { showSection } from './router.js';
+import { escapeHtml } from './ui.js';
 
 const MAX_RESULTS = 8;
 const DEBOUNCE_MS = 200;
@@ -301,10 +302,3 @@ function activate(i) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function escapeHtml(s) {
-    return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}

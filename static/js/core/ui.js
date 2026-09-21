@@ -109,3 +109,17 @@ export function debounce(func, wait) {
         timeout = setTimeout(() => func.apply(this, args), wait);
     };
 }
+
+// Escapa texto antes de inyectarlo vía innerHTML. Antes había 4 copias
+// prácticamente idénticas de esto dando vueltas (cmdk.js, historial-precios.js,
+// consultorio.js, notificaciones.js) — se consolidan acá (hallazgo de
+// revisión, etapa 7: XSS en router.js::renderSidebar por username sin
+// escapar).
+export function escapeHtml(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}

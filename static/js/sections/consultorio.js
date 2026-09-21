@@ -13,7 +13,7 @@
 //     dentro de handlers, nunca en la evaluación del módulo.
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
-import { ICONS, showNotification, openModal, closeModal, debounce } from '../core/ui.js';
+import { ICONS, showNotification, openModal, closeModal, debounce, escapeHtml } from '../core/ui.js';
 import { createPrettySelect, initSearchableSelect } from '../core/select.js';
 import { cargarFacturasMascota } from './facturacion.js';
 import { cargarBadgeOrdenes } from './ordenes.js';
@@ -1794,12 +1794,6 @@ export const verServicioDetalle = async (servicioId) => {
     }
 };
 
-// Escapa texto que va a insertarse vía innerHTML (Tarea 06, decisión 7 --
-// fix del XSS almacenado de PruebaComplementaria.archivo_url).
-const _escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-}[c]));
-
 // Trae la fila clínica de detalle (por tipo) y devuelve una tabla clave→valor.
 const _detalleClinicoPorTipo = async (tipo, referenciaId, mascotaId) => {
     const endpoints = {
@@ -1852,7 +1846,7 @@ const _detalleClinicoPorTipo = async (tipo, referenciaId, mascotaId) => {
         // mano se ejecuta al hacer clic). Se muestra como texto plano; el
         // adjunto real de esta etapa en adelante se sube y descarga por
         // /api/adjuntos, no por esta columna.
-        add('Archivo (histórico)', d.archivo_url ? _escapeHtml(d.archivo_url) : null);
+        add('Archivo (histórico)', d.archivo_url ? escapeHtml(d.archivo_url) : null);
         add('Fecha', d.fecha ? new Date(d.fecha).toLocaleDateString() : null);
     }
     if (!rows.length) return null;
