@@ -5,7 +5,7 @@
 // expuesta por el bootstrap desde sections/consultorio.js.
 
 import { fetchAPI } from '../core/api.js';
-import { showNotification } from '../core/ui.js';
+import { showNotification, escapeHtml } from '../core/ui.js';
 
 // ============ REPORTES MODULE ============
 export const loadReportes = async () => {
@@ -220,7 +220,7 @@ const cargarSelectorVeterinarios = async () => {
         const vets = await fetchAPI('/usuarios/veterinarios');
         const previo = select.value;
         select.innerHTML = '<option value="">Seleccioná un veterinario...</option>' +
-            (Array.isArray(vets) ? vets : []).map(v => `<option value="${v.id}">${v.username}</option>`).join('');
+            (Array.isArray(vets) ? vets : []).map(v => `<option value="${v.id}">${escapeHtml(v.username)}</option>`).join('');
         if (previo) select.value = previo;
     } catch (error) {
         console.error('Error cargando veterinarios', error);
@@ -355,7 +355,7 @@ const cargarTarifas = async () => {
         }
         body.innerHTML = lista.map(v => `
             <tr>
-                <td style="padding: 0.6rem 0.75rem;">${v.username}</td>
+                <td style="padding: 0.6rem 0.75rem;">${escapeHtml(v.username)}</td>
                 <td style="padding: 0.6rem 0.75rem;">
                     <input type="number" min="0" step="0.01" id="liqTarifaInput${v.id}" value="${v.tarifa_consulta ?? ''}" placeholder="Sin configurar" style="width:120px; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px;">
                 </td>
@@ -400,7 +400,7 @@ const cargarSelectoresVeterinariosLiq = async () => {
             const previo = select.value;
             const placeholder = select.id === 'liqHistVetSelect' ? 'Todos los veterinarios' : 'Seleccioná un veterinario...';
             select.innerHTML = `<option value="">${placeholder}</option>` +
-                lista.map(v => `<option value="${v.id}">${v.username}</option>`).join('');
+                lista.map(v => `<option value="${v.id}">${escapeHtml(v.username)}</option>`).join('');
             if (previo) select.value = previo;
         });
     } catch (error) {

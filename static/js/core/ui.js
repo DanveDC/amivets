@@ -123,3 +123,27 @@ export function escapeHtml(s) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
 }
+
+// Escapa un valor para usarlo como argumento string dentro de un onclick
+// inline: `onclick="fn('${escapeJsAttr(valor)}')"`.
+//
+// escapeHtml() sola NO alcanza acá. El atributo onclick se parsea en dos
+// pasos: primero el HTML parser decodifica las entidades (&#39; → ') para
+// obtener el texto fuente que va a compilar como JS, y RECIÉN DESPUÉS ese
+// texto se ejecuta como JS. Si sólo se HTML-escapa la comilla, el parser la
+// vuelve a convertir en ' antes de que el motor de JS la vea, y el username
+// igual corta el string literal (hallazgo de revisión, etapa 7 — username sin
+// escapar en usuarios.js dentro de un onclick, más grave que el innerHTML sin
+// escapar de router.js porque acá se sale del string de JS, no sólo del HTML).
+//
+// El orden importa: primero se escapa para JS (\ y ' — los dos caracteres que
+// pueden cerrar el string literal de una comilla simple), y RECIÉN DESPUÉS se
+// HTML-escapa el resultado (para que las comillas dobles u otros caracteres
+// que sobrevivieron al paso anterior no corten el atributo `onclick="..."`
+// que lo contiene). Aplicar los pasos al revés no protege nada.
+export function escapeJsAttr(s) {
+    const jsEscaped = String(s ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'");
+    return escapeHtml(jsEscaped);
+}

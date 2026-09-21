@@ -4,7 +4,7 @@
 // a función nombrada, el bootstrap lo vuelve a enlazar a #formEditarUsuario.
 
 import { fetchAPI } from '../core/api.js';
-import { ICONS, openModal, closeModal } from '../core/ui.js';
+import { ICONS, openModal, closeModal, escapeHtml, escapeJsAttr } from '../core/ui.js';
 
 export const loadUsuarios = async () => {
     const tbody = document.getElementById('usuariosTableBody');
@@ -23,14 +23,14 @@ export const loadUsuarios = async () => {
         };
         tbody.innerHTML = usuarios.map(u => `
             <tr>
-                <td>${u.username}</td>
-                <td>${u.email}</td>
+                <td>${escapeHtml(u.username)}</td>
+                <td>${escapeHtml(u.email)}</td>
                 <td>${roleBadge(u.role)}</td>
                 <td>${u.is_active
                     ? `<span class="status-pill status-pill--ok">${ICONS.checkCircle} Activo</span>`
                     : `<span class="status-pill status-pill--muted">${ICONS.xCircle} Inactivo</span>`}</td>
                 <td style="white-space:nowrap;">
-                    <button class="btn-secondary btn-sm" onclick="abrirEditarUsuario(${u.id}, '${u.username}', '${u.email}', '${u.role}')"
+                    <button class="btn-secondary btn-sm" onclick="abrirEditarUsuario(${u.id}, '${escapeJsAttr(u.username)}', '${escapeJsAttr(u.email)}', '${escapeJsAttr(u.role)}')"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-right:0.35rem;">
                         Editar
                     </button>
@@ -38,7 +38,7 @@ export const loadUsuarios = async () => {
                         style="font-size:0.75rem; padding:0.25rem 0.6rem;">
                         ${u.is_active ? 'Desactivar' : 'Activar'}
                     </button>
-                    ${u.id !== meId ? `<button class="btn-secondary btn-sm btn-row-danger" onclick="deleteUsuario(${u.id}, '${u.username}')"
+                    ${u.id !== meId ? `<button class="btn-secondary btn-sm btn-row-danger" onclick="deleteUsuario(${u.id}, '${escapeJsAttr(u.username)}')"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-left:0.35rem;">
                         Eliminar
                     </button>` : ''}

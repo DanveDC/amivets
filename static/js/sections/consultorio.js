@@ -2493,9 +2493,9 @@ export const cargarVeterinarios = async () => {
     try {
         const usuarios = await fetchAPI('/usuarios/veterinarios');
         const opts1 = '<option value="">Seleccionar médico...</option>' +
-            usuarios.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join('');
+            usuarios.map(u => `<option value="${u.id}">${escapeHtml(u.username)} (${escapeHtml(u.role)})</option>`).join('');
         const opts2 = '<option value="">Seleccionar médico...</option>' +
-            usuarios.map(u => `<option value="${u.id}" data-username="${u.username}">${u.username} (${u.role})</option>`).join('');
+            usuarios.map(u => `<option value="${u.id}" data-username="${escapeHtml(u.username)}">${escapeHtml(u.username)} (${escapeHtml(u.role)})</option>`).join('');
 
         const scita = document.getElementById('citaVeterinarioId');
         if (scita) scita.innerHTML = opts1;
