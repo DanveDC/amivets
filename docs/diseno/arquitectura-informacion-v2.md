@@ -112,6 +112,12 @@ lateral. Es lo que el equipo ya tiene en la cabeza.
 Los modales se reservan para confirmaciones cortas. Anexar un servicio es un
 panel lateral, no un modal que hay que abrir y cerrar tres veces seguidas.
 
+> **Etapa 7 de la tarea 06.** Esta sección dice que el panel del día es la
+> pantalla de inicio y que los seis módulos son la barra lateral; el enunciado de
+> la tarea 06 dice que la pantalla de entrada es el lanzador de módulos. Las dos
+> cosas conviven —entrada de sesión vs. aterrizaje de trabajo— y la decisión
+> concreta, con las reglas de rol, está en `docs/diseno/navegacion-v2.md`.
+
 ---
 
 ## 4. Identidad visual

@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AmiVets · Bandeja del gestor</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #FBFBFA; color: #2F3437;
+      font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    a { color: #0C7A89; text-decoration: none; }
+    a:hover { color: #0B6976; }
+    .num { font-family: 'Geist Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .ser { font-family: 'Newsreader', Georgia, serif; font-weight: 500; letter-spacing: -0.01em; }
+    table { border-collapse: collapse; width: 100%; }
+    th { text-align: left; font-size: 12px; font-weight: 500; color: #9B9A97;
+      text-transform: uppercase; letter-spacing: 0.06em; padding: 0 14px 10px; }
+    td { padding: 13px 14px; border-top: 1px solid #F0F0EF; font-size: 14px; }
+  </style>
+
+</head>
+<body>
+<div style="display:flex;height:900px;overflow:hidden">
+
+  <!-- ───────── barra lateral 248px · el gestor solo tiene el módulo 2 ───────── -->
+  <aside style="width:248px;flex-shrink:0;background:#FFFFFF;border-right:1px solid #EAEAEA;display:flex;flex-direction:column;padding:20px 14px;gap:26px">
+    <div style="display:flex;align-items:center;gap:11px;padding:0 6px">
+      <div style="width:40px;height:40px;flex-shrink:0;border-radius:8px;background:#0C7A89;display:flex;align-items:center;justify-content:center" role="img" aria-label="AmiVets">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="#FFFFFF"><circle cx="11" cy="4.6" r="2.1"/><circle cx="17.8" cy="8.2" r="2.1"/><circle cx="4.2" cy="8.2" r="2.1"/><circle cx="6.8" cy="14.6" r="2.1"/><path d="M14.4 14.6c1.6 1.2 2.6 2.7 2.6 4.2a2.7 2.7 0 0 1-2.7 2.7c-1 0-1.9-.4-3-.4s-2 .4-3 .4A2.7 2.7 0 0 1 5.6 18.8c0-2.7 3.1-5.6 5.7-5.6 1.1 0 2.2.5 3.1 1.4Z"/></svg>
+      </div>
+      <div style="display:flex;flex-direction:column;line-height:1.25">
+        <span class="ser" style="font-size:17px;color:#2F3437">AmiVets</span>
+        <span style="font-size:11px;color:#9B9A97;letter-spacing:0.03em">Sistema de gestión</span>
+      </div>
+    </div>
+
+    <nav style="display:flex;flex-direction:column;gap:2px">
+      <div style="position:relative;display:flex;align-items:center;gap:11px;padding:10px 14px 10px 18px;border-radius:6px;background:rgba(12,122,137,0.07);color:#0C7A89;font-weight:600;font-size:14px">
+        <div style="position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:0 3px 3px 0;background:#0C7A89"></div>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#0C7A89" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .2.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/></svg>
+        <span style="flex-grow:1">Servicios</span>
+        <span class="num" style="font-size:11px;color:#9B9A97">2</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px 8px 48px;border-radius:6px;background:transparent;color:#0C7A89;font-weight:500;font-size:13.5px">
+        <span style="flex-grow:1">Mi bandeja</span>
+        <span class="num" style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:9999px;background:#0C7A89;color:#fff;font-size:11px;font-weight:500">6</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px 8px 48px;border-radius:6px;background:transparent;color:#787774;font-weight:450;font-size:13.5px">
+        <span style="flex-grow:1">Ejecutados hoy</span>
+        <span class="num" style="font-size:11px;color:#9B9A97">9</span>
+      </div>
+    </nav>
+
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <span style="font-size:12px;color:#9B9A97;text-transform:uppercase;letter-spacing:0.06em;padding:0 8px;margin-bottom:2px">Mis áreas</span>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;background:#F7F6F3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#787774" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h4v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></svg>
+        <span style="flex-grow:1;font-size:13px;color:#2F3437">Laboratorio</span>
+        <span class="num" style="font-size:11.5px;color:#787774">4</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;background:#F7F6F3">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#787774" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 12h8"/></svg>
+        <span style="flex-grow:1;font-size:13px;color:#2F3437">Imagen</span>
+        <span class="num" style="font-size:11.5px;color:#787774">2</span>
+      </div>
+    </div>
+
+    <div style="flex-grow:1"></div>
+
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:6px;background:#F7F6F3">
+      <div style="width:30px;height:30px;border-radius:50%;background:#0C7A89;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">JA</div>
+      <div style="display:flex;flex-direction:column;line-height:1.3">
+        <span style="font-size:13px;font-weight:500">Téc. J. Alcántara</span>
+        <span style="font-size:11px;color:#9B9A97">Gestor de servicio</span>
+      </div>
+    </div>
+  </aside>
+
+  <div style="flex-grow:1;display:flex;flex-direction:column;min-width:0">
+
+    <!-- ───────── cabecera 68px · sin búsqueda global: el gestor no navega el padrón ───────── -->
+    <header style="height:68px;flex-shrink:0;border-bottom:1px solid #EAEAEA;background:#FFFFFF;display:flex;align-items:center;gap:20px;padding:0 28px">
+      <div style="display:flex;flex-direction:column;line-height:1.25">
+        <span class="ser" style="font-size:22px;color:#2F3437">Mi bandeja</span>
+        <span style="font-size:12.5px;color:#787774">Sábado 12 de septiembre · Laboratorio e Imagen</span>
+      </div>
+      <div style="flex-grow:1"></div>
+      <div style="display:flex;align-items:center;gap:8px;height:34px;padding:0 12px;border:1px solid #EAEAEA;border-radius:6px;background:#FBFBFA;color:#9B9A97;font-size:13px;width:230px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span style="flex-grow:1">Filtrar en mi bandeja</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div style="position:relative;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:6px;background:#FFFFFF;border:1px solid #EAEAEA">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#787774" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="num" style="position:absolute;top:-5px;right:-5px;display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:9999px;background:#9F2F2D;color:#fff;font-size:10px;font-weight:500;border:1.5px solid #FFFFFF">3</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;height:38px;padding:0 15px;border-radius:6px;font-size:13.5px;font-weight:500;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#787774" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+          <span>Actualizar</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ───────── lienzo ───────── -->
+    <main style="flex-grow:1;overflow:hidden;padding:24px 28px 20px;display:flex;flex-direction:column;gap:14px">
+
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="padding:0 12px;height:30px;border-radius:9999px;background:rgba(12,122,137,0.07);color:#0C7A89;font-size:12.5px;font-weight:500;display:inline-flex;align-items:center">Todas <span class="num" style="margin-left:5px">6</span></span>
+        <span style="padding:0 12px;height:30px;border-radius:9999px;border:1px solid #EAEAEA;background:#FFFFFF;color:#787774;font-size:12.5px;font-weight:400;display:inline-flex;align-items:center">Laboratorio <span class="num" style="margin-left:5px">4</span></span>
+        <span style="padding:0 12px;height:30px;border-radius:9999px;border:1px solid #EAEAEA;background:#FFFFFF;color:#787774;font-size:12.5px;font-weight:400;display:inline-flex;align-items:center">Imagen <span class="num" style="margin-left:5px">2</span></span>
+        <span style="padding:0 12px;height:30px;border-radius:9999px;border:1px solid #EAEAEA;background:#FFFFFF;color:#787774;font-size:12.5px;font-weight:400;display:inline-flex;align-items:center">En proceso <span class="num" style="margin-left:5px">1</span></span>
+        <div style="flex-grow:1"></div>
+        <span style="font-size:12.5px;color:#787774">Ordenadas por tiempo de espera</span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:minmax(0, 1fr) 330px;gap:16px;min-height:0">
+
+        <!-- cola de trabajo -->
+        <section style="background:#FFFFFF;border:1px solid #EAEAEA;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.03);padding:16px 4px 8px;">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:0 14px">
+            <span class="ser" style="font-size:17px;color:#2F3437">Servicios asignados a mí</span>
+            <span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#FBF3DB;color:#8A5A00;font-size:11.5px;font-weight:500;white-space:nowrap">1 esperando más de 1 h</span>
+          </div>
+          <table>
+            <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+              <tr style="background:#F7F6F3">
+                <td>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="font-weight:500">Hemograma completo</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                  </div>
+                  <span style="font-size:12px;color:#9B9A97">Laboratorio</span>
+                </td>
+                <td><span style="font-weight:500">Luna</span> <span style="color:#9B9A97;font-size:12.5px">· Canino</span></td>
+                <td><span class="num" style="font-weight:500;color:#0C7A89">OS-2418</span></td>
+                <td class="num" style="color:#8A5A00;font-weight:500">1 h 42 min</td>
+                <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#E4F3F8;color:#0E6F8C;font-size:11.5px;font-weight:500;white-space:nowrap">En proceso</span></td>
+                <td style="text-align:right">
+                  <span style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:6px;background:#0C7A89;color:#fff;border:1px solid #0B6976;font-size:12.5px;font-weight:500">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                    Cargar resultado
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="font-weight:500">Radiografía de tórax</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                  </div>
+                  <span style="font-size:12px;color:#9B9A97">Imagen</span>
+                </td>
+                <td><span style="font-weight:500">Thor</span> <span style="color:#9B9A97;font-size:12.5px">· Canino</span></td>
+                <td><span class="num" style="font-weight:500;color:#0C7A89">OS-2417</span></td>
+                <td class="num" style="color:#787774">58 min</td>
+                <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#FBF3DB;color:#8A5A00;font-size:11.5px;font-weight:500;white-space:nowrap">Asignado</span></td>
+                <td style="text-align:right"><span style="display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:6px;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA;font-size:12.5px;font-weight:500">Tomar</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="font-weight:500">Química sanguínea</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                  </div>
+                  <span style="font-size:12px;color:#9B9A97">Laboratorio</span>
+                </td>
+                <td><span style="font-weight:500">Nala</span> <span style="color:#9B9A97;font-size:12.5px">· Felino</span></td>
+                <td><span class="num" style="font-weight:500;color:#0C7A89">OS-2415</span></td>
+                <td class="num" style="color:#787774">41 min</td>
+                <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#FBF3DB;color:#8A5A00;font-size:11.5px;font-weight:500;white-space:nowrap">Asignado</span></td>
+                <td style="text-align:right"><span style="display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:6px;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA;font-size:12.5px;font-weight:500">Tomar</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="font-weight:500">Ecografía abdominal</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                  </div>
+                  <span style="font-size:12px;color:#9B9A97">Imagen</span>
+                </td>
+                <td><span style="font-weight:500">Simón</span> <span style="color:#9B9A97;font-size:12.5px">· Canino</span></td>
+                <td><span class="num" style="font-weight:500;color:#0C7A89">OS-2419</span></td>
+                <td class="num" style="color:#787774">23 min</td>
+                <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#FBF3DB;color:#8A5A00;font-size:11.5px;font-weight:500;white-space:nowrap">Asignado</span></td>
+                <td style="text-align:right"><span style="display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:6px;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA;font-size:12.5px;font-weight:500">Tomar</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="font-weight:500">Urianálisis</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                  </div>
+                  <span style="font-size:12px;color:#9B9A97">Laboratorio</span>
+                </td>
+                <td><span style="font-weight:500">Mía</span> <span style="color:#9B9A97;font-size:12.5px">· Felino</span></td>
+                <td><span class="num" style="font-weight:500;color:#0C7A89">OS-2420</span></td>
+                <td class="num" style="color:#787774">12 min</td>
+                <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#FBF3DB;color:#8A5A00;font-size:11.5px;font-weight:500;white-space:nowrap">Asignado</span></td>
+                <td style="text-align:right"><span style="display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:6px;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA;font-size:12.5px;font-weight:500">Tomar</span></td>
+              </tr>
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:7px">
+                    <span style="font-weight:500">Coproparasitológico</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                  </div>
+                  <span style="font-size:12px;color:#9B9A97">Laboratorio</span>
+                </td>
+                <td><span style="font-weight:500">Rocco</span> <span style="color:#9B9A97;font-size:12.5px">· Canino</span></td>
+                <td><span class="num" style="font-weight:500;color:#0C7A89">OS-2421</span></td>
+                <td class="num" style="color:#787774">6 min</td>
+                <td><span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#FBF3DB;color:#8A5A00;font-size:11.5px;font-weight:500;white-space:nowrap">Asignado</span></td>
+                <td style="text-align:right"><span style="display:inline-flex;align-items:center;height:30px;padding:0 13px;border-radius:6px;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA;font-size:12.5px;font-weight:500">Tomar</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="display:flex;align-items:center;gap:7px;padding:12px 14px 4px;font-size:12.5px;color:#9B9A97">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+            <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
+          </div>
+        </section>
+
+        <!-- el servicio que tomó · ejecutar y cargar el resultado -->
+        <section style="background:#FFFFFF;border:1px solid #EAEAEA;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.03);display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:15px 16px;border-bottom:1px solid #F0F0EF;display:flex;flex-direction:column;gap:5px">
+            <span style="font-size:12px;color:#9B9A97;text-transform:uppercase;letter-spacing:0.06em">En proceso</span>
+            <span class="ser" style="font-size:19px;color:#2F3437;line-height:1.2">Hemograma completo</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+              <span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:9999px;background:#F7F6F3;color:#787774;font-size:11.5px;font-weight:500;white-space:nowrap">Laboratorio</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:#0C7A89">
+                <span class="num">OS-2418</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0C7A89" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
+            </div>
+          </div>
+
+          <div style="padding:15px 16px;display:flex;flex-direction:column;gap:11px">
+
+            <div style="display:flex;align-items:center;gap:11px">
+              <div style="width:34px;height:34px;flex-shrink:0;border-radius:8px;background:rgba(12,122,137,0.07);color:#0C7A89;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600">LU</div>
+              <div style="display:flex;flex-direction:column;line-height:1.3;min-width:0">
+                <span style="font-size:14px;font-weight:500">Luna · Canino, mestiza, 4 a.</span>
+                <span style="font-size:12px;color:#787774">Tutora: Carolina Pérez</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;border-radius:6px;background:#E4F3F8;color:#0E6F8C;font-size:12px;line-height:1.45">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0E6F8C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              <span style="text-wrap:pretty">Ves solo lo necesario para tu trabajo: sin diagnóstico, tratamiento, otros servicios ni montos.</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span style="font-size:12px;color:#9B9A97;text-transform:uppercase;letter-spacing:0.06em">Indicación del veterinario</span>
+              <span style="font-size:13.5px;color:#2F3437;line-height:1.5;text-wrap:pretty">Ayuno de 12 h confirmado. Descartar anemia. La orden cierra hoy.</span>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <span style="font-size:12px;color:#9B9A97;text-transform:uppercase;letter-spacing:0.06em">Resultado</span>
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 11px;border:1px solid #EAEAEA;border-radius:6px;background:#FBFBFA">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#787774" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <div style="display:flex;flex-direction:column;line-height:1.3;min-width:0;flex-grow:1">
+                  <span class="num" style="font-size:12.5px;color:#2F3437;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">hemograma-luna-12sep.pdf</span>
+                  <span style="font-size:11px;color:#9B9A97"><span class="num">318 KB</span> · subido 14:07 por J. Alcántara</span>
+                </div>
+              </div>
+              <div style="height:62px;border:1px dashed #EAEAEA;border-radius:6px;background:#FFFFFF;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9B9A97" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                <span style="font-size:12.5px;color:#787774">Arrastrá otro archivo o hacé clic</span>
+                <span style="font-size:11px;color:#9B9A97">PDF, JPG o PNG · máx. <span class="num">10 MB</span></span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:6px;background:#EEF6E9;color:#3D7A2C;font-size:12px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3D7A2C" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M20 6 9 17l-5-5"/></svg>
+              <span>Laboratorio exige adjunto · cumplido</span>
+            </div>
+          </div>
+
+          <div style="flex-grow:1"></div>
+
+          <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:8px">
+            <div style="height:42px;border-radius:6px;background:#0C7A89;color:#fff;border:1px solid #0B6976;display:flex;align-items:center;justify-content:center;gap:7px;font-size:14px;font-weight:600">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+              <span>Marcar como ejecutado</span>
+            </div>
+            <div style="height:36px;border-radius:6px;background:#FFFFFF;color:#787774;border:1px solid #EAEAEA;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500">Devolver: no me corresponde</div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- ───────── anotación: estado vacío ───────── -->
+      <div style="background:#FFFFFF;border:1px dashed #EAEAEA;border-radius:8px;padding:14px 18px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;color:#9B9A97;text-transform:uppercase;letter-spacing:0.06em">Nota de diseño · estado vacío, no es parte de la pantalla</span>
+          <div style="flex-grow:1;height:1px;background:#F0F0EF"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px;padding:4px 0">
+          <div style="width:44px;height:44px;flex-shrink:0;border-radius:8px;background:rgba(12,122,137,0.07);display:flex;align-items:center;justify-content:center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0C7A89" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1Z"/></svg>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;max-width:520px">
+            <span class="ser" style="font-size:18px;color:#2F3437">No tenés servicios pendientes</span>
+            <span style="font-size:13px;color:#787774;line-height:1.5;text-wrap:pretty">Cuando un veterinario confirme un servicio de Laboratorio o de Imagen, entra acá y te llega el aviso en la campana. La bandeja se refresca sola.</span>
+          </div>
+          <div style="display:flex;align-items:center;height:38px;padding:0 15px;border-radius:6px;background:#FFFFFF;color:#2F3437;border:1px solid #EAEAEA;font-size:13.5px;font-weight:500;white-space:nowrap">Ver lo que ejecuté hoy</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+</body>
+</html>

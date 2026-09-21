@@ -1,6 +1,6 @@
 # Pantallas del rediseño — AmiVets
 
-Nueve maquetas estáticas de 1440×900, autocontenidas: cada `.html` se abre en el
+Once maquetas estáticas de 1440×900, autocontenidas: cada `.html` se abre en el
 navegador sin servidor y sin dependencias (el logo va incrustado como data URI;
 las fuentes se cargan de Google Fonts).
 
@@ -11,14 +11,27 @@ espaciados, alturas de control— y se leen y copian directamente.
 | Archivo | Pantalla |
 |---|---|
 | `Login.html` | Inicio de sesión |
+| `Inicio.html` | Inicio — el lanzador de los seis módulos (la entrada de sesión) |
 | `Main.html` | Panel del día — inicio de Admisión |
 | `OrdenAbierta.html` | Orden de servicio abierta (la pantalla de trabajo) |
 | `AnexarServicio.html` | Panel lateral para anexar un servicio a la orden |
+| `BandejaGestor.html` | Bandeja del gestor — su cola de trabajo, ejecutar y cargar el resultado |
 | `FichaMascota.html` | Ficha de paciente e historia clínica |
 | `Insumos.html` | Inventario con unidad de medida y stock fraccionado |
 | `Catalogo.html` | Catálogo de servicios, su receta de insumos y su historial de precios |
 | `Facturacion.html` | Facturación de una orden |
 | `Reportes.html` | KPI y reportes |
+
+`Inicio.html` y `BandejaGestor.html` se agregaron en la etapa 7 de la tarea 06.
+Dos diferencias respecto de las nueve primeras, hechas a propósito:
+
+- El logo va como **SVG inline** (huella blanca sobre el cuadro teal de 40 px,
+  radio 8) en vez del PNG en data URI. El PNG pesa ~60 KB en base64 y no se
+  puede duplicar carácter por carácter sin riesgo de corromperlo; el SVG mantiene
+  la misma caja, el mismo radio y la autonomía del archivo.
+- Ambas traen un bloque con **borde punteado** rotulado *"Nota de diseño · no es
+  parte de la pantalla"*: el recorte por rol del lanzador y el estado vacío de la
+  bandeja. Es anotación para quien implemente, no interfaz.
 
 ## Tokens
 
@@ -35,9 +48,18 @@ Tipografía   Geist (UI) · Newsreader (títulos, clase .ser) · Geist Mono (cif
 Controles    38-46 px de alto · barra lateral 248 px · cabecera 68 px
 ```
 
-Son los mismos tokens estructurales que ya usa `static/css/styles.css`; lo único
-que cambia respecto al sistema actual es la familia de color, que pasa del verde
-clínico al teal de la marca.
+Son los mismos tokens estructurales que ya declara `static/css/styles.css`
+—superficies, texto, bordes, radios y las tres familias tipográficas—; lo único
+que cambia ahí es la familia de color, que pasa del verde clínico al teal de la
+marca.
+
+> ⚠️ **Corrección (etapa 7).** Esa frase describe `styles.css`, no lo que el
+> navegador pinta hoy. `static/css/bridge.css` se carga al final y remapea
+> `--primary`, las superficies y las tipografías a la capa 1A (Nocturne oscuro,
+> acento `#9184d9`, Inter), y `index.html` solo carga Inter de Google Fonts, así
+> que Geist y Newsreader nunca llegan a cargarse. La distancia entre estas
+> maquetas y la aplicación actual es mayor que "un color": es toda la capa 1A.
+> Qué se retira y cuándo está en `docs/diseno/navegacion-v2.md`.
 
 ## Datos de la maqueta
 
@@ -47,9 +69,15 @@ OS-2418 suma $51,20 en las tres pantallas donde aparece; los ingresos por médic
 suman el total del mes) — se cuidaron para que la maqueta no enseñe aritmética
 equivocada, no porque sean datos reales.
 
+`BandejaGestor.html` usa la misma OS-2418 que `OrdenAbierta.html`,
+`AnexarServicio.html` y `Facturacion.html`: el hemograma de Luna que en la orden
+figura como servicio de laboratorio es el que el gestor tiene en proceso.
+
 ## Lo que estas pantallas dibujan y la base todavía no soporta
 
-- **Órdenes de servicio** — no existe la tabla; hoy el contenedor es `Consulta`.
+- ~~**Órdenes de servicio**~~ — resuelto: la tabla, los estados, el despacho a
+  gestores, las notificaciones y los adjuntos se implementaron en las etapas 1-6
+  de la tarea 06. Ver `docs/diseno/ordenes-de-servicio.md`.
 - **Tutores jurídicos** — `Propietario` solo tiene nombre, apellido y cédula.
 - **Catálogo de diagnósticos** — `Consulta.diagnostico` es texto libre, así que
   "reportes por patología" no se puede agrupar.
