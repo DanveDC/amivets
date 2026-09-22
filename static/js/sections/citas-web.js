@@ -76,7 +76,7 @@ async function cargarCitasQR() {
                 <td><span class="badge" style="background:${color}; color:#fff;">${c.estado}</span></td>
                 <td style="font-size:0.8rem;">${fecha}</td>
                 <td>${c.estado === 'pendiente'
-                    ? `<button onclick="cancelarCitaQR('${c.id}')" class="btn-secondary" style="font-size:0.8rem; padding:4px 10px;">Cancelar</button>`
+                    ? `<button onclick="cancelarCitaQR('${c.id}')" class="av-btn" style="height:28px; padding:0 10px; font-size:12px;">Cancelar</button>`
                     : '—'
                 }</td>
             </tr>`;

@@ -1466,8 +1466,8 @@
                 <div class="content-header">
                     <h2>Agenda y Calendario Médico</h2>
                     <div style="display: flex; gap: 0.75rem;">
-                        <button class="btn-secondary" id="btnGenerarOrden">+ Generar Orden</button>
-                        <button class="btn-primary" id="btnNuevaCita">+ Agendar Cita</button>
+                        <button class="av-btn" id="btnGenerarOrden">+ Generar Orden</button>
+                        <button class="av-btn av-btn--primary" id="btnNuevaCita">+ Agendar Cita</button>
                     </div>
                 </div>
                 <div class="agenda-layout">
@@ -1533,7 +1533,7 @@
                         <input type="text" id="searchPropietario"
                             placeholder="Buscar por nombre, apellido o cédula..." class="search-input"
                             style="width: 300px; margin: 0;">
-                        <button class="btn-primary" id="btnRegistrarPropietarioAlt">+ Nuevo Propietario</button>
+                        <button class="av-btn av-btn--primary" id="btnRegistrarPropietarioAlt">+ Nuevo Propietario</button>
                     </div>
                 </div>
                 <table class="consultas-table">
@@ -1557,7 +1557,7 @@
             <section id="sec-usuarios" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Gestión de Usuarios</h2>
-                    <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
+                    <button class="av-btn av-btn--primary" id="btnShowModalUser">+ Nuevo Usuario</button>
                 </div>
                 <div style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.875rem; color: var(--info-dark);">
                     <strong>Tip QR:</strong> Los usuarios con rol <strong>Veterinario</strong> aparecen en el formulario de reserva de turnos (QR/link público). Asigná el rol al crearlos.
@@ -1979,7 +1979,7 @@
                                     style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
                             </div>
 
-                            <button type="submit" class="btn-primary"
+                            <button type="submit" class="av-btn av-btn--primary"
                                 style="width: 100%; justify-content: center;">Actualizar Contraseña</button>
                         </form>
                     </div>
@@ -2019,7 +2019,7 @@
                             <option value="rechazada">Rechazadas</option>
                             <option value="cancelada">Canceladas</option>
                         </select>
-                        <button onclick="cargarCitasQR()" class="btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.875rem;">Actualizar</button>
+                        <button onclick="cargarCitasQR()" class="av-btn" style="padding: 0.4rem 0.9rem; font-size: 0.875rem;">Actualizar</button>
                     </div>
                     <div style="overflow-x: auto;">
                         <table class="consultas-table" id="tablaCitasQR">
@@ -2050,8 +2050,8 @@
                                 <option value="">Cargando…</option>
                             </select>
                         </div>
-                        <button onclick="cargarHorariosVet()" class="btn-secondary">Ver Horarios</button>
-                        <button onclick="abrirModalNuevoHorario()" class="btn-primary">+ Agregar Bloque</button>
+                        <button onclick="cargarHorariosVet()" class="av-btn">Ver Horarios</button>
+                        <button onclick="abrirModalNuevoHorario()" class="av-btn av-btn--primary">+ Agregar Bloque</button>
                     </div>
                     <div id="horariosGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.75rem;">
                         <p style="grid-column: 1/-1; text-align:center; color: var(--text-secondary);">Seleccioná un veterinario para ver sus horarios.</p>
@@ -2061,7 +2061,7 @@
                 <!-- Tab: Veterinarios -->
                 <div id="tab-vets-qr" class="qr-tab-content" style="display:none;">
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                        <button onclick="abrirModalNuevoVetQR()" class="btn-primary">+ Nuevo Veterinario</button>
+                        <button onclick="abrirModalNuevoVetQR()" class="av-btn av-btn--primary">+ Nuevo Veterinario</button>
                     </div>
                     <table class="consultas-table">
                         <thead>

@@ -30,15 +30,15 @@ export const loadUsuarios = async () => {
                     ? `<span class="status-pill status-pill--ok">${ICONS.checkCircle} Activo</span>`
                     : `<span class="status-pill status-pill--muted">${ICONS.xCircle} Inactivo</span>`}</td>
                 <td style="white-space:nowrap;">
-                    <button class="btn-secondary btn-sm" onclick="abrirEditarUsuario(${u.id}, '${escapeJsAttr(u.username)}', '${escapeJsAttr(u.email)}', '${escapeJsAttr(u.role)}')"
+                    <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="abrirEditarUsuario(${u.id}, '${escapeJsAttr(u.username)}', '${escapeJsAttr(u.email)}', '${escapeJsAttr(u.role)}')"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-right:0.35rem;">
                         Editar
                     </button>
-                    <button class="btn-secondary btn-sm" onclick="toggleUsuarioActivo(${u.id}, ${u.is_active})"
+                    <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="toggleUsuarioActivo(${u.id}, ${u.is_active})"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem;">
                         ${u.is_active ? 'Desactivar' : 'Activar'}
                     </button>
-                    ${u.id !== meId ? `<button class="btn-secondary btn-sm btn-row-danger" onclick="deleteUsuario(${u.id}, '${escapeJsAttr(u.username)}')"
+                    ${u.id !== meId ? `<button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px; color:var(--accent); border-color:var(--accent);" onclick="deleteUsuario(${u.id}, '${escapeJsAttr(u.username)}')"
                         style="font-size:0.75rem; padding:0.25rem 0.6rem; margin-left:0.35rem;">
                         Eliminar
                     </button>` : ''}

@@ -35,9 +35,9 @@ export const loadPropietarios = async (filter = '') => {
                 <td>${p.email || '<span style="color: var(--text-muted);">N/D</span>'}</td>
                 <td style="text-align: right;">
                     <div class="row-actions">
-                        <button class="btn-secondary btn-sm" onclick="verMascotasPropietario(${p.id}, '${p.nombre}')" title="Ver mascotas" aria-label="Ver mascotas">${ICONS.paw} Mascotas</button>
-                        <button class="btn-secondary btn-sm" onclick="abrirEditarPropietario(${p.id})" title="Editar" aria-label="Editar">${ICONS.edit}</button>
-                        <button class="btn-secondary btn-sm btn-row-danger" onclick="confirmEliminarPropietario(${p.id}, '${p.nombre} ${p.apellido}')" title="Eliminar" aria-label="Eliminar">${ICONS.trash}</button>
+                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="verMascotasPropietario(${p.id}, '${p.nombre}')" title="Ver mascotas" aria-label="Ver mascotas">${ICONS.paw} Mascotas</button>
+                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="abrirEditarPropietario(${p.id})" title="Editar" aria-label="Editar">${ICONS.edit}</button>
+                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px; color:var(--accent); border-color:var(--accent);" onclick="confirmEliminarPropietario(${p.id}, '${p.nombre} ${p.apellido}')" title="Eliminar" aria-label="Eliminar">${ICONS.trash}</button>
                     </div>
                 </td>
             </tr>

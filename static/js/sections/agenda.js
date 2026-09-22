@@ -34,7 +34,7 @@ export const loadAgenda = async () => {
                 <option value="CANCELADA">Cancelada</option>
             </select>
             <input type="text" id="filtroAgendaMascota" placeholder="Buscar mascota..." style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem; flex:1; min-width:100px;">
-            <button id="btnFiltrarAgenda" class="btn-primary" style="padding:0.4rem 0.75rem; font-size:0.82rem; white-space:nowrap;">Filtrar</button>
+            <button id="btnFiltrarAgenda" class="av-btn av-btn--primary" style="padding:0 0.75rem; height:32px; font-size:0.82rem; white-space:nowrap;">Filtrar</button>
         `;
         agendaWaiting.insertBefore(filterBar, container);
 
@@ -102,8 +102,8 @@ export const loadAgenda = async () => {
                     <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">${mascotasMap[cita.mascota_id] || `Mascota ID: #${cita.mascota_id}`}</p>
                     <p style="font-size: 0.875rem; font-weight: 500;">${cita.motivo}</p>
                     <div style="margin-top: 1rem; text-align: right;">
-                        ${cita.estado === 'PENDIENTE' ? `<button onclick="checkInCita(${cita.id})" class="btn-secondary btn-sm">Marcar Check-in</button>` : ''}
-                        ${(cita.estado === 'EN_ESPERA' || cita.estado === 'PENDIENTE') ? `<button onclick="atenderDesdeOrden(${cita.mascota_id}, ${cita.id})" class="btn-primary btn-sm">Atender</button>` : ''}
+                        ${cita.estado === 'PENDIENTE' ? `<button onclick="checkInCita(${cita.id})" class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;">Marcar Check-in</button>` : ''}
+                        ${(cita.estado === 'EN_ESPERA' || cita.estado === 'PENDIENTE') ? `<button onclick="atenderDesdeOrden(${cita.mascota_id}, ${cita.id})" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Atender</button>` : ''}
                     </div>
                 </div>
             `).join('');
@@ -130,8 +130,8 @@ export const loadAgenda = async () => {
                 id: 'cons_' + c.id,
                 title: `${petName} - Cons. Histórica`,
                 start: c.fecha_consulta || c.fecha,
-                backgroundColor: '#10b981', // Verde estilo consulta completada past
-                borderColor: '#059669',
+                backgroundColor: 'var(--secondary)', // consulta histórica completada
+                borderColor: 'var(--secondary-dark)',
                 extendedProps: { ...c, mascota_nombre: petName, esConsultaPasada: true }
             });
         });
@@ -284,7 +284,7 @@ export const mostrarResumenDia = (dateStr, allEvents) => {
                         ${detail}
                     </div>
                     <div style="margin-top: 0.8rem;">
-                        <button class="btn-primary btn-sm" onclick="verDetallesDesdeAgenda(${ev.extendedProps?.mascota_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;">Ver Consultas</button>
+                        <button class="av-btn av-btn--primary" style="height:26px; padding:0 8px; font-size:0.75rem;" onclick="verDetallesDesdeAgenda(${ev.extendedProps?.mascota_id})">Ver Consultas</button>
                     </div>
                 </div>
             `;
