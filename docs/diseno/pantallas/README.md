@@ -84,7 +84,11 @@ figura como servicio de laboratorio es el que el gestor tiene en proceso.
 - **Tutores jurídicos** — `Propietario` solo tiene nombre, apellido y cédula.
 - **Catálogo de diagnósticos** — `Consulta.diagnostico` es texto libre, así que
   "reportes por patología" no se puede agrupar.
-- **Unidad de medida y stock fraccionado** en insumos (tarea 07).
-- **Historial de precios** de servicios y materiales (tarea 08).
+- ~~**Unidad de medida y stock fraccionado** en insumos~~ — resuelto en la
+  tarea 07: `Insumo.unidad_medida` (ml/g/unidad), consumo fraccionado y su
+  cobertura en `e2e/inventario-fraccionado.spec.js`.
+- ~~**Historial de precios** de servicios y materiales~~ — resuelto en la
+  tarea 08: `GET /inventario/{id}/historial-precios`, cobertura en
+  `e2e/historial-precios.spec.js`.
 
 Ver `docs/diseno/arquitectura-informacion-v2.md`.
