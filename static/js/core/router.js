@@ -26,6 +26,7 @@ import { escapeHtml } from './ui.js';
 import { initConsultorio } from '../sections/consultorio.js';
 import { loadAgenda } from '../sections/agenda.js';
 import { loadPropietarios } from '../sections/propietarios.js';
+import { initMascotas } from '../sections/mascotas.js';
 import { loadInventario } from '../sections/inventario.js';
 import { cargarHistorialFacturas } from '../sections/facturacion.js';
 import { loadReportes } from '../sections/reportes.js';
@@ -57,7 +58,12 @@ const SECTIONS = [
     { id: 'sec-orden-abierta',   label: 'Orden abierta',       tab: false, init: null },
     { id: 'sec-catalogo',        label: 'Catálogo',            tab: true,  init: () => { cargarCategoriasSelect(); cargarCatalogo(); }, roles: ['admin', 'veterinario'] },
     { id: 'sec-bandeja-gestor',  label: 'Mi bandeja',          tab: true,  init: loadBandejaGestor,    roles: SERVICIOS_ROLES },
-    { id: 'sec-propietarios',    label: 'Propietarios',        tab: true,  init: loadPropietarios,     roles: MASCOTAS_ROLES },
+    // sec-mascotas es la entrada nueva del módulo 3 (etapa 8); sec-propietarios
+    // sigue registrada (alcanzable por hash/link directo, ej. desde
+    // verMascotasPropietario) pero ya no tiene su propia entrada de sidebar
+    // -- tab:false porque MODULES ya no la lista en sectionIds, ver abajo.
+    { id: 'sec-mascotas',        label: 'Mascotas',            tab: true,  init: initMascotas,         roles: MASCOTAS_ROLES },
+    { id: 'sec-propietarios',    label: 'Propietarios',        tab: false, init: loadPropietarios,     roles: MASCOTAS_ROLES },
     { id: 'sec-consultorio',     label: 'Historia clínica',    tab: true,  init: initConsultorio,      roles: MASCOTAS_ROLES },
     { id: 'sec-consulta-abierta', label: 'Consulta abierta',   tab: false, init: null },
     { id: 'sec-inventario',      label: 'Inventario',          tab: true,  init: loadInventario,       roles: ['admin'] },
@@ -97,9 +103,9 @@ const MODULES = [
         icon: iconSvg('<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .2.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>'),
     },
     {
-        num: 3, label: 'Mascotas / Tutores', sectionIds: ['sec-propietarios', 'sec-consultorio'],
+        num: 3, label: 'Mascotas / Tutores', sectionIds: ['sec-mascotas', 'sec-consultorio'],
         descripcion: 'Pacientes por especie, tutores naturales y jurídicos, y la historia clínica completa de cada uno.',
-        cta: { 'sec-propietarios': 'Abre el buscador de pacientes', 'sec-consultorio': 'Abre la historia clínica' },
+        cta: { 'sec-mascotas': 'Abre el listado de mascotas', 'sec-consultorio': 'Abre la historia clínica' },
         icon: iconSvg('<circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="6.5" cy="15" r="2"/><path d="M14.5 15c1.6 1.2 2.5 2.6 2.5 4a2.6 2.6 0 0 1-2.6 2.6c-1 0-1.8-.4-2.9-.4s-1.9.4-2.9.4A2.6 2.6 0 0 1 6 19c0-2.6 3-5.4 5.5-5.4 1.1 0 2.1.5 3 1.4z"/>'),
     },
     {

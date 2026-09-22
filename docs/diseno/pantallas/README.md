@@ -16,14 +16,17 @@ espaciados, alturas de control— y se leen y copian directamente.
 | `OrdenAbierta.html` | Orden de servicio abierta (la pantalla de trabajo) |
 | `AnexarServicio.html` | Panel lateral para anexar un servicio a la orden |
 | `BandejaGestor.html` | Bandeja del gestor — su cola de trabajo, ejecutar y cargar el resultado |
+| `Mascotas.html` | Listado de mascotas — landing del módulo 3 (etapa 8) |
 | `FichaMascota.html` | Ficha de paciente e historia clínica |
 | `Insumos.html` | Inventario con unidad de medida y stock fraccionado |
 | `Catalogo.html` | Catálogo de servicios, su receta de insumos y su historial de precios |
 | `Facturacion.html` | Facturación de una orden |
 | `Reportes.html` | KPI y reportes |
 
-`Inicio.html` y `BandejaGestor.html` se agregaron en la etapa 7 de la tarea 06.
-Dos diferencias respecto de las nueve primeras, hechas a propósito:
+`Inicio.html` y `BandejaGestor.html` se agregaron en la etapa 7 de la tarea 06;
+`Mascotas.html` se agregó en la etapa 8 (era el único listado sin maqueta —
+ver navegacion-v2.md, "Puntos abiertos"). Dos diferencias respecto de las
+nueve primeras, hechas a propósito:
 
 - El logo va como **SVG inline** (huella blanca sobre el cuadro teal de 40 px,
   radio 8) en vez del PNG en data URI. El PNG pesa ~60 KB en base64 y no se

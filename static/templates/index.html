@@ -1485,6 +1485,39 @@
                 </div>
             </section>
 
+            <!-- sec-mascotas — landing del módulo 3 (Tarea 06, etapa 8). Ver
+                 docs/diseno/pantallas/Mascotas.html y navegacion-v2.md,
+                 "Puntos abiertos". Reemplaza a sec-propietarios como entrada
+                 por defecto; sec-propietarios sigue viva más abajo como ruta
+                 alcanzable (ya no tiene entrada de sidebar propia). -->
+            <section id="sec-mascotas" class="spa-section" hidden>
+                <div class="pd-canvas">
+                    <div class="pd-panel pd-orders">
+                        <div class="pd-orders-head">
+                            <strong>Mascotas</strong>
+                            <div class="pd-orders-filters" id="mascotasFiltros">
+                                <button type="button" class="pd-filter" data-especie="" aria-pressed="true">Todas</button>
+                                <button type="button" class="pd-filter" data-especie="Perro" aria-pressed="false">Perros</button>
+                                <button type="button" class="pd-filter" data-especie="Gato" aria-pressed="false">Gatos</button>
+                                <button type="button" class="pd-filter" data-especie="otro" aria-pressed="false">Otros</button>
+                            </div>
+                            <div class="av-spacer"></div>
+                            <input type="text" id="mascotasSearch" class="search-input"
+                                placeholder="Buscar por nombre, tutor o código…" style="width:260px; margin:0;">
+                            <button type="button" class="av-btn av-btn--primary" id="btnNuevaMascotaListado">+ Nueva mascota</button>
+                        </div>
+                        <table class="pd-table">
+                            <thead>
+                                <tr><th>Mascota</th><th>Especie / raza</th><th>Tutor</th><th>Sexo</th><th></th></tr>
+                            </thead>
+                            <tbody id="mascotasTableBody">
+                                <tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- Content Area: Propietarios -->
             <section id="sec-propietarios" class="content-area spa-section">
                 <div class="content-header"
