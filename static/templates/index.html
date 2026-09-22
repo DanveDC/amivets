@@ -64,11 +64,27 @@
                     <div class="av-notif-panel" id="notifPanel" role="menu" hidden>
                         <div class="av-notif-head">
                             <strong>Notificaciones</strong>
+                            <button type="button" id="notifVerHistorial">Ver histórico</button>
                             <button type="button" id="notifMarkAll">Marcar todas leídas</button>
                         </div>
                         <div id="notifList"></div>
+                        <div id="notifLoadMoreWrap" class="av-notif-loadmore" hidden>
+                            <button type="button" id="notifCargarMas">Cargar más</button>
+                        </div>
                     </div>
                 </div>
+                <!-- Tarea 06, etapa 8: se revisó si estas tres entradas debían
+                     reubicarse bajo su módulo (Citas web/QR -> ¿Admisión?,
+                     Usuarios -> ¿un séptimo módulo de administración?, Mi
+                     perfil -> ¿en cualquier lado?) y se decidió dejarlas acá.
+                     Las tres son utilidades transversales, alcanzables desde
+                     CUALQUIER pantalla del sistema -- no son "landing" de
+                     ningún módulo de los seis (arquitectura-informacion-v2.md
+                     no las lista como tal). Moverlas adentro de un módulo las
+                     haría alcanzables en un clic menos desde ahí pero en más
+                     clics desde cualquier otro lugar (primero cambiar de
+                     módulo, después buscar la entrada) -- una pérdida neta de
+                     accesibilidad para ganar nada. -->
                 <details class="av-usermenu">
                     <summary class="av-usermenu-trigger" aria-label="Menú de usuario">
                         <i class="ph ph-list" aria-hidden="true"></i>

@@ -118,6 +118,10 @@ def listar_ordenes(
     veterinario_id: Optional[int] = None,
     mascota_id: Optional[int] = None,
     propietario_id: Optional[int] = None,
+    numero: Optional[str] = Query(
+        None,
+        description="Búsqueda parcial (ilike) por número de orden, ej. OS-2418 o 2418",
+    ),
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
     skip: int = 0,
@@ -131,6 +135,10 @@ def listar_ordenes(
     frontend refresca con un poll periódico (decisión 6, "actualización en
     vivo"). El índice compuesto (estado, fecha_apertura) está puesto para
     exactamente esta query.
+
+    `numero` es la búsqueda global por número de orden (etapa 8,
+    navegacion-v2.md "Puntos abiertos" — cmdk.js documentaba la ausencia de
+    este filtro).
     """
     q = db.query(OrdenServicio)
 
@@ -138,6 +146,8 @@ def listar_ordenes(
         estados = [e.strip().upper() for e in estado.split(",") if e.strip()]
         if estados:
             q = q.filter(OrdenServicio.estado.in_(estados))
+    if numero:
+        q = q.filter(OrdenServicio.numero.ilike(f"%{numero.strip()}%"))
     if veterinario_id:
         q = q.filter(OrdenServicio.veterinario_id == veterinario_id)
     if mascota_id:

@@ -1,6 +1,12 @@
 // core/cmdk.js — command palette (etapa 2b). Replaces the 11-item sidebar
-// search. Opens with a click on #cmdkTrigger or Ctrl/Cmd+K, searches patients
-// and owners in parallel, and navigates on Enter.
+// search. Opens with a click on #cmdkTrigger or Ctrl/Cmd+K, searches patients,
+// owners, order numbers and invoice numbers in parallel, and navigates on
+// Enter.
+//
+// La búsqueda por orden y por factura se agregó en la etapa 8
+// (navegacion-v2.md, "Puntos abiertos"): `/facturas/?search=` ya existía en
+// el backend y nunca se usaba acá; `/ordenes/?numero=` es nuevo (filtro
+// trivial, mismo patrón que los demás Optional de ese endpoint).
 //
 // Accessibility: role="dialog" + aria-modal on the panel, focus trapped on the
 // input, Up/Down move aria-selected in the list, Enter activates, Esc / click
@@ -9,6 +15,8 @@
 import { fetchAPI } from './api.js';
 import { showSection } from './router.js';
 import { escapeHtml } from './ui.js';
+import { abrirOrden } from '../sections/orden-abierta.js';
+import { abrirPreviewFactura } from '../sections/facturacion.js';
 
 const MAX_RESULTS = 8;
 const DEBOUNCE_MS = 200;
@@ -24,7 +32,6 @@ let results = [];          // [{ type, id, label, sub, data }]
 let activeIndex = -1;
 let queryToken = 0;        // guards against out-of-order async responses
 let ownersSearchUnsupported = false;
-let facturasEndpointMissing = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
@@ -67,7 +74,7 @@ function open() {
     inputEl.setAttribute('aria-expanded', 'true');
     inputEl.setAttribute('aria-autocomplete', 'list');
     inputEl.setAttribute('aria-controls', 'avCmdkList');
-    inputEl.setAttribute('placeholder', 'Buscar mascota o tutor');
+    inputEl.setAttribute('placeholder', 'Buscar mascota, tutor, orden o factura');
     inputEl.autocomplete = 'off';
     inputEl.spellcheck = false;
 
@@ -82,7 +89,7 @@ function open() {
     backdrop.appendChild(panel);
     document.body.appendChild(backdrop);
 
-    renderEmpty('Escribí para buscar pacientes o propietarios.');
+    renderEmpty('Escribí para buscar pacientes, tutores, órdenes o facturas.');
 
     backdrop.addEventListener('mousedown', (e) => {
         if (e.target === backdrop) close();
@@ -137,9 +144,15 @@ async function runSearch(q) {
     const token = ++queryToken;
     renderEmpty('Buscando…');
 
-    const [mascRes, propRes] = await Promise.allSettled([
+    const [mascRes, propRes, ordenRes, facturaRes] = await Promise.allSettled([
         fetchAPI(`/mascotas/?search=${encodeURIComponent(q)}`),
         fetchAPI(`/propietarios/?search=${encodeURIComponent(q)}`),
+        // Búsqueda global por número de orden (etapa 8) — 403 silencioso para
+        // roles sin acceso (gestor ya no llega acá: el trigger está oculto).
+        fetchAPI(`/ordenes/?numero=${encodeURIComponent(q)}&limit=5`),
+        // Búsqueda global por factura (etapa 8) — el endpoint `?search=` ya
+        // existía en el backend desde antes; cmdk.js nunca lo usaba.
+        fetchAPI(`/facturas/?search=${encodeURIComponent(q)}&limit=5`),
     ]);
     if (token !== queryToken) return; // superseded by a newer query
 
@@ -188,10 +201,28 @@ async function runSearch(q) {
         });
     }
 
-    // Facturas: no search-capable endpoint exists in this backend — skipped.
-    if (!facturasEndpointMissing) {
-        facturasEndpointMissing = true;
-        console.info('[cmdk] búsqueda de facturas omitida — no hay endpoint /facturas/?search.');
+    if (ordenRes.status === 'fulfilled' && Array.isArray(ordenRes.value)) {
+        for (const o of ordenRes.value) {
+            out.push({
+                type: 'orden',
+                id: o.id,
+                label: o.numero,
+                sub: `Orden · ${o.estado}`,
+                data: o,
+            });
+        }
+    }
+
+    if (facturaRes.status === 'fulfilled' && Array.isArray(facturaRes.value)) {
+        for (const f of facturaRes.value) {
+            out.push({
+                type: 'factura',
+                id: f.id,
+                label: f.numero_factura,
+                sub: `Factura · ${f.estado}`,
+                data: f,
+            });
+        }
     }
 
     results = out.slice(0, MAX_RESULTS);
@@ -206,6 +237,7 @@ async function runSearch(q) {
 const ICON = {
     mascota: 'ph-dog',
     propietario: 'ph-user',
+    orden: 'ph-clipboard-text',
     factura: 'ph-receipt',
 };
 
@@ -299,6 +331,11 @@ function activate(i) {
         }
     } else if (r.type === 'propietario') {
         showSection('sec-propietarios');
+    } else if (r.type === 'orden') {
+        abrirOrden(r.id);
+    } else if (r.type === 'factura') {
+        showSection('sec-facturacion');
+        abrirPreviewFactura(r.id);
     }
 }
 

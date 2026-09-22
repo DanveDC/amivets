@@ -27,17 +27,22 @@ router = APIRouter(prefix="/api/notificaciones", tags=["Notificaciones"])
 @router.get("/", response_model=List[NotificacionResponse])
 def listar_notificaciones(
     no_leidas: bool = False,
+    skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
     """Las notificaciones del usuario logueado, de la más nueva a la más
     vieja. `?no_leidas=true` es la query del badge (poll periódico, decisión
-    6) -- usa el índice compuesto (destinatario_id, leida_at, created_at)."""
+    6) -- usa el índice compuesto (destinatario_id, leida_at, created_at).
+
+    `skip` es paginación básica para el histórico completo (etapa 8,
+    navegacion-v2.md "Puntos abiertos"): el panel corto de la campana sigue
+    usando sólo `no_leidas=true` sin paginar."""
     q = db.query(Notificacion).filter(Notificacion.destinatario_id == current_user.id)
     if no_leidas:
         q = q.filter(Notificacion.leida_at.is_(None))
-    return q.order_by(Notificacion.created_at.desc()).limit(limit).all()
+    return q.order_by(Notificacion.created_at.desc()).offset(skip).limit(limit).all()
 
 
 @router.patch("/{notificacion_id}/leer", response_model=NotificacionResponse)
