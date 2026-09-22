@@ -77,6 +77,67 @@ test.describe('Shell — lanzador y navegación por módulos', () => {
     }
   });
 
+  // Tarea 11, §4 — "probá el lanzador con los cinco roles y confirmá que cada
+  // uno ve exactamente lo que puede usar". La matriz (admin 6/6, recepcionista
+  // 3/6, veterinario 3/6, gestor 1/6 → sin lanzador) es la que documenta el
+  // propio boceto Inicio.html en su nota de diseño; acá se verifica contra la
+  // app real, no solo se lee el código.
+  test('recepcionista ve 3/6 módulos (Admisión, Mascotas/Tutores, Facturación) y no alcanza Insumos ni por hash directo', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const recepcionista = await createTestUser(request, adminToken, { role: 'recepcionista' });
+    try {
+      await loginUI(page, recepcionista.username, TEST_USER_PASSWORD);
+      await expect(page.locator('#sec-inicio')).toBeVisible();
+      await expect(page.locator('.av-launcher-card')).toHaveCount(3);
+      await expect(page.locator('.av-launcher-card', { hasText: 'Admisión' })).toBeVisible();
+      await expect(page.locator('.av-launcher-card', { hasText: 'Mascotas / Tutores' })).toBeVisible();
+      await expect(page.locator('.av-launcher-card', { hasText: 'Facturación' })).toBeVisible();
+
+      // Insumos (sec-inventario, admin-only) no tiene tarjeta...
+      await expect(page.locator('.av-launcher-card', { hasText: 'Insumos' })).toHaveCount(0);
+      // ...y tampoco es alcanzable escribiendo el hash a mano.
+      await page.goto('/#sec-inventario');
+      await expect(page.locator('#avNoAccess')).toBeVisible();
+      await expect(page.locator('#sec-inventario')).toBeHidden();
+    } finally {
+      await deleteTestUser(request, adminToken, recepcionista.id);
+    }
+  });
+
+  test('veterinario ve 3/6 módulos (Admisión, Servicios, Mascotas/Tutores) y no alcanza Facturación ni por hash directo', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const vet = await createTestVeterinario(request, adminToken);
+    try {
+      await loginUI(page, vet.username, TEST_USER_PASSWORD);
+      await expect(page.locator('#sec-inicio')).toBeVisible();
+      await expect(page.locator('.av-launcher-card')).toHaveCount(3);
+      await expect(page.locator('.av-launcher-card', { hasText: 'Admisión' })).toBeVisible();
+      await expect(page.locator('.av-launcher-card', { hasText: 'Servicios' })).toBeVisible();
+      await expect(page.locator('.av-launcher-card', { hasText: 'Mascotas / Tutores' })).toBeVisible();
+
+      await expect(page.locator('.av-launcher-card', { hasText: 'Facturación' })).toHaveCount(0);
+      await page.goto('/#sec-facturacion');
+      await expect(page.locator('#avNoAccess')).toBeVisible();
+      await expect(page.locator('#sec-facturacion')).toBeHidden();
+    } finally {
+      await deleteTestUser(request, adminToken, vet.id);
+    }
+  });
+
+  test('un usuario sin rol asignado (role="user", el default del modelo) ve el lanzador vacío con explicación, no una grilla en blanco', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const sinRol = await createTestUser(request, adminToken); // createTestUser ya defaultea role:'user'
+    try {
+      await loginUI(page, sinRol.username, TEST_USER_PASSWORD);
+      await expect(page.locator('#sec-inicio')).toBeVisible();
+      await expect(page.locator('.av-launcher-card')).toHaveCount(0);
+      await expect(page.locator('#inicioGrid .av-empty')).toBeVisible();
+      await expect(page.locator('#inicioGrid')).toContainText('no tiene un módulo asignado');
+    } finally {
+      await deleteTestUser(request, adminToken, sinRol.id);
+    }
+  });
+
   test('búsqueda global (Ctrl/Cmd+K) funciona desde el header nuevo', async ({ page }) => {
     await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
     await page.locator('.av-launcher-card').first().click();
@@ -149,6 +210,12 @@ test.describe('Listado de mascotas — sec-mascotas (etapa 8, landing nuevo del 
       const filaPerro = page.locator('#mascotasTableBody tr', { hasText: nombrePerro });
       await expect(filaPerro).toBeVisible({ timeout: 5000 });
       await expect(page.locator('#mascotasTableBody tr', { hasText: nombreGato })).toHaveCount(0);
+      // Hallazgo de revisión (Tarea 11): el lookup de tutores pedía
+      // /propietarios/?limit=200 fijo -- con más tutores que ese límite en la
+      // base, la columna Tutor quedaba en "—" sin aviso. La fila debe traer
+      // el nombre real, no el guión de "sin tutor".
+      await expect(filaPerro).toContainText(propietario.nombre);
+      await expect(filaPerro).not.toContainText('—');
 
       // Filtro por especie "Gatos": limpio la búsqueda y filtro por especie.
       await page.locator('#mascotasSearch').fill('');
@@ -212,6 +279,19 @@ test.describe('Shell — recorrido feliz: orden -> anexar -> confirmar -> bandej
       await fila.click();
       await expect(page.locator('#sec-orden-abierta')).toBeVisible();
       await expect(page.locator('#oaMetaNumero')).toHaveText(orden.numero);
+
+      // Hallazgo de revisión (Tarea 11): .oa-canvas no tenía display:grid, así
+      // que el panel "Resumen / Facturar orden" (.oa-side) caía apilado DEBAJO
+      // de la tabla de servicios en vez de la columna fija de la derecha que
+      // dibuja OrdenAbierta.html -- toBeVisible() no lo detectaba porque el
+      // elemento seguía siendo "visible" (solo que fuera del viewport, sin
+      // scroll evidente). Se verifica la posición real: el panel de resumen
+      // tiene que estar a la derecha de la tabla de servicios, dentro del
+      // viewport, no debajo.
+      const stackBox = await page.locator('.oa-stack').boundingBox();
+      const sideBox = await page.locator('.oa-side').boundingBox();
+      expect(sideBox.x, 'el panel Resumen debe quedar a la derecha de los servicios, no debajo').toBeGreaterThan(stackBox.x + stackBox.width - 20);
+      expect(sideBox.y, 'el panel Resumen tiene que entrar en el viewport inicial').toBeLessThan(900);
 
       await page.locator('#btnOaAnexar').click();
       const panel = page.locator('#oaAnexarPanel');

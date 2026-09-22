@@ -42,6 +42,31 @@ test.describe('Autenticación', () => {
     expect(token).toBeFalsy();
   });
 
+  // Tarea 11 (revisión de bocetos) — login.html se rehizo siguiendo
+  // docs/diseno/pantallas/Login.html; esto cubre lo que un boceto estático
+  // no muestra: foco visible y que el submit funcione por teclado (Enter),
+  // no solo con el mouse en #btnLogin.
+  test('foco visible en los campos y login funciona con Enter, sin tocar el mouse', async ({ page }) => {
+    await page.goto('/login');
+
+    await page.locator('#username').focus();
+    await expect(page.locator('#username')).toBeFocused();
+    const outlineUsuario = await page.locator('#username').evaluate(
+      (el) => getComputedStyle(el).boxShadow
+    );
+    expect(outlineUsuario, 'el input de usuario debe tener --focus-ring visible al enfocarse').not.toBe('none');
+
+    await page.locator('#username').fill(ADMIN_CREDENTIALS.username);
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#password')).toBeFocused();
+    await page.keyboard.type(ADMIN_CREDENTIALS.password);
+    await page.keyboard.press('Enter');
+
+    await page.waitForURL('**/');
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    expect(token).toBeTruthy();
+  });
+
   test('el menú de administración aparece solo para usuarios admin', async ({ page }) => {
     await page.goto('/login');
     await page.fill('#username', ADMIN_CREDENTIALS.username);
