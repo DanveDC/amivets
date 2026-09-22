@@ -6,8 +6,21 @@ from typing import List, Dict, Any, Optional
 
 from app.core.database import get_db
 from app.models.models import DetalleFactura, Inventario, Consulta, Usuario
+from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/reportes", tags=["Reportes y Analitica"])
+
+# HALLAZGO DE SEGURIDAD (Tarea 10): este router nunca tuvo Depends(require_roles)
+# en NINGUN endpoint. Confirmado en vivo: GET /api/reportes/finanzas/ingresos
+# sin token devolvia 200 con el total de ingresos real de la clinica. Los seis
+# endpoints exponen datos financieros (ingresos, cuentas por cobrar) y de
+# desempeno por medico (kpi/rendimiento) -- ninguno anonimo.
+#
+# admin unicamente: la seccion "Informes" del front ya esta restringida a
+# admin (static/js/core/router.js:75, roles: ['admin']), y ningun otro rol
+# tiene una pantalla que llegue a estos endpoints -- no hay tension con un
+# flujo real en uso, a diferencia de facturas/catalogo.
+_ROLES_REPORTES = ("admin",)
 
 
 def _rango_utc(fecha_inicio: Optional[str], fecha_fin: Optional[str]):
@@ -37,7 +50,8 @@ def servicios_mas_solicitados(
     limit: int = 5,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """
     Retorna los servicios/productos mas solicitados basandose en el detalle de facturas.
@@ -81,7 +95,8 @@ def servicios_mas_solicitados(
 def rendimiento_veterinarios(
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """
     Retorna el rendimiento por veterinario (cantidad de consultas realizadas).
@@ -120,7 +135,8 @@ def consultas_por_veterinario(
     veterinario_id: int,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """
     Detalle de las consultas atendidas por un veterinario puntual en un rango de fechas.
@@ -181,7 +197,8 @@ def consultas_por_veterinario(
 def resumen_consultas(
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """Consultas atendidas y pacientes unicos en el rango dado."""
     dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
@@ -209,7 +226,8 @@ def resumen_ingresos(
     periodo: str = "diario", # diario, mensual (ignorado si se pasan fecha_inicio/fecha_fin)
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """Resumen de ingresos para la Subfamilia Administración"""
     from app.models.models import Factura
@@ -252,7 +270,8 @@ def resumen_ingresos(
 def cuentas_por_cobrar(
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """Gestión de cobros pendientes"""
     from app.models.models import Factura, Propietario

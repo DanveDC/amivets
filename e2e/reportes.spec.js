@@ -1,6 +1,7 @@
 // Unidad — Reportes y analítica (backend/app/routers/reportes.py)
 //
-// Endpoints (todos de solo lectura, sin auth en este stack):
+// Endpoints (todos de solo lectura, admin-only desde Tarea 10 -- el router no
+// tenía NINGUNA autenticación antes; hallazgo de seguridad, hoy corregido):
 //   /kpi/servicios · /kpi/rendimiento · /kpi/consultas
 //   /consultas-por-veterinario · /finanzas/ingresos · /finanzas/cuentas-por-cobrar
 //
@@ -40,6 +41,8 @@ const {
   anularTestFactura,
   pagarFacturaCompleta,
   gotoSection,
+  authHeaders,
+  createTestGestor,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -109,7 +112,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
 
   test('/kpi/consultas: cuenta la consulta sembrada y respeta el rango de fechas', async ({ request }) => {
     const hoy = todayUTC();
-    const res = await request.get(`/api/reportes/kpi/consultas?fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const res = await request.get(`/api/reportes/kpi/consultas?fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(body).toMatchObject({ fecha_inicio: hoy, fecha_fin: hoy });
@@ -119,17 +122,17 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     expect(body.pacientes_unicos).toBeGreaterThanOrEqual(1);
 
     // Rango antiguo: la consulta de hoy queda fuera.
-    const viejo = await request.get(`/api/reportes/kpi/consultas?fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`);
+    const viejo = await request.get(`/api/reportes/kpi/consultas?fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`, { headers: authHeaders(S.token) });
     expect((await viejo.json()).consultas_atendidas).toBe(0);
 
     // Fecha mal formada -> 400.
-    const malformada = await request.get('/api/reportes/kpi/consultas?fecha_inicio=ayer&fecha_fin=hoy');
+    const malformada = await request.get('/api/reportes/kpi/consultas?fecha_inicio=ayer&fecha_fin=hoy', { headers: authHeaders(S.token) });
     expect(malformada.status()).toBe(400);
   });
 
   test('/kpi/rendimiento: el veterinario sembrado aparece con al menos 1 consulta', async ({ request }) => {
     const hoy = todayUTC();
-    const res = await request.get(`/api/reportes/kpi/rendimiento?fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const res = await request.get(`/api/reportes/kpi/rendimiento?fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const filas = await res.json();
     expect(Array.isArray(filas)).toBe(true);
@@ -139,7 +142,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     expect(mia.consultas_realizadas).toBeGreaterThanOrEqual(1);
 
     // Rango antiguo: el veterinario no aparece (no tiene consultas en el 2000).
-    const viejo = await request.get(`/api/reportes/kpi/rendimiento?fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`);
+    const viejo = await request.get(`/api/reportes/kpi/rendimiento?fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`, { headers: authHeaders(S.token) });
     const viejas = await viejo.json();
     expect(viejas.some((f) => f.veterinario_id === S.vet.id)).toBe(false);
   });
@@ -147,7 +150,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
   test('/kpi/servicios: el producto facturado aparece con las unidades vendidas', async ({ request }) => {
     const hoy = todayUTC();
     // limit alto para que el producto no quede truncado si hoy se vendieron muchos.
-    const res = await request.get(`/api/reportes/kpi/servicios?limit=200&fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const res = await request.get(`/api/reportes/kpi/servicios?limit=200&fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const filas = await res.json();
     expect(Array.isArray(filas)).toBe(true);
@@ -155,14 +158,14 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     expect(mia, 'el producto facturado debe estar entre los más solicitados').toBeTruthy();
     expect(Number(mia.total_solicitudes)).toBeGreaterThanOrEqual(3); // cantidad de la línea
 
-    const viejo = await request.get(`/api/reportes/kpi/servicios?limit=200&fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`);
+    const viejo = await request.get(`/api/reportes/kpi/servicios?limit=200&fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`, { headers: authHeaders(S.token) });
     const viejas = await viejo.json();
     expect(viejas.some((f) => f.servicio === S.producto.nombre)).toBe(false);
   });
 
   test('/consultas-por-veterinario: detalle de la consulta sembrada + validaciones', async ({ request }) => {
     const hoy = todayUTC();
-    const res = await request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=${S.vet.id}&fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const res = await request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=${S.vet.id}&fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(body).toMatchObject({ veterinario_id: S.vet.id, veterinario: S.vet.username, fecha_inicio: hoy, fecha_fin: hoy });
@@ -174,21 +177,21 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     expect(fila.propietario).toContain('Apellido'); // helper crea apellido "Apellido"
 
     // veterinario_id obligatorio.
-    const sinVet = await request.get(`/api/reportes/consultas-por-veterinario?fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const sinVet = await request.get(`/api/reportes/consultas-por-veterinario?fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(sinVet.status()).toBe(422);
 
     // Veterinario inexistente -> 404.
-    const noVet = await request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=99999999&fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const noVet = await request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=99999999&fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(noVet.status()).toBe(404);
 
     // Rango antiguo: 0 consultas.
-    const viejo = await request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=${S.vet.id}&fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`);
+    const viejo = await request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=${S.vet.id}&fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`, { headers: authHeaders(S.token) });
     expect((await viejo.json()).total_consultas).toBe(0);
   });
 
   test('/finanzas/ingresos: incluye la factura emitida y calcula el ticket promedio', async ({ request }) => {
     const hoy = todayUTC();
-    const res = await request.get(`/api/reportes/finanzas/ingresos?fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const res = await request.get(`/api/reportes/finanzas/ingresos?fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
     expect(body).toMatchObject({ fecha_inicio: hoy, fecha_fin: hoy });
@@ -198,7 +201,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     expect(body.ticket_promedio).toBeCloseTo(body.total_ingresos / body.cantidad_facturas, 2);
 
     // Rango antiguo: sin ingresos.
-    const viejo = await request.get(`/api/reportes/finanzas/ingresos?fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`);
+    const viejo = await request.get(`/api/reportes/finanzas/ingresos?fecha_inicio=${ANCIENT_START}&fecha_fin=${ANCIENT_END}`, { headers: authHeaders(S.token) });
     const viejas = await viejo.json();
     expect(viejas.total_ingresos).toBeNull();
     expect(viejas.cantidad_facturas).toBe(0);
@@ -208,7 +211,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
   test('/finanzas/cuentas-por-cobrar: una factura impaga nueva mueve el total pendiente por su monto exacto', async ({ request }) => {
     const hoy = todayUTC();
 
-    const antesRes = await request.get(`/api/reportes/finanzas/cuentas-por-cobrar?fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const antesRes = await request.get(`/api/reportes/finanzas/cuentas-por-cobrar?fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     const antes = await antesRes.json();
     const totalAntes = antes.total_pendiente || 0;
     const cantAntes = antes.cantidad_facturas;
@@ -222,7 +225,7 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     expect(S.facturaImpaga.estado).toBe('PENDIENTE');
     expect(S.facturaImpaga.saldo_pendiente).toBeCloseTo(S.facturaImpaga.total, 2);
 
-    const despuesRes = await request.get(`/api/reportes/finanzas/cuentas-por-cobrar?fecha_inicio=${hoy}&fecha_fin=${hoy}`);
+    const despuesRes = await request.get(`/api/reportes/finanzas/cuentas-por-cobrar?fecha_inicio=${hoy}&fecha_fin=${hoy}`, { headers: authHeaders(S.token) });
     const despues = await despuesRes.json();
     expect(despues.cantidad_facturas).toBe(cantAntes + 1);
     expect(despues.total_pendiente).toBeCloseTo(totalAntes + S.facturaImpaga.total, 2);
@@ -252,5 +255,51 @@ test.describe.serial('Reportes y analítica — dataset sembrado por API', () =>
     await expect(page.locator('#kpiRangoActual')).toContainText(
       `${todayUTC().slice(8, 10)}/${todayUTC().slice(5, 7)}/${todayUTC().slice(0, 4)}`
     );
+  });
+});
+
+test.describe('Reportes — sin token y con rol sin permiso (Tarea 10)', () => {
+  test('reportes: TODOS los endpoints rechazan sin token (el router nunca tuvo require_roles)', async ({ request }) => {
+    const sinToken = { headers: {} };
+    const hoy = todayUTC();
+    const checks = [
+      () => request.get(`/api/reportes/kpi/servicios?fecha_inicio=${hoy}&fecha_fin=${hoy}`, sinToken),
+      () => request.get(`/api/reportes/kpi/rendimiento?fecha_inicio=${hoy}&fecha_fin=${hoy}`, sinToken),
+      () => request.get(`/api/reportes/consultas-por-veterinario?veterinario_id=1&fecha_inicio=${hoy}&fecha_fin=${hoy}`, sinToken),
+      () => request.get(`/api/reportes/kpi/consultas?fecha_inicio=${hoy}&fecha_fin=${hoy}`, sinToken),
+      () => request.get(`/api/reportes/finanzas/ingresos?fecha_inicio=${hoy}&fecha_fin=${hoy}`, sinToken),
+      () => request.get(`/api/reportes/finanzas/cuentas-por-cobrar?fecha_inicio=${hoy}&fecha_fin=${hoy}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  // Test de rol pedido explícitamente por la Tarea 10: un `gestor` no puede
+  // leer /api/reportes/finanzas/ingresos ni borrar una mascota. Cubre dos
+  // routers distintos (reportes.py, admin-only; mascotas.py,
+  // admin/recepcionista/veterinario) con el mismo usuario de prueba.
+  test('un usuario con rol "gestor" recibe 403 en /finanzas/ingresos y al borrar una mascota', async ({ request }) => {
+    const adminToken = await getAdminToken(request);
+    const { user: gestor, token: gestorToken } = await createTestGestor(request, adminToken);
+    const propietario = await createTestPropietario(request, {}, adminToken);
+    const mascota = await createTestMascota(request, propietario.id, {}, adminToken);
+
+    try {
+      const hoy = todayUTC();
+      const ingresosRes = await request.get(
+        `/api/reportes/finanzas/ingresos?fecha_inicio=${hoy}&fecha_fin=${hoy}`,
+        { headers: authHeaders(gestorToken) },
+      );
+      expect(ingresosRes.status(), 'gestor no está en _ROLES_REPORTES (admin-only)').toBe(403);
+
+      const delRes = await request.delete(`/api/mascotas/${mascota.id}`, { headers: authHeaders(gestorToken) });
+      expect(delRes.status(), 'gestor no está en _ROLES_MASCOTAS (admin/recepcionista/veterinario)').toBe(403);
+    } finally {
+      await deleteTestMascota(request, mascota.id, adminToken);
+      await deleteTestPropietario(request, propietario.id, adminToken);
+      await deleteTestUser(request, adminToken, gestor.id);
+    }
   });
 });
