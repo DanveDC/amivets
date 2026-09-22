@@ -13,8 +13,32 @@ router = APIRouter(
     tags=["Clinico"]
 )
 
+# HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): los 5 POST de este router ya
+# usaban require_roles("admin", "veterinario"), pero los 5 GET de historial
+# (vacunaciones, desparasitaciones, hospitalizaciones, cirugias,
+# pruebas_complementarias por mascota) no tenian NINGUNA dependencia de auth.
+#
+# Se gatean con el mismo admin+veterinario que ya usan los POST del router, no
+# con admin+recepcionista+veterinario como el resto de las lecturas clinicas
+# (consultas.py, mascotas.py): la fila 15 de la matriz de permisos
+# (docs/diseno/ordenes-de-servicio.md, decision 9, 9.3) le da a recepcion una
+# vista RECORTADA de la historia clinica -- "sin diagnostico ni tratamiento" --
+# via un schema de respuesta propio que no existe todavia (fuera de alcance:
+# "exclusivamente autenticacion y autorizacion", no esquemas). Estos 5
+# endpoints devuelven el detalle clinico crudo (lote de vacuna, dosis,
+# informe quirurgico, resultado de laboratorio) sin ningun recorte posible con
+# el schema actual, asi que sumar recepcion ahora seria darle mas acceso del
+# que la matriz pide para esa fila. Queda anotado como deuda pendiente para
+# cuando exista el schema recortado, no resuelto adivinando.
+_ROLES_CLINICO_LECTURA = ("admin", "veterinario")
+
+
 @router.get("/vacunaciones/{mascota_id}")
-def obtener_vacunaciones(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_vacunaciones(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     res = db.query(models.Vacunacion).join(models.Consulta).filter(models.Consulta.mascota_id == mascota_id).all()
     # attach vacuna details
     out = []
@@ -111,7 +135,11 @@ def crear_vacunacion(
     return db_vacunacion
 
 @router.get("/desparasitaciones/{mascota_id}")
-def obtener_desparasitaciones(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_desparasitaciones(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     res = db.query(models.Desparasitacion).join(models.Consulta).filter(models.Consulta.mascota_id == mascota_id).all()
     out = []
     for d in res:
@@ -193,7 +221,11 @@ def crear_desparasitacion(
     return db_desp
 
 @router.get("/hospitalizaciones/{mascota_id}", response_model=List[schemas.HospitalizacionResponse])
-def obtener_hospitalizaciones(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_hospitalizaciones(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     return db.query(models.Hospitalizacion).filter(models.Hospitalizacion.mascota_id == mascota_id).all()
 
 @router.post("/hospitalizacion", response_model=schemas.HospitalizacionResponse)
@@ -247,7 +279,11 @@ def crear_hospitalizacion(
     return db_hosp
 
 @router.get("/cirugias/{mascota_id}", response_model=List[schemas.CirugiaResponse])
-def obtener_cirugias(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_cirugias(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     return db.query(models.Cirugia).filter(models.Cirugia.mascota_id == mascota_id).all()
 
 @router.post("/cirugia", response_model=schemas.CirugiaResponse)
@@ -299,7 +335,11 @@ def crear_cirugia(
     return db_cir
 
 @router.get("/pruebas_complementarias/{mascota_id}", response_model=List[schemas.PruebaComplementariaResponse])
-def obtener_pruebas(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_pruebas(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     return db.query(models.PruebaComplementaria).filter(models.PruebaComplementaria.mascota_id == mascota_id).all()
 
 @router.post("/prueba_complementaria", response_model=schemas.PruebaComplementariaResponse)

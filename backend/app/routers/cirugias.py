@@ -51,6 +51,13 @@ def registrar_cirugia(
     return db_cirugia
 
 @router.get("/mascota/{mascota_id}", response_model=List[CirugiaResponse])
-def historial_quirurgico(mascota_id: int, db: Session = Depends(get_db)):
+def historial_quirurgico(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    # HALLAZGO DE SEGURIDAD (Tarea 10): unico endpoint del router sin guard --
+    # el POST ya usaba require_roles. Mismo admin/veterinario (ver clinico.py
+    # para la nota completa sobre por que no se suma recepcionista todavia).
+    _=Depends(require_roles("admin", "veterinario")),
+):
     """Obtiene el historial de cirugías de una mascota"""
     return db.query(Cirugia).filter(Cirugia.mascota_id == mascota_id).all()

@@ -102,7 +102,7 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
   });
 
   test('vacunación: aplica, descuenta stock, deja servicio en la consulta y lista', async ({ request }) => {
-    const antes = await (await request.get(`/api/inventario/${S.vacunaProd.id}`)).json();
+    const antes = await (await request.get(`/api/inventario/${S.vacunaProd.id}`, { headers: authHeaders(S.token) })).json();
 
     const vac = await createTestVacunacion(request, { consultaId: S.consulta.id, vacunaId: S.vacunaProd.id, lote: 'PWTEST-L1' }, S.token);
     expect(vac.id).toBeTruthy();
@@ -110,11 +110,11 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(vac.fecha_aplicacion).toBeTruthy();
 
     // Stock descontado en 1.
-    const despues = await (await request.get(`/api/inventario/${S.vacunaProd.id}`)).json();
+    const despues = await (await request.get(`/api/inventario/${S.vacunaProd.id}`, { headers: authHeaders(S.token) })).json();
     expect(despues.stock_actual).toBe(antes.stock_actual - 1);
 
     // Aparece en el historial de vacunaciones de la mascota.
-    const lista = await (await request.get(`/api/clinico/vacunaciones/${S.mascota.id}`)).json();
+    const lista = await (await request.get(`/api/clinico/vacunaciones/${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     const enLista = lista.find((v) => v.id === vac.id);
     expect(enLista).toBeTruthy();
     expect(enLista.vacuna_nombre).toBe(S.vacunaProd.nombre);
@@ -143,16 +143,16 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
   });
 
   test('desparasitación: aplica, descuenta stock y lista', async ({ request }) => {
-    const antes = await (await request.get(`/api/inventario/${S.despProd.id}`)).json();
+    const antes = await (await request.get(`/api/inventario/${S.despProd.id}`, { headers: authHeaders(S.token) })).json();
 
     const desp = await createTestDesparasitacion(request, { consultaId: S.consulta.id, productoId: S.despProd.id, tipo: 'Externa', dosis: '2 ml' }, S.token);
     expect(desp.id).toBeTruthy();
     expect(desp.fecha_aplicacion).toBeTruthy();
 
-    const despues = await (await request.get(`/api/inventario/${S.despProd.id}`)).json();
+    const despues = await (await request.get(`/api/inventario/${S.despProd.id}`, { headers: authHeaders(S.token) })).json();
     expect(despues.stock_actual).toBe(antes.stock_actual - 1);
 
-    const lista = await (await request.get(`/api/clinico/desparasitaciones/${S.mascota.id}`)).json();
+    const lista = await (await request.get(`/api/clinico/desparasitaciones/${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     const enLista = lista.find((d) => d.id === desp.id);
     expect(enLista).toBeTruthy();
     expect(enLista.tipo).toBe('Externa');
@@ -173,11 +173,11 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(S.hosp.fecha_egreso).toBeNull();
 
     // Aparece en el listado de hospitalizados activos.
-    const activos = await (await request.get('/api/hospitalizaciones/?activos=true')).json();
+    const activos = await (await request.get('/api/hospitalizaciones/?activos=true', { headers: authHeaders(S.token) })).json();
     expect(activos.some((h) => h.id === S.hosp.id)).toBe(true);
 
     // Aparece en el historial de la mascota (router clinico).
-    const porMascota = await (await request.get(`/api/clinico/hospitalizaciones/${S.mascota.id}`)).json();
+    const porMascota = await (await request.get(`/api/clinico/hospitalizaciones/${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     expect(porMascota.some((h) => h.id === S.hosp.id)).toBe(true);
 
     // Dar de alta: cierra fecha_egreso y baja activo.
@@ -190,7 +190,7 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(alta.fecha_egreso).toBeTruthy();
 
     // Ya no está entre los activos.
-    const activosDespues = await (await request.get('/api/hospitalizaciones/?activos=true')).json();
+    const activosDespues = await (await request.get('/api/hospitalizaciones/?activos=true', { headers: authHeaders(S.token) })).json();
     expect(activosDespues.some((h) => h.id === S.hosp.id)).toBe(false);
 
     // Alta sobre id inexistente -> 404.
@@ -230,7 +230,7 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     await expect(page.locator('#petTabContent')).toContainText(procedimiento);
 
     // Contraste API: el router clinico guarda la cirugía ligada a la mascota.
-    const lista = await (await request.get(`/api/clinico/cirugias/${S.mascota.id}`)).json();
+    const lista = await (await request.get(`/api/clinico/cirugias/${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     const creada = lista.find((c) => c.tipo_procedimiento === procedimiento);
     expect(creada, 'la cirugía creada por UI debe aparecer en la API').toBeTruthy();
     expect(creada.riesgo_asa).toBe('III');
@@ -242,7 +242,7 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(cir.id).toBeTruthy();
     expect(cir.fecha_cirugia).toBeTruthy();
 
-    const lista = await (await request.get(`/api/cirugias/mascota/${S.mascota.id}`)).json();
+    const lista = await (await request.get(`/api/cirugias/mascota/${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     expect(lista.some((c) => c.id === cir.id)).toBe(true);
   });
 
@@ -255,11 +255,11 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     expect(S.pruebaApi.fecha).toBeTruthy();
 
     // LIST con filtro por mascota.
-    const lista = await (await request.get(`/api/pruebas/?mascota_id=${S.mascota.id}`)).json();
+    const lista = await (await request.get(`/api/pruebas/?mascota_id=${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     expect(lista.some((p) => p.id === S.pruebaApi.id)).toBe(true);
 
     // GET {id}
-    const getRes = await request.get(`/api/pruebas/${S.pruebaApi.id}`);
+    const getRes = await request.get(`/api/pruebas/${S.pruebaApi.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).tipo).toBe('Radiologia');
 
@@ -278,7 +278,7 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     // DELETE (borrado real, 204).
     const delRes = await request.delete(`/api/pruebas/${S.pruebaApi.id}`, { headers: authHeaders(S.token) });
     expect(delRes.status()).toBe(204);
-    const gone = await request.get(`/api/pruebas/${S.pruebaApi.id}`);
+    const gone = await request.get(`/api/pruebas/${S.pruebaApi.id}`, { headers: authHeaders(S.token) });
     expect(gone.status()).toBe(404);
     S.pruebaApi = null;
 
@@ -325,5 +325,29 @@ test.describe.serial('Clínica extendida — vacunación, desparasitación, hosp
     });
     expect(conRolIncorrecto.status()).toBe(403);
     await deleteTestUser(request, S.token, recepcionista.id);
+  });
+
+  test('Tarea 10 — los GET de historial que habían quedado sueltos (gate parcial) rechazan sin token', async ({ request }) => {
+    // clinico.py: los 5 POST ya tenían require_roles(admin,veterinario); los 5
+    // GET de historial por mascota no tenían NINGUNA dependencia de auth.
+    // cirugias.py, hospitalizaciones.py y pruebas.py tenían el mismo patrón
+    // parcial: el/los POST (y algunos PUT/DELETE) gateados, uno o dos GET
+    // sueltos.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get(`/api/clinico/vacunaciones/${S.mascota.id}`, sinToken),
+      () => request.get(`/api/clinico/desparasitaciones/${S.mascota.id}`, sinToken),
+      () => request.get(`/api/clinico/hospitalizaciones/${S.mascota.id}`, sinToken),
+      () => request.get(`/api/clinico/cirugias/${S.mascota.id}`, sinToken),
+      () => request.get(`/api/clinico/pruebas_complementarias/${S.mascota.id}`, sinToken),
+      () => request.get(`/api/cirugias/mascota/${S.mascota.id}`, sinToken),
+      () => request.get('/api/hospitalizaciones/', sinToken),
+      () => request.get(`/api/pruebas/?mascota_id=${S.mascota.id}`, sinToken),
+      () => request.get(`/api/pruebas/1`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
   });
 });

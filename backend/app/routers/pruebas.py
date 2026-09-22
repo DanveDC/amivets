@@ -62,7 +62,12 @@ def listar_pruebas(
     mascota_id: Optional[int] = None,
     consulta_id: Optional[int] = None,
     tipo: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # HALLAZGO DE SEGURIDAD (Tarea 10): este GET y el de abajo (obtener_prueba)
+    # no tenian guard -- POST/PUT/DELETE ya lo usaban. Mismo admin/veterinario
+    # (ver clinico.py para la nota completa sobre por que no se suma
+    # recepcionista todavia).
+    _=Depends(require_roles("admin", "veterinario")),
 ):
     """Lista pruebas complementarias con filtros"""
     query = db.query(PruebaComplementaria)
@@ -79,7 +84,8 @@ def listar_pruebas(
 @router.get("/{prueba_id}", response_model=PruebaComplementariaResponse)
 def obtener_prueba(
     prueba_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(require_roles("admin", "veterinario")),
 ):
     """Obtiene una prueba especifica por ID"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()

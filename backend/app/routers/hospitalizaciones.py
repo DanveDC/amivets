@@ -53,7 +53,15 @@ def ingresar_paciente(
     return db_hosp
 
 @router.get("/", response_model=List[HospitalizacionResponse])
-def listar_hospitalizados(activos: bool = True, db: Session = Depends(get_db)):
+def listar_hospitalizados(
+    activos: bool = True,
+    db: Session = Depends(get_db),
+    # HALLAZGO DE SEGURIDAD (Tarea 10): unico endpoint del router sin guard --
+    # POST y PUT ya usaban require_roles. Mismo admin/veterinario (ver
+    # clinico.py para la nota completa sobre por que no se suma recepcionista
+    # todavia).
+    _=Depends(require_roles("admin", "veterinario")),
+):
     """Lista pacientes en hospitalización"""
     query = db.query(Hospitalizacion)
     if activos:
