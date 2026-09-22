@@ -1569,55 +1569,135 @@ button:active:not(:disabled) {
     animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-/* --- LOGIN PAGE --- */
+/* --- LOGIN PAGE ───────────────────────────────────────────────────────
+   Tarea 11 (revisión de bocetos): valores literales de
+   docs/diseno/pantallas/Login.html — panel de marca teal 620px + panel de
+   formulario, sin redondear a ninguna grilla. min-height:100dvh en vez de
+   la altura fija de 900px del boceto (frame de captura, no un contrato de
+   layout); responsive: el panel de marca se retira bajo 860px (ver media
+   query al final del archivo) porque a 768px, con los dos paneles, el
+   formulario queda con menos de 320px reales. */
 
 .login-page {
     display: flex;
-    justify-content: center;
-    align-items: center;
     min-height: 100dvh;
     background: var(--bg);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+}
+
+.login-brand-panel {
+    width: 620px;
+    flex-shrink: 0;
+    background: var(--primary);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 26px;
+    padding: 0 66px;
+    color: #fff;
+}
+
+.login-brand-logo {
+    width: 84px;
+    height: 84px;
+    border-radius: var(--radius-lg);
+    object-fit: cover;
+}
+
+.login-brand-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.login-brand-headline {
+    font-family: var(--font-serif);
+    font-weight: 500;
+    font-size: 42px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+}
+
+.login-brand-sub {
+    font-size: 15px;
+    opacity: 0.85;
+    max-width: 390px;
+    text-wrap: pretty;
+}
+
+.login-brand-stats {
+    display: flex;
+    gap: 30px;
+    margin-top: 8px;
+}
+
+.login-brand-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.login-brand-stat-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 21px;
+    font-weight: 500;
+}
+
+.login-brand-stat-label {
+    font-size: 12px;
+    opacity: 0.75;
+}
+
+.login-form-side {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
     padding: 1.5rem;
 }
 
 .login-card {
-    background: var(--surface);
     width: 100%;
-    max-width: 400px;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border);
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
+    max-width: 372px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
     animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .login-card-header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 2.25rem 2.25rem 1.75rem;
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-.login-brand {
+.login-card-title {
     font-family: var(--font-serif);
-    font-size: 1.85rem;
     font-weight: 500;
+    font-size: 26px;
     color: var(--text-primary);
-    letter-spacing: -0.02em;
-    margin: 0 0 0.35rem;
 }
 
 .login-subtitle {
-    font-size: 0.85rem;
+    font-size: 13.5px;
     color: var(--text-secondary);
     margin: 0;
     font-weight: 400;
 }
 
 .login-form {
-    padding: 1.75rem 2.25rem 2.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+.login-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
 }
 
 .login-error {
@@ -1629,7 +1709,6 @@ button:active:not(:disabled) {
     padding: 0.7rem 1rem;
     font-size: 0.85rem;
     text-align: center;
-    margin-bottom: 1.25rem;
 }
 
 /* legacy alias used by auth.js */
@@ -1642,24 +1721,24 @@ button:active:not(:disabled) {
 }
 
 .login-field {
-    margin-bottom: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .login-field label {
-    display: block;
-    font-size: 0.85rem;
+    font-size: 12.5px;
     font-weight: 500;
-    color: var(--text-primary);
-    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
 }
 
 .login-field input {
-    width: 100%;
-    padding: 0.7rem 0.9rem;
+    height: 44px;
+    padding: 0 13px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--surface);
-    font-size: 0.9rem;
+    font-size: 14px;
     font-family: inherit;
     color: var(--text-primary);
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
@@ -1677,15 +1756,14 @@ button:active:not(:disabled) {
 }
 
 .btn-login {
-    width: 100%;
-    margin-top: 0.5rem;
-    padding: 0.8rem;
-    background: var(--text-primary);
+    height: 46px;
+    margin-top: 0.25rem;
+    background: var(--primary);
     color: white;
     border: none;
-    border-radius: var(--radius-sm);
-    font-size: 0.9rem;
-    font-weight: 500;
+    border-radius: var(--radius-md);
+    font-size: 14.5px;
+    font-weight: 600;
     cursor: pointer;
     font-family: inherit;
     transition: background 0.18s ease, transform 0.1s ease;
@@ -1697,7 +1775,7 @@ button:active:not(:disabled) {
 }
 
 .btn-login:hover {
-    background: #1F2325;
+    background: var(--primary-dark);
 }
 
 .btn-login:active {
@@ -1707,6 +1785,28 @@ button:active:not(:disabled) {
 .btn-login:focus-visible {
     outline: none;
     box-shadow: var(--focus-ring);
+}
+
+.login-help {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    text-align: center;
+    text-wrap: pretty;
+}
+
+/* Responsive (Tarea 11, §3 — la clínica usa tablets en consultorio): a
+   1280 el panel de marca ya angosta el formulario más de lo que el
+   boceto (1440) contempla; a 768 no entran los dos paneles con margen
+   legible. Se retira el panel de marca y el form pasa a ocupar todo el
+   ancho, igual que hacía la tarjeta centrada anterior. */
+@media (max-width: 860px) {
+    .login-brand-panel {
+        display: none;
+    }
+
+    .login-form-side {
+        width: 100%;
+    }
 }
 
 /* --- APP-WIDE VISUAL IMPROVEMENTS --- */

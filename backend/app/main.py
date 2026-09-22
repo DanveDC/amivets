@@ -218,7 +218,28 @@ async def login_page(request: Request):
     """Página de inicio de sesión"""
     if templates:
         try:
-            return templates.TemplateResponse("login.html", {"request": request})
+            # Tarea 11 (revisión de bocetos): Login.html dibuja un stat de
+            # "Pacientes" -- se pasa el conteo real de mascotas activas en
+            # vez de un número hardcodeado. Sin auth (login.html se sirve
+            # antes de loguearse): es un agregado, no un dato de un
+            # paciente puntual. best-effort: si la DB no responde, el
+            # template muestra la página igual sin ese stat (ver login.html).
+            pacientes_activos = None
+            try:
+                from app.core.database import SessionLocal
+                from app.models.models import Mascota
+                db = SessionLocal()
+                try:
+                    pacientes_activos = db.query(Mascota).filter(Mascota.activo.is_(True)).count()
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"No se pudo obtener el conteo de pacientes para login.html: {e}")
+
+            return templates.TemplateResponse(
+                "login.html",
+                {"request": request, "pacientes_activos": pacientes_activos},
+            )
         except Exception as e:
             logger.error(f"Error serving login template: {e}")
     
