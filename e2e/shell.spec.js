@@ -36,6 +36,7 @@ const {
   createTestGestor,
   createTestVeterinario,
   createTestConsulta,
+  createTestFactura,
 } = require('./helpers');
 
 async function loginUI(page, username, password) {
@@ -86,6 +87,85 @@ test.describe('Shell — lanzador y navegación por módulos', () => {
     await expect(page.locator('.av-cmdk-input')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('.av-cmdk-input')).toHaveCount(0);
+  });
+
+  test('búsqueda global encuentra número de orden y número de factura (etapa 8 — Puntos abiertos)', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const propietario = await createTestPropietario(request);
+    const orden = await createTestOrden(request, { propietarioId: propietario.id }, adminToken);
+    const factura = await createTestFactura(request, { propietarioId: propietario.id });
+
+    try {
+      await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+
+      // GET /api/ordenes/?numero= es nuevo en esta etapa (antes cmdk.js no
+      // buscaba órdenes en absoluto).
+      await page.keyboard.press('Control+K');
+      await page.locator('.av-cmdk-input').fill(orden.numero);
+      const ordenItem = page.locator('.av-cmdk-item', { hasText: orden.numero });
+      await expect(ordenItem).toBeVisible({ timeout: 5000 });
+      await ordenItem.click();
+      await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+
+      // GET /api/facturas/?search= ya existía en el backend; cmdk.js nunca
+      // lo usaba (comentario stale en el código, corregido en esta etapa).
+      await page.keyboard.press('Control+K');
+      await page.locator('.av-cmdk-input').fill(factura.numero_factura);
+      const facturaItem = page.locator('.av-cmdk-item', { hasText: factura.numero_factura });
+      await expect(facturaItem).toBeVisible({ timeout: 5000 });
+      await facturaItem.click();
+      await expect(page.locator('#modalPreviewFactura')).toBeVisible();
+      await expect(page.locator('#previewFacturaNumero')).toContainText(factura.numero_factura);
+    } finally {
+      await deleteTestPropietario(request, propietario.id);
+    }
+  });
+});
+
+test.describe('Listado de mascotas — sec-mascotas (etapa 8, landing nuevo del módulo 3)', () => {
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => localStorage.clear()).catch(() => {});
+  });
+
+  test('filtra por especie, busca por nombre y abre la ficha desde "Ver ficha"', async ({ page, request }) => {
+    const propietario = await createTestPropietario(request);
+    // Nombres SIN espacios a propósito: MascotaResponse (schemas.py,
+    // append_apellido) reescribe `nombre` en cada serialización como
+    // "<primer token> <apellido del tutor>" -- un hallazgo de esta etapa, no
+    // algo a corregir acá. Buscar/matchear por el token base (antes del
+    // espacio) es estable sin importar cuántas veces se le pegue el apellido.
+    const nombrePerro = testTag('Firulais');
+    const nombreGato = testTag('Michi');
+    const perro = await createTestMascota(request, propietario.id, { nombre: nombrePerro, especie: 'Perro' });
+    const gato = await createTestMascota(request, propietario.id, { nombre: nombreGato, especie: 'Gato' });
+
+    try {
+      await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+      await page.locator('.av-launcher-card[data-target="sec-mascotas"]').click();
+      await expect(page.locator('#sec-mascotas')).toBeVisible();
+
+      // Búsqueda: sólo el perro de prueba debería quedar visible.
+      await page.locator('#mascotasSearch').fill(nombrePerro);
+      const filaPerro = page.locator('#mascotasTableBody tr', { hasText: nombrePerro });
+      await expect(filaPerro).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('#mascotasTableBody tr', { hasText: nombreGato })).toHaveCount(0);
+
+      // Filtro por especie "Gatos": limpio la búsqueda y filtro por especie.
+      await page.locator('#mascotasSearch').fill('');
+      await page.locator('#mascotasFiltros [data-especie="Gato"]').click();
+      const filaGato = page.locator('#mascotasTableBody tr', { hasText: nombreGato });
+      await expect(filaGato).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('#mascotasTableBody tr', { hasText: nombrePerro })).toHaveCount(0);
+
+      // "Ver ficha" navega a la historia clínica del paciente correcto.
+      await filaGato.locator('[data-open-mascota]').click();
+      await expect(page.locator('#sec-consultorio')).toBeVisible();
+      await expect(page.locator('#displayNombreMascota')).toContainText(nombreGato);
+    } finally {
+      await deleteTestMascota(request, perro.id);
+      await deleteTestMascota(request, gato.id);
+      await deleteTestPropietario(request, propietario.id);
+    }
   });
 });
 

@@ -982,8 +982,21 @@ async function gotoSection(page, target) {
     }
   }
 
-  await page.locator('.av-usermenu > summary').click();
-  await page.locator(`.av-usermenu [data-target="${target}"]`).click();
+  const usermenuTarget = page.locator(`.av-usermenu [data-target="${target}"]`);
+  const usermenuSummary = page.locator('.av-usermenu > summary');
+  await usermenuSummary.click();
+  if (await usermenuTarget.count()) {
+    await usermenuTarget.click();
+    return;
+  }
+  await usermenuSummary.click(); // cierra el menú que se acaba de abrir para nada
+
+  // Último recurso (Tarea 06, etapa 8): secciones registradas en router.js
+  // pero sin entrada de sidebar/lanzador/usermenu -- ej. sec-propietarios,
+  // que sigue viva como ruta alcanzable pero perdió su tab al reemplazarla
+  // sec-mascotas como landing del módulo 3. `window.showSection` sigue
+  // expuesto exactamente para esto (ver router.js, comentario de cabecera).
+  await page.evaluate((id) => window.showSection(id), target);
 }
 
 module.exports = {
