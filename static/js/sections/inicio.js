@@ -63,6 +63,28 @@ export const initInicio = async () => {
 
     const grid = document.getElementById('inicioGrid');
     if (grid) {
+        // Hallazgo de revisión (Tarea 11, §4 — verificación por rol): router.js
+        // solo tenía un caso especial para "un módulo -> se omite el lanzador"
+        // (Decisión 2, regla 6). Con CERO módulos -- el rol 'user', que es el
+        // default de Usuario.role en el modelo (backend/app/models/models.py)
+        // para cualquier cuenta sin rol asignado explícito -- no hay caso
+        // especial: la grilla queda vacía y sin ningún mensaje, un callejón
+        // sin salida real (barra lateral oculta en el lanzador, nada para
+        // clickear). No es la misma regla 5 ("no hay tarjeta apagada ni
+        // candado" para módulos que el rol no puede usar): acá no hay NINGÚN
+        // módulo, así que sí corresponde explicarlo.
+        if (modules.length === 0) {
+            grid.innerHTML = `
+                <div class="av-empty" style="grid-column:1/-1;">
+                    <span class="av-empty-icon" aria-hidden="true">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                    </span>
+                    <strong class="av-empty-title">Tu cuenta todavía no tiene un módulo asignado</strong>
+                    <p class="av-empty-text">Pedile a un administrador que te asigne un rol (recepcionista, veterinario o gestor) desde Usuarios. Mientras tanto no hay nada que puedas abrir acá.</p>
+                    <button type="button" class="av-btn" onclick="logout()">Cerrar sesión</button>
+                </div>`;
+            return;
+        }
         grid.innerHTML = '';
         modules.forEach(m => grid.appendChild(renderCard(m)));
         grid.querySelectorAll('.av-launcher-card').forEach(card => {
