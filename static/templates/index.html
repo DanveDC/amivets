@@ -1327,7 +1327,7 @@
             <!-- Content Area: Consultorio -->
             <section id="sec-consultorio" class="content-area spa-section">
                 <div class="content-header">
-                    <h2>Consultorio Clínico</h2>
+                    <h2>Historia clínica</h2>
                 </div>
 
                 <div class="consultorio-layout">
@@ -1580,8 +1580,8 @@
                         <p style="color:var(--text-secondary); font-size:0.875rem; margin:0;">Gestión de productos, medicamentos y materiales.</p>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        <button class="btn-secondary btn-sm" id="btnAlertasStock" style="color:var(--warning-dark); border-color:var(--warning); background:var(--warning-subtle);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Bajo Stock</button>
-                        <button class="btn-primary" id="btnNuevoProducto">+ Nuevo Producto</button>
+                        <button class="av-btn" id="btnAlertasStock" style="color:var(--warning-dark); border-color:var(--warning); background:var(--warning-subtle);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Bajo Stock</button>
+                        <button class="av-btn av-btn--primary" id="btnNuevoProducto">+ Nuevo Producto</button>
                     </div>
                 </div>
 
@@ -1715,8 +1715,8 @@
                     </div>
                 </div>
 
-                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden;">
-                    <table class="consultas-table" style="width: 100%; border-collapse: collapse;">
+                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                    <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
                         <thead>
                             <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
                                 <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
@@ -2083,7 +2083,7 @@
                             <option value="">Todas las categorías</option>
                         </select>
                     </div>
-                    <button class="btn-primary" onclick="abrirModalServicio()">+ Nuevo Servicio</button>
+                    <button class="av-btn av-btn--primary" onclick="abrirModalServicio()">+ Nuevo Servicio</button>
                 </div>
 
                 <div style="overflow-x:auto;">

@@ -430,6 +430,11 @@ button {
     padding: 1.75rem;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border);
+    /* Sombra permanente (no sólo al hover) -- Tarea 06, etapa 8: alinea las
+       tarjetas de KPI con el idioma de tarjeta que ya usan las pantallas
+       rediseñadas del shell nuevo (.pd-kpi, .oa-summary, etc. en shell.css),
+       que sí llevan box-shadow: var(--shadow-sm) en reposo. */
+    box-shadow: var(--shadow-sm);
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -465,6 +470,9 @@ button {
     border: 1px solid var(--border);
     overflow: hidden;
     margin-top: 1.5rem;
+    /* Ídem .kpi-card arriba: sombra permanente para el idioma de tarjeta del
+       shell nuevo (Tarea 06, etapa 8). */
+    box-shadow: var(--shadow-sm);
 }
 
 .consultas-table th {
@@ -1056,9 +1064,15 @@ form {
 }
 
 .patient-list-sidebar {
+    /* Tarea 06, etapa 8 -- panel de tarjeta en vez de sólo un borde a la
+       derecha: alinea la Ficha de mascota con el idioma de tarjeta del
+       shell nuevo (docs/diseno/pantallas/FichaMascota.html). */
     flex: 0 0 340px;
-    border-right: 1px solid var(--border);
-    padding: 0 1.5rem 1rem 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 1.25rem 1.25rem 1rem;
     height: calc(100vh - 250px);
     overflow-y: auto;
 }
@@ -1081,7 +1095,7 @@ form {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: none;
+    box-shadow: var(--shadow-sm);
 }
 
 .pet-nav-item:hover {
@@ -1109,7 +1123,7 @@ form {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: none;
+    box-shadow: var(--shadow-sm);
     min-height: 600px;
 }
 

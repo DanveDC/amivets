@@ -280,18 +280,31 @@ Seis cosas del código actual que muerden si se encuentran tarde.
 
 ## Puntos abiertos
 
-- **Quién ve el módulo 6.** La matriz §9.3 cubre liquidaciones (admin) pero no
-  la lectura de KPI. Hoy `sec-reportes` es una pestaña visible para todos;
-  esconder el módulo lo restringe de hecho. La etapa 7 lo muestra solo al
-  administrador. Si la clínica quiere que cada veterinario vea sus propios
-  números, es una lectura con alcance y se decide en el backend, no ocultando o
-  mostrando una tarjeta.
-- **Pantalla de entrada del módulo 3.** El lanzador dice "abre el buscador de
-  pacientes", pero la única pantalla diseñada del módulo 3 es la ficha
-  (`FichaMascota.html`). El listado se diseña en la etapa 8; hasta entonces la
-  tarjeta 3 abre `sec-propietarios` con su layout actual.
-- **Notificaciones en la cabecera.** `BandejaGestor.html` dibuja la campana con
-  su contador. El modelo existe (`ordenes-de-servicio.md` Decisión 6), pero el
-  enunciado no lista una pantalla de notificaciones: en la etapa 7 la campana
-  abre un panel con la lista corta y marca como leído; el histórico completo es
-  etapa 8.
+Los tres se resolvieron en la etapa 8:
+
+- ~~**Quién ve el módulo 6.**~~ Resuelto: sigue solo-admin. La matriz §9.3
+  cubre liquidaciones (admin) pero no la lectura de KPI en general; esconder
+  el módulo lo restringe de hecho, y así queda — la etapa 7 ya lo mostraba
+  solo al administrador y la etapa 8 confirma la decisión sin tocarla. Si la
+  clínica quiere que cada veterinario vea sus propios números, sigue siendo
+  una lectura con alcance de backend que no se decidió, no un cambio de
+  visibilidad de tarjeta.
+- ~~**Pantalla de entrada del módulo 3.**~~ Resuelto: `docs/diseno/pantallas/
+  Mascotas.html` es la maqueta nueva (listado por especie, búsqueda, acceso a
+  la ficha) y `sec-mascotas` (`sections/mascotas.js`) es la entrada real del
+  módulo 3 desde la etapa 8. `sec-propietarios` sigue registrada en
+  `router.js` como ruta alcanzable (`verMascotasPropietario` la sigue usando),
+  pero ya no tiene entrada de sidebar propia.
+- ~~**Notificaciones en la cabecera.**~~ Resuelto: el mismo panel de la
+  campana (`core/notificaciones.js`) agrega un botón "Ver histórico" que
+  cambia a listar TODAS las notificaciones del usuario (leídas + no leídas),
+  paginadas con `skip`/`limit` sobre `GET /api/notificaciones` (el `skip` es
+  nuevo en esta etapa) y un botón "Cargar más" al pie. No se abrió una
+  sección nueva — el panel ya scrollea dentro de sus 420px.
+
+Un cuarto punto, no listado acá pero sí en `cmdk.js` (comentario inline): la
+búsqueda global no cubría número de orden ni número de factura. También se
+resolvió en la etapa 8 — `GET /api/ordenes/` ahora acepta `?numero=` (filtro
+nuevo, mismo patrón que sus otros `Optional`) y `cmdk.js` empezó a usar
+`GET /api/facturas/?search=`, que ya existía en el backend desde antes y
+nunca se había conectado a la paleta de comandos.
