@@ -1488,8 +1488,13 @@
             <!-- sec-mascotas — landing del módulo 3 (Tarea 06, etapa 8). Ver
                  docs/diseno/pantallas/Mascotas.html y navegacion-v2.md,
                  "Puntos abiertos". Reemplaza a sec-propietarios como entrada
-                 por defecto; sec-propietarios sigue viva más abajo como ruta
-                 alcanzable (ya no tiene entrada de sidebar propia). -->
+                 por defecto; sec-propietarios sigue viva más abajo (ya no
+                 tiene entrada de sidebar propia) y se llega por el botón
+                 "Tutores" de acá abajo (#btnVerTutores) -- hallazgo de
+                 revisión: antes de este botón, la única forma de llegar era
+                 un resultado de propietario en la búsqueda global, que exige
+                 ya saber a quién se busca; no había forma de "ver el listado
+                 completo". -->
             <section id="sec-mascotas" class="spa-section" hidden>
                 <div class="pd-canvas">
                     <div class="pd-panel pd-orders">
@@ -1504,6 +1509,7 @@
                             <div class="av-spacer"></div>
                             <input type="text" id="mascotasSearch" class="search-input"
                                 placeholder="Buscar por nombre, tutor o código…" style="width:260px; margin:0;">
+                            <button type="button" class="av-btn" id="btnVerTutores" data-target="sec-propietarios">Tutores</button>
                             <button type="button" class="av-btn av-btn--primary" id="btnNuevaMascotaListado">+ Nueva mascota</button>
                         </div>
                         <table class="pd-table">

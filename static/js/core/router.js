@@ -59,9 +59,13 @@ const SECTIONS = [
     { id: 'sec-catalogo',        label: 'Catálogo',            tab: true,  init: () => { cargarCategoriasSelect(); cargarCatalogo(); }, roles: ['admin', 'veterinario'] },
     { id: 'sec-bandeja-gestor',  label: 'Mi bandeja',          tab: true,  init: loadBandejaGestor,    roles: SERVICIOS_ROLES },
     // sec-mascotas es la entrada nueva del módulo 3 (etapa 8); sec-propietarios
-    // sigue registrada (alcanzable por hash/link directo, ej. desde
-    // verMascotasPropietario) pero ya no tiene su propia entrada de sidebar
-    // -- tab:false porque MODULES ya no la lista en sectionIds, ver abajo.
+    // sigue registrada -- tab:false porque MODULES ya no la lista en
+    // sectionIds, ver abajo. Se llega por el botón "Tutores" de sec-mascotas
+    // (#btnVerTutores, sections/mascotas.js) o por un resultado de
+    // propietario en la búsqueda global. CORRECCIÓN (hallazgo de revisión):
+    // este comentario decía "alcanzable ej. desde verMascotasPropietario",
+    // pero esa función navega a sec-consultorio, no acá -- era falso; el
+    // botón "Tutores" es el fix real, no solo la corrección del comentario.
     { id: 'sec-mascotas',        label: 'Mascotas',            tab: true,  init: initMascotas,         roles: MASCOTAS_ROLES },
     { id: 'sec-propietarios',    label: 'Propietarios',        tab: false, init: loadPropietarios,     roles: MASCOTAS_ROLES },
     { id: 'sec-consultorio',     label: 'Historia clínica',    tab: true,  init: initConsultorio,      roles: MASCOTAS_ROLES },

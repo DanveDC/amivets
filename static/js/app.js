@@ -138,6 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listeners para botones de modal
     document.getElementById('btnRegistrarPropietario')?.addEventListener('click', () => openModal('modalPropietario'));
     document.getElementById('btnRegistrarMascota')?.addEventListener('click', async () => {
+        // Mismo hallazgo que sections/mascotas.js::wireNuevaMascota: sin
+        // esperar esto, initCustomSelects() (fire-and-forget más arriba)
+        // puede no haber terminado y ownerSelectInstance sigue null.
+        await consultorio.whenCustomSelectsReady();
         // Refresh owners list when opening pet registration
         try {
             const propietariosList = await fetchAPI('/propietarios/');

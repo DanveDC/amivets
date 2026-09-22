@@ -15,8 +15,19 @@
 import { fetchAPI } from './api.js';
 import { showSection } from './router.js';
 import { escapeHtml } from './ui.js';
+import { getRole } from './session.js';
 import { abrirOrden } from '../sections/orden-abierta.js';
 import { abrirPreviewFactura } from '../sections/facturacion.js';
+
+// Roles sin acceso a la búsqueda global (Decisión 4, navegacion-v2.md, regla
+// 5): el gestor sólo ve sus propios servicios/orden de origen, un buscador
+// del padrón completo de pacientes/tutores sería una fuga. Hallazgo de
+// revisión: ocultar #cmdkTrigger (vía data-hide-for-role en el markup) NO
+// alcanza -- es sólo el botón, el atajo Ctrl/Cmd+K seguía activo para
+// cualquiera igual. El control de acceso real está en el backend (cada
+// endpoint gatea por su cuenta), pero el atajo tiene que respetar la misma
+// regla que ya respeta el botón, no ser una puerta de al lado.
+const ROLES_SIN_BUSQUEDA_GLOBAL = ['gestor'];
 
 const MAX_RESULTS = 8;
 const DEBOUNCE_MS = 200;
@@ -43,6 +54,7 @@ export function init() {
 
     document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+            if (ROLES_SIN_BUSQUEDA_GLOBAL.includes(getRole())) return;
             e.preventDefault();
             if (backdrop) close();
             else open();
@@ -200,6 +212,13 @@ async function runSearch(q) {
             data: p,
         });
     }
+
+    // Hallazgo de revisión: antes, un 500 real acá quedaba indistinguible de
+    // "sin resultados" -- ni un log, ni un aviso. Un 403 por rol es
+    // silencioso a propósito (comentario de arriba); cualquier OTRA falla se
+    // loguea para que no se pierda en un QA manual mirando la consola.
+    if (ordenRes.status === 'rejected') console.warn('[cmdk] búsqueda de órdenes falló:', ordenRes.reason);
+    if (facturaRes.status === 'rejected') console.warn('[cmdk] búsqueda de facturas falló:', facturaRes.reason);
 
     if (ordenRes.status === 'fulfilled' && Array.isArray(ordenRes.value)) {
         for (const o of ordenRes.value) {

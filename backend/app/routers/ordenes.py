@@ -147,7 +147,14 @@ def listar_ordenes(
         if estados:
             q = q.filter(OrdenServicio.estado.in_(estados))
     if numero:
-        q = q.filter(OrdenServicio.numero.ilike(f"%{numero.strip()}%"))
+        # Hallazgo de revisión: sin escapar, un '%' o '_' en la búsqueda
+        # (típicamente un typo, ej. "OS_2418") se interpreta como comodín de
+        # SQL LIKE en vez de caracter literal, y da matches de más sin que el
+        # usuario tenga forma de saberlo (no es una fuga de datos -- ilike
+        # sigue acotado a lo que el rol ya puede ver -- pero sí resultados
+        # incorrectos sin aviso).
+        termino = numero.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(OrdenServicio.numero.ilike(f"%{termino}%", escape="\\"))
     if veterinario_id:
         q = q.filter(OrdenServicio.veterinario_id == veterinario_id)
     if mascota_id:

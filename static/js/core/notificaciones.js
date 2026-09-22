@@ -23,6 +23,13 @@ let pollTimer = null;
 let historyMode = false;
 let historyOffset = 0;
 let historyHasMore = false;
+// Guard de secuencia (hallazgo de revisión, mismo patrón que cmdk.js
+// queryToken): sin esto, pedir "Cargar más" y togglear a "Ver no leídas"
+// antes de que resuelva deja que la respuesta vieja del histórico se
+// aplique DESPUÉS de que toggleHistorial() ya reemplazó la lista -- las
+// filas leídas/viejas quedan pegadas debajo de lo que debería ser una
+// lista corta de no leídas.
+let listToken = 0;
 
 async function refreshBadge() {
     const countEl = document.getElementById('notifCount');
@@ -64,6 +71,7 @@ function syncLoadMore() {
 async function renderList() {
     const list = document.getElementById('notifList');
     if (!list) return;
+    const token = ++listToken;
     historyOffset = 0;
     historyHasMore = false;
     list.innerHTML = '<p class="av-notif-empty">Cargando…</p>';
@@ -72,6 +80,7 @@ async function renderList() {
             ? `/notificaciones/?skip=0&limit=${HISTORY_PAGE}`
             : '/notificaciones/?no_leidas=true';
         const items = await fetchAPI(url);
+        if (token !== listToken) return;
         const lista = Array.isArray(items) ? items : [];
         historyHasMore = historyMode && lista.length === HISTORY_PAGE;
         if (lista.length === 0) {
@@ -83,6 +92,7 @@ async function renderList() {
         wireRows(list);
         syncLoadMore();
     } catch (e) {
+        if (token !== listToken) return;
         list.innerHTML = `<p class="av-notif-empty">No se pudieron cargar: ${escapeHtml(e.message)}</p>`;
         syncLoadMore();
     }
@@ -92,10 +102,12 @@ async function cargarMasHistorial() {
     const list = document.getElementById('notifList');
     const btn = document.getElementById('notifCargarMas');
     if (!list || !historyMode) return;
+    const token = listToken; // no incrementa: esto AGREGA a la lista actual, no abre una nueva
     historyOffset += HISTORY_PAGE;
     if (btn) { btn.disabled = true; btn.textContent = 'Cargando…'; }
     try {
         const items = await fetchAPI(`/notificaciones/?skip=${historyOffset}&limit=${HISTORY_PAGE}`);
+        if (token !== listToken) return; // renderList() ya reemplazó la lista mientras esto esperaba
         const lista = Array.isArray(items) ? items : [];
         historyHasMore = lista.length === HISTORY_PAGE;
         list.insertAdjacentHTML('beforeend', lista.map(notifRowHtml).join(''));
@@ -103,8 +115,8 @@ async function cargarMasHistorial() {
     } catch (_) {
         historyOffset -= HISTORY_PAGE; // permitir reintentar
     } finally {
-        if (btn) { btn.disabled = false; btn.textContent = 'Cargar más'; }
-        syncLoadMore();
+        if (token === listToken && btn) { btn.disabled = false; btn.textContent = 'Cargar más'; }
+        if (token === listToken) syncLoadMore();
     }
 }
 

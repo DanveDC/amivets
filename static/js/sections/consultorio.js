@@ -179,7 +179,22 @@ export const handleTransferirSubmit = async (e) => {
     }
 };
 
-export const initCustomSelects = async () => {
+// app.js dispara initCustomSelects() sin esperarla (fire-and-forget) durante
+// el boot. Hallazgo de revisión: cualquier código que necesite
+// ownerSelectInstance ya poblado (ej. mascotas.js::wireNuevaMascota, que
+// puede correr apenas se entra a sec-mascotas, el landing nuevo del módulo 3
+// desde etapa 8) puede correr ANTES de que termine -- `?.setOptions(...)`
+// no tira error, sólo no-opea en silencio y el combo queda vacío. Se expone
+// la promesa para que quien la necesite pueda esperarla.
+let _customSelectsReadyPromise = null;
+export const whenCustomSelectsReady = () => _customSelectsReadyPromise || Promise.resolve();
+
+export const initCustomSelects = () => {
+    _customSelectsReadyPromise = _doInitCustomSelects();
+    return _customSelectsReadyPromise;
+};
+
+const _doInitCustomSelects = async () => {
     // 1. Breed Select for Registration
     razaSelectInstance = createPrettySelect('selectMascotaRazaContainer',
         RAZAS_PERROS.map(r => ({ value: r, label: r })),

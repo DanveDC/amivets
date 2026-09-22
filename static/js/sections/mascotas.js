@@ -16,10 +16,11 @@
 import { fetchAPI } from '../core/api.js';
 import { escapeHtml, openModal } from '../core/ui.js';
 import { showSection } from '../core/router.js';
-import { seleccionarMascota, ownerSelectInstance } from './consultorio.js';
+import { seleccionarMascota, ownerSelectInstance, whenCustomSelectsReady } from './consultorio.js';
 
 let especieActiva = '';
 let searchTimer = null;
+let loadToken = 0; // guarda contra respuestas fuera de orden (hallazgo de revisión)
 
 const initials = (nombre) => (nombre || '').trim().slice(0, 2).toUpperCase() || '—';
 
@@ -46,11 +47,28 @@ function wireSearch() {
     });
 }
 
+function wireVerTutores() {
+    const btn = document.getElementById('btnVerTutores');
+    if (!btn || btn.dataset.wired) return;
+    btn.dataset.wired = '1';
+    // Hallazgo de revisión: sec-propietarios (el listado completo de
+    // tutores, con alta/edición/baja) se quedó sin ningún punto de entrada
+    // real cuando sec-mascotas pasó a ser el landing del módulo 3 -- la
+    // única forma de llegar era un resultado de propietario en la búsqueda
+    // global (cmdk.js), que exige ya saber a quién se busca.
+    btn.addEventListener('click', () => showSection('sec-propietarios'));
+}
+
 function wireNuevaMascota() {
     const btn = document.getElementById('btnNuevaMascotaListado');
     if (!btn || btn.dataset.wired) return;
     btn.dataset.wired = '1';
     btn.addEventListener('click', async () => {
+        // Hallazgo de revisión: sin esperar esto, un click apenas se entra a
+        // sec-mascotas puede correr antes de que consultorio.js termine de
+        // armar el select -- ownerSelectInstance sigue null, `?.setOptions`
+        // no-opea en silencio y el combo del modal queda vacío sin aviso.
+        await whenCustomSelectsReady();
         try {
             const propietarios = await fetchAPI('/propietarios/');
             const ownerOptions = propietarios.map((p) => ({
@@ -64,13 +82,22 @@ function wireNuevaMascota() {
     });
 }
 
+// Techo generoso, no paginación real (hallazgo de revisión: con 150 fijo,
+// una clínica con más de 150 mascotas activas perdía en silencio las que
+// exceden el límite, tanto en "Todas" como en "Otros" -- acá no hay filtro
+// server-side de "no es perro ni gato", así que "Otros" siempre pide TODO y
+// filtra client-side). 1000 no es infinito, pero el aviso de truncamiento de
+// abajo asegura que si algún día se pasa, se vea, no que desaparezca solo.
+const LIMITE_LISTADO = 1000;
+
 export const loadMascotas = async (filtro = '') => {
     const tbody = document.getElementById('mascotasTableBody');
     if (!tbody) return;
+    const token = ++loadToken;
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando…</td></tr>';
 
     try {
-        const params = new URLSearchParams({ activo: 'true', limit: '150' });
+        const params = new URLSearchParams({ activo: 'true', limit: String(LIMITE_LISTADO) });
         if (filtro) params.set('search', filtro);
         if (especieActiva && especieActiva !== 'otro') params.set('especie', especieActiva);
 
@@ -78,9 +105,14 @@ export const loadMascotas = async (filtro = '') => {
             fetchAPI(`/mascotas/?${params.toString()}`),
             fetchAPI('/propietarios/?activo=true&limit=200'),
         ]);
+        // Guard de secuencia (hallazgo de revisión): sin esto, un click rápido
+        // en otro filtro puede pintar la tabla con la respuesta VIEJA si llega
+        // después de la nueva -- mismo patrón queryToken que ya usa cmdk.js.
+        if (token !== loadToken) return;
 
         const ownerById = new Map((propietarios || []).map((p) => [p.id, p]));
         let lista = Array.isArray(mascotasRaw) ? mascotasRaw : [];
+        const truncado = Array.isArray(mascotasRaw) && mascotasRaw.length >= LIMITE_LISTADO;
         if (especieActiva === 'otro') {
             lista = lista.filter((m) => !['perro', 'gato'].includes((m.especie || '').toLowerCase()));
         }
@@ -90,7 +122,13 @@ export const loadMascotas = async (filtro = '') => {
             return;
         }
 
-        tbody.innerHTML = lista.map((m) => {
+        const avisoTruncado = truncado
+            ? `<tr><td colspan="5" style="text-align:center; padding:0.6rem; color:var(--text-muted); font-size:12.5px; background:var(--surface-hover, #F7F6F3);">
+                 Mostrando los primeros ${LIMITE_LISTADO}. Refiná la búsqueda para encontrar mascotas fuera de este grupo.
+               </td></tr>`
+            : '';
+
+        tbody.innerHTML = avisoTruncado + lista.map((m) => {
             const owner = ownerById.get(m.propietario_id);
             const ownerLabel = owner ? `${owner.nombre} ${owner.apellido}` : '—';
             return `
@@ -122,6 +160,7 @@ export const loadMascotas = async (filtro = '') => {
             });
         });
     } catch (error) {
+        if (token !== loadToken) return;
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--accent); padding:2rem;">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
 };
@@ -129,6 +168,7 @@ export const loadMascotas = async (filtro = '') => {
 export const initMascotas = () => {
     wireFiltros();
     wireSearch();
+    wireVerTutores();
     wireNuevaMascota();
     loadMascotas(document.getElementById('mascotasSearch')?.value.trim() || '');
 };
