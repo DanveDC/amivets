@@ -290,7 +290,7 @@ function syncHeaderTitle(entry) {
     const title = document.getElementById('avHeaderTitleText');
     const sub = document.getElementById('avHeaderSubtitleText');
     if (title) title.textContent = entry.label;
-    if (sub && entry.id !== 'sec-orden-abierta' && entry.id !== 'sec-bandeja-gestor') sub.textContent = '';
+    if (sub && entry.id !== 'sec-orden-abierta' && entry.id !== 'sec-bandeja-gestor' && entry.id !== 'sec-mascotas') sub.textContent = '';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

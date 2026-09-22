@@ -90,6 +90,14 @@ function wireNuevaMascota() {
 // abajo asegura que si algún día se pasa, se vea, no que desaparezca solo.
 const LIMITE_LISTADO = 1000;
 
+// Hallazgo de revisión (Tarea 11, capturas reales vs. boceto Mascotas.html):
+// el lookup de tutores pedía /propietarios/?limit=200 fijo -- el mismo
+// patrón de pérdida silenciosa que ya se corrigió arriba para mascotas.
+// Con más de 200 propietarios (la clínica ya tiene 264 reales), cualquier
+// mascota de un tutor fuera de esa ventana quedaba con "—" en la columna
+// Tutor sin ningún aviso. Mismo techo que LIMITE_LISTADO.
+const LIMITE_PROPIETARIOS = 2000;
+
 export const loadMascotas = async (filtro = '') => {
     const tbody = document.getElementById('mascotasTableBody');
     if (!tbody) return;
@@ -103,7 +111,7 @@ export const loadMascotas = async (filtro = '') => {
 
         const [mascotasRaw, propietarios] = await Promise.all([
             fetchAPI(`/mascotas/?${params.toString()}`),
-            fetchAPI('/propietarios/?activo=true&limit=200'),
+            fetchAPI(`/propietarios/?activo=true&limit=${LIMITE_PROPIETARIOS}`),
         ]);
         // Guard de secuencia (hallazgo de revisión): sin esto, un click rápido
         // en otro filtro puede pintar la tabla con la respuesta VIEJA si llega
@@ -116,6 +124,14 @@ export const loadMascotas = async (filtro = '') => {
         if (especieActiva === 'otro') {
             lista = lista.filter((m) => !['perro', 'gato'].includes((m.especie || '').toLowerCase()));
         }
+
+        // Boceto Mascotas.html: subtítulo con el conteo ("142 pacientes
+        // activos"). Cuenta la vista actual (filtro de especie/búsqueda
+        // incluido), no un total global aparte -- no hay endpoint de conteo
+        // total y pedirlo solo para el subtítulo sería una llamada extra por
+        // un número que además mentiría en cuanto se filtre.
+        const sub = document.getElementById('avHeaderSubtitleText');
+        if (sub) sub.textContent = `${lista.length} paciente${lista.length === 1 ? '' : 's'} en esta vista`;
 
         if (lista.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">No se encontraron mascotas.</td></tr>';
@@ -144,7 +160,7 @@ export const loadMascotas = async (filtro = '') => {
                 </td>
                 <td>${escapeHtml(m.especie || '—')}${m.raza ? ' · ' + escapeHtml(m.raza) : ''}</td>
                 <td>${escapeHtml(ownerLabel)}</td>
-                <td>${escapeHtml(m.sexo || '—')}</td>
+                <td style="white-space:nowrap;">${escapeHtml(m.sexo || '—')}</td>
                 <td style="text-align:right;">
                     <button type="button" class="av-btn av-btn--primary" style="height:30px; padding:0 12px; font-size:12.5px;"
                         data-open-mascota="${m.id}" data-nombre="${escapeHtml(m.nombre)}"
