@@ -72,9 +72,13 @@ async function createServicioConReceta(request, { inventarioId, cantidad, unidad
   return servicio;
 }
 
-/** Lee el stock crudo (número JSON) de un material. */
+/** Lee el stock crudo (número JSON) de un material.
+ * GET /api/inventario/{id} exige sesión desde Tarea 10 (el router no tenía
+ * NINGUNA autenticación -- hallazgo de seguridad, hoy corregido). Resuelve su
+ * propio token de admin para no tocar los ~25 call sites existentes. */
 async function stockOf(request, id) {
-  const body = await (await request.get(`/api/inventario/${id}`)).json();
+  const token = await getAdminToken(request);
+  const body = await (await request.get(`/api/inventario/${id}`, { headers: authHeaders(token) })).json();
   return body.stock_actual;
 }
 
@@ -177,7 +181,7 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
       expect(resp.advertencias ?? null).toBeNull();
     }
 
-    const body = await (await request.get(`/api/inventario/${material.id}`)).json();
+    const body = await (await request.get(`/api/inventario/${material.id}`, { headers: authHeaders(S.token) })).json();
     expect(Number(body.stock_actual)).toBe(0);
     // Ni -0.001 ni 0.001: el Numeric decimal no arrastra cola binaria.
     expect(body.stock_actual == 0).toBe(true); // eslint-disable-line eqeqeq
@@ -256,11 +260,11 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     const ok = await createTestMaterial(request, { stock_actual: 5.5, stock_minimo: 5 });
     S.materiales.push(ok.id);
 
-    const bajoStock = await (await request.get('/api/inventario/?bajo_stock=true&limit=2000')).json();
+    const bajoStock = await (await request.get('/api/inventario/?bajo_stock=true&limit=2000', { headers: authHeaders(S.token) })).json();
     expect(bajoStock.some((p) => p.id === bajo.id)).toBe(true);
     expect(bajoStock.some((p) => p.id === ok.id)).toBe(false);
 
-    const alertas = await (await request.get('/api/inventario/alertas-stock')).json();
+    const alertas = await (await request.get('/api/inventario/alertas-stock', { headers: authHeaders(S.token) })).json();
     expect(alertas.some((p) => p.id === bajo.id)).toBe(true);
     expect(alertas.some((p) => p.id === ok.id)).toBe(false);
   });
@@ -270,16 +274,17 @@ test.describe.serial('Inventario fraccionado — consumo de materiales por recet
     const prod = await createTestProduct(request, { stock_actual: 10, stock_minimo: 5 });
     S.materiales.push(prod.id);
 
-    const body = await (await request.get(`/api/inventario/${prod.id}`)).json();
+    const body = await (await request.get(`/api/inventario/${prod.id}`, { headers: authHeaders(S.token) })).json();
     expect(typeof body.stock_actual).toBe('number');
     expect(body.stock_actual).toBe(10);
 
     // Un movimiento de 2.5 deja 7.5 → la columna es numérica, no trunca a entero.
     const movRes = await request.post(`/api/inventario/${prod.id}/movimiento`, {
+      headers: authHeaders(S.token),
       params: { cantidad: '2.5', tipo: 'SALIDA' },
     });
     expect(movRes.ok(), await movRes.text()).toBeTruthy();
-    const tras = await (await request.get(`/api/inventario/${prod.id}`)).json();
+    const tras = await (await request.get(`/api/inventario/${prod.id}`, { headers: authHeaders(S.token) })).json();
     expect(Number(tras.stock_actual)).toBe(7.5);
   });
 

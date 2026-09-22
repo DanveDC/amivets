@@ -241,7 +241,7 @@ test.describe('Historial de precios — precio congelado en un documento', () =>
     const putRes = await putPrecioInventario(request, S.token, S.producto.id, 250);
     expect(putRes.status(), await putRes.text()).toBe(200);
     // Sanity: el cambio ocurrió de verdad (columna viva + fila de historial).
-    const prodAhora = await (await request.get(`/api/inventario/${S.producto.id}`)).json();
+    const prodAhora = await (await request.get(`/api/inventario/${S.producto.id}`, { headers: authHeaders(S.token) })).json();
     expect(prodAhora.precio_unitario).toBeCloseTo(250, 2);
     const hist = await historialInventario(request, S.token, S.producto.id);
     expect(money(hist[0].precio_nuevo)).toBe(250);
@@ -298,7 +298,7 @@ test.describe.serial('Historial de precios — permisos de cambio de precio', ()
     expect(rows.length).toBe(S.B);
 
     // Y la columna viva quedó intacta.
-    const prod = await (await request.get(`/api/inventario/${S.producto.id}`)).json();
+    const prod = await (await request.get(`/api/inventario/${S.producto.id}`, { headers: authHeaders(S.adminToken) })).json();
     expect(prod.precio_unitario).toBeCloseTo(100, 2);
   });
 
@@ -310,7 +310,7 @@ test.describe.serial('Historial de precios — permisos de cambio de precio', ()
     });
     expect(res.status(), await res.text()).toBe(200);
 
-    const prod = await (await request.get(`/api/inventario/${S.producto.id}`)).json();
+    const prod = await (await request.get(`/api/inventario/${S.producto.id}`, { headers: authHeaders(S.vetToken) })).json();
     expect(prod.descripcion).toBe(descripcion);
 
     // El historial sigue sin filas: editar la descripción no toca el precio.

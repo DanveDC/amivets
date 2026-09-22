@@ -7,10 +7,17 @@
 // the pre-existing validation (insufficient stock) still works.
 
 const { test, expect } = require('@playwright/test');
-const { createTestProduct, deleteTestProduct } = require('./helpers');
+const { createTestProduct, deleteTestProduct, getAdminToken, authHeaders } = require('./helpers');
 
 test.describe('Inventario — registrar movimiento', () => {
   let product;
+  let token;
+
+  test.beforeAll(async ({ request }) => {
+    // POST /{id}/movimiento exige rol admin desde Tarea 10 (el router no
+    // tenía NINGUNA autenticación -- hallazgo de seguridad, hoy corregido).
+    token = await getAdminToken(request);
+  });
 
   test.afterEach(async ({ request }) => {
     if (product?.id) await deleteTestProduct(request, product.id);
@@ -20,6 +27,7 @@ test.describe('Inventario — registrar movimiento', () => {
     product = await createTestProduct(request, { stock_actual: 10, stock_minimo: 5 });
 
     const res = await request.post(`/api/inventario/${product.id}/movimiento`, {
+      headers: authHeaders(token),
       params: { cantidad: '6', tipo: 'SALIDA' },
     });
 
@@ -33,6 +41,7 @@ test.describe('Inventario — registrar movimiento', () => {
     product = await createTestProduct(request, { stock_actual: 10, stock_minimo: 5 });
 
     const res = await request.post(`/api/inventario/${product.id}/movimiento`, {
+      headers: authHeaders(token),
       params: { cantidad: '5', tipo: 'ENTRADA' },
     });
 
@@ -45,6 +54,7 @@ test.describe('Inventario — registrar movimiento', () => {
     product = await createTestProduct(request, { stock_actual: 3, stock_minimo: 5 });
 
     const res = await request.post(`/api/inventario/${product.id}/movimiento`, {
+      headers: authHeaders(token),
       params: { cantidad: '10', tipo: 'SALIDA' },
     });
 

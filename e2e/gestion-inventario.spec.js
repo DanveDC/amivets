@@ -14,6 +14,7 @@ const { test, expect } = require('@playwright/test');
 const {
   ADMIN_CREDENTIALS,
   getAdminToken,
+  authHeaders,
   testTag,
   createTestProduct,
   deleteTestProduct,
@@ -65,7 +66,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     await expect(page.locator('#inventarioTableBody')).toContainText(nombre);
 
     // Contraste API: aparece en el listado y en GET /{id}.
-    const items = await (await request.get('/api/inventario/?limit=500')).json();
+    const items = await (await request.get('/api/inventario/?limit=500', { headers: authHeaders(S.token) })).json();
     const creado = items.find((p) => p.codigo === S.codigo);
     expect(creado, 'el producto creado por UI debe aparecer en la API').toBeTruthy();
     expect(creado.nombre).toBe(nombre);
@@ -75,12 +76,12 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     expect(creado.precio_unitario).toBeCloseTo(1500, 2);
     S.uiProd = creado;
 
-    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`);
+    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).proveedor).toBe('PWTEST Proveedor');
 
     // GET /{id} inexistente -> 404.
-    const missing = await request.get('/api/inventario/99999999');
+    const missing = await request.get('/api/inventario/99999999', { headers: authHeaders(S.token) });
     expect(missing.status()).toBe(404);
   });
 
@@ -107,7 +108,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     await expect(page.locator('#modalEditarProducto')).toBeHidden();
 
     // Contraste API.
-    const actualizado = await (await request.get(`/api/inventario/${S.uiProd.id}`)).json();
+    const actualizado = await (await request.get(`/api/inventario/${S.uiProd.id}`, { headers: authHeaders(S.token) })).json();
     expect(actualizado.nombre).toBe(nuevoNombre);
     expect(actualizado.precio_unitario).toBeCloseTo(2750, 2);
     expect(actualizado.stock_minimo).toBe(50);
@@ -123,7 +124,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     const okProd = await createTestProduct(request, { stock_actual: 80, stock_minimo: 5, precio_unitario: 10 });
 
     try {
-      const alertas = await (await request.get('/api/inventario/alertas-stock')).json();
+      const alertas = await (await request.get('/api/inventario/alertas-stock', { headers: authHeaders(S.token) })).json();
       expect(Array.isArray(alertas)).toBe(true);
       for (const p of alertas) expect(p.stock_actual).toBeLessThanOrEqual(p.stock_minimo);
 
@@ -134,7 +135,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
       expect(alertas.some((p) => p.id === okProd.id)).toBe(false);
 
       // El filtro equivalente del listado general.
-      const bajoStock = await (await request.get('/api/inventario/?limit=500&bajo_stock=true')).json();
+      const bajoStock = await (await request.get('/api/inventario/?limit=500&bajo_stock=true', { headers: authHeaders(S.token) })).json();
       expect(bajoStock.some((p) => p.id === S.lowProd.id)).toBe(true);
       expect(bajoStock.some((p) => p.id === okProd.id)).toBe(false);
     } finally {
@@ -155,17 +156,46 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     await expect(page.locator('#inventarioTableBody')).not.toContainText(S.codigo);
 
     // Contraste API: sigue existiendo con activo=false; ausente del listado (sólo activos).
-    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`);
+    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).activo).toBe(false);
 
-    const activos = await (await request.get('/api/inventario/?limit=500')).json();
+    const activos = await (await request.get('/api/inventario/?limit=500', { headers: authHeaders(S.token) })).json();
     expect(activos.some((p) => p.id === S.uiProd.id)).toBe(false);
 
     S.uiProd = null; // ya desactivado; nada que limpiar
 
     // DELETE sobre id inexistente -> 404.
-    const missing = await request.delete('/api/inventario/99999999');
+    const missing = await request.delete('/api/inventario/99999999', { headers: authHeaders(S.token) });
     expect(missing.status()).toBe(404);
+  });
+
+  test('inventario: TODOS los endpoints rechazan sin token (Tarea 10 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // Confirmado en vivo: 6 de los 9 endpoints no tenían NINGUNA dependencia
+    // de auth; los otros 3 (PUT /{id}, historial-precios, movimientos)
+    // exigían sesión pero sin chequear rol. Acá se prueba la parte "sin
+    // token" de los 9; historial-precios.spec.js ya cubre el 403 por rol de
+    // PUT /{id} contra un veterinario.
+    const producto = await createTestProduct(request);
+    const sinToken = { headers: {} };
+    try {
+      const checks = [
+        () => request.post('/api/inventario/', { ...sinToken, data: { codigo: testTag('SKU'), nombre: 'x', categoria: 'Insumo', stock_actual: 1, stock_minimo: 1, precio_unitario: 1 } }),
+        () => request.get('/api/inventario/', sinToken),
+        () => request.get('/api/inventario/alertas-stock', sinToken),
+        () => request.get(`/api/inventario/${producto.id}`, sinToken),
+        () => request.put(`/api/inventario/${producto.id}`, { ...sinToken, data: { descripcion: 'x' } }),
+        () => request.get(`/api/inventario/${producto.id}/historial-precios`, sinToken),
+        () => request.get(`/api/inventario/${producto.id}/movimientos`, sinToken),
+        () => request.delete(`/api/inventario/${producto.id}`, sinToken),
+        () => request.post(`/api/inventario/${producto.id}/movimiento`, { ...sinToken, params: { cantidad: '1', tipo: 'ENTRADA' } }),
+      ];
+      for (const hacerPedido of checks) {
+        const res = await hacerPedido();
+        expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+      }
+    } finally {
+      await deleteTestProduct(request, producto.id, S.token);
+    }
   });
 });

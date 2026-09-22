@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from app.core.database import get_db
 from app.models.models import Inventario, MovimientoInventario, HistorialPrecioInventario, Usuario
-from app.routers.usuarios import get_current_user
+from app.routers.usuarios import get_current_user, require_roles
 from app.schemas.schemas import (
     InventarioCreate,
     InventarioUpdate,
@@ -19,10 +19,39 @@ from app.services.precio_service import registrar_cambio_precio, cuantizar_preci
 
 router = APIRouter(prefix="/api/inventario", tags=["Inventario y Farmacia"])
 
+# HALLAZGO DE SEGURIDAD (Tarea 10): 6 de los 9 endpoints no tenian NINGUNA
+# dependencia de auth (crear, listar, alertas-stock, obtener por id, borrar,
+# registrar movimiento). historial-precios y movimientos usaban
+# `get_current_user` -- exigian sesion, pero cualquier rol autenticado
+# pasaba, sin chequeo de `role`. `PUT /{id}` tambien usaba `get_current_user`
+# pero SE DEJA ASI (ver el docstring de `actualizar_producto` mas abajo): no
+# es un agujero, es un contrato ya probado de Tarea 08.
+#
+# Lectura (GET /, /alertas-stock, /{id}): admin + recepcionista + veterinario.
+# NO es admin-only pese a que la seccion "Inventario" del front esta
+# restringida a admin (router.js:73) -- GET /api/inventario/ tiene otros dos
+# consumidores reales fuera de esa pantalla: consultorio.js (selector de
+# medicamentos/consumos, alcanzable por recepcion y veterinario) y
+# catalogo.js (selector de materiales de receta, alcanzable por veterinario).
+# Restringir la lectura a admin habria roto esos dos flujos en uso.
+#
+# Escritura administrativa (POST /, DELETE /{id}, POST /{id}/movimiento,
+# historial-precios, movimientos): admin unicamente. Coincide con la fila 25
+# de la matriz de permisos (docs/diseno/ordenes-de-servicio.md, decision 9,
+# 9.3: "Movimientos y ajustes de inventario" -- admin solo) y con la seccion
+# "Inventario" del front, que SI es admin-only de punta a punta -- a
+# diferencia de la lectura, ningun otro rol tiene pantalla que llegue a
+# borrar/mover stock o ver el historial de precios/movimientos.
+# cualquier usuario logueado).
+_ROLES_INVENTARIO_LECTURA = ("admin", "recepcionista", "veterinario")
+_ROLES_INVENTARIO_ESCRITURA = ("admin",)
+
+
 @router.post("/", response_model=InventarioResponse, status_code=status.HTTP_201_CREATED)
 def crear_producto(
     producto: InventarioCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_ESCRITURA)),
 ):
     """Registra un nuevo producto en el inventario"""
     # Verificar si el codigo ya existe
@@ -42,7 +71,8 @@ def listar_inventario(
     limit: int = 100,
     categoria: Optional[str] = None,
     bajo_stock: bool = False,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_LECTURA)),
 ):
     """Lista productos del inventario con filtros.
     
@@ -59,7 +89,10 @@ def listar_inventario(
     return query.offset(skip).limit(limit).all()
 
 @router.get("/alertas-stock", response_model=List[InventarioResponse])
-def obtener_alertas_stock(db: Session = Depends(get_db)):
+def obtener_alertas_stock(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_LECTURA)),
+):
     """Endpoint para dashboard (Trae cosas bajo el mínimo)"""
     return db.query(Inventario).filter(
         Inventario.activo == True,
@@ -69,7 +102,8 @@ def obtener_alertas_stock(db: Session = Depends(get_db)):
 @router.get("/{producto_id}", response_model=InventarioResponse)
 def obtener_producto(
     producto_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_LECTURA)),
 ):
     """Obtiene un producto por ID"""
     producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
@@ -92,6 +126,16 @@ def actualizar_producto(
     admin (Tarea 08, decision 7). El resto de los campos (nombre, stock_minimo,
     proveedor, etc.) siguen por setattr: un veterinario los puede seguir
     editando.
+
+    Tarea 10: este endpoint YA exigia sesion (get_current_user) antes de esta
+    tarea -- no es parte del hallazgo de "sin autenticacion". Se dejo
+    deliberadamente en `get_current_user` (cualquier rol autenticado) en vez
+    de sumarlo a `_ROLES_INVENTARIO_ESCRITURA` (admin-only): e2e/
+    historial-precios.spec.js prueba explicitamente, contra la API directa,
+    que un veterinario recibe 200 al editar un campo no-precio (descripcion,
+    proveedor) y 403 solo al intentar cambiar el precio -- es un contrato ya
+    probado de Tarea 08, no un agujero de esta tarea. Subirlo a admin-only
+    habria roto ese contrato.
     """
     producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
     if not producto:
@@ -126,7 +170,7 @@ def historial_precios_producto(
     desde: Optional[date] = Query(None, description="Filtra fecha_cambio desde este dia inclusive (YYYY-MM-DD)"),
     hasta: Optional[date] = Query(None, description="Filtra fecha_cambio hasta este dia inclusive (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_ESCRITURA)),
 ):
     """Historial de precios de lista del material/producto, del mas nuevo al mas
     viejo (Tarea 08). La vigencia en una fecha se deriva tomando la primera fila
@@ -162,7 +206,7 @@ def movimientos_producto(
     desde: Optional[date] = Query(None, description="Filtra fecha_registro desde este dia inclusive (YYYY-MM-DD)"),
     hasta: Optional[date] = Query(None, description="Filtra fecha_registro hasta este dia inclusive (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_ESCRITURA)),
 ):
     """Ledger de movimientos del producto, del mas nuevo al mas viejo (Tarea 08).
 
@@ -196,13 +240,14 @@ def movimientos_producto(
 @router.delete("/{producto_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_producto(
     producto_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_ESCRITURA)),
 ):
     """Desactiva un producto del inventario"""
     producto = db.query(Inventario).filter(Inventario.id == producto_id).first()
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-        
+
     producto.activo = False
     db.commit()
     return None
@@ -212,7 +257,8 @@ def registrar_movimiento(
     producto_id: int,
     cantidad: float,  # Positivo para entrada, negativo para salida; admite fracciones (Tarea 07)
     tipo: str = Query(..., description="ENTRADA o SALIDA"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_INVENTARIO_ESCRITURA)),
 ):
     """Registra entrada o salida de stock (Simplificado)"""
     # Row-lock antes de leer/mutar el stock: sin esto, dos movimientos manuales
