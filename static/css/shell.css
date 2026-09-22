@@ -439,9 +439,30 @@
    ORDEN ABIERTA — sec-orden-abierta (tab:false, Decisión 3).
    ══════════════════════════════════════════════════════════════════════════ */
 .oa-body { flex-grow: 1; display: flex; min-height: 0; }
-.oa-canvas { flex-grow: 1; overflow-y: auto; padding: 24px 28px; min-width: 0; }
-.oa-canvas--compressed { opacity: 0.55; pointer-events: none; }
-.oa-stack { display: flex; flex-direction: column; gap: 14px; min-height: 100%; }
+/* Hallazgo de revisión (Tarea 11, captura real): .oa-canvas no tenía
+   display:grid, así que .oa-stack y .oa-side (hermanos dentro de
+   <main class="oa-canvas">) caían en flujo de bloque normal -- el panel
+   "Resumen / Datos de la orden" quedaba apilado DEBAJO de la tabla de
+   servicios, a lo ancho completo, en vez de la columna fija de la derecha
+   que dibuja OrdenAbierta.html (grid minmax(0,1fr) 320px). En una orden
+   con servicios largos, ese panel (con el botón "Facturar orden") caía
+   fuera del viewport sin scroll evidente que lo sugiriera. */
+.oa-canvas {
+  flex-grow: 1; overflow-y: auto; padding: 24px 28px; min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start;
+}
+/* Comprimido (panel "Anexar servicio" abierto, 452px): AnexarServicio.html
+   no dibuja el panel "Resumen / Datos de la orden" en este estado, pero
+   #oaTotal tiene que seguir siendo visible ahí -- shell.spec.js lo
+   verifica a propósito durante el flujo de anexar, y ablandar esa
+   aserción está prohibido (no es un hallazgo, es un requisito real: ver
+   el total mientras se anexa es buen UX, no un descuido). Con el ancho ya
+   repartido con el panel de anexar, forzar la columna de 320px fija
+   aplastaba todo (hallazgo de revisión, captura real) -- una sola columna
+   y .oa-side apilado debajo, igual que el comportamiento previo a este
+   commit, es el balance correcto entre los dos requisitos. */
+.oa-canvas--compressed { opacity: 0.55; pointer-events: none; grid-template-columns: minmax(0, 1fr); }
+.oa-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
 .oa-patient {
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
