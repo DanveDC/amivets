@@ -42,7 +42,6 @@ router = APIRouter(prefix="/api/inventario", tags=["Inventario y Farmacia"])
 # "Inventario" del front, que SI es admin-only de punta a punta -- a
 # diferencia de la lectura, ningun otro rol tiene pantalla que llegue a
 # borrar/mover stock o ver el historial de precios/movimientos.
-# cualquier usuario logueado).
 _ROLES_INVENTARIO_LECTURA = ("admin", "recepcionista", "veterinario")
 _ROLES_INVENTARIO_ESCRITURA = ("admin",)
 

@@ -10,11 +10,18 @@ from app.services import orden_service
 
 router = APIRouter(prefix="/api/hospitalizaciones", tags=["Hospitalización"])
 
+# Tarea 10 (fix de auth): admin + veterinario, sin recepcionista -- misma
+# regla que clinico.py._ROLES_CLINICO_LECTURA. La fila 15 de la matriz de
+# permisos le daria a recepcion una vista recortada (sin diagnostico ni
+# tratamiento), pero eso exige un schema propio que hoy no existe; esta
+# tarea es exclusivamente auth, sin tocar esquemas. Queda anotado como deuda.
+_ROLES_HOSPITALIZACIONES = ("admin", "veterinario")
+
 @router.post("/", response_model=HospitalizacionResponse, status_code=status.HTTP_201_CREATED)
 def ingresar_paciente(
     hospitalizacion: HospitalizacionCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_HOSPITALIZACIONES)),
 ):
     """Ingresa un paciente a hospitalización"""
     # Verificar mascota
@@ -57,10 +64,8 @@ def listar_hospitalizados(
     activos: bool = True,
     db: Session = Depends(get_db),
     # HALLAZGO DE SEGURIDAD (Tarea 10): unico endpoint del router sin guard --
-    # POST y PUT ya usaban require_roles. Mismo admin/veterinario (ver
-    # clinico.py para la nota completa sobre por que no se suma recepcionista
-    # todavia).
-    _=Depends(require_roles("admin", "veterinario")),
+    # POST y PUT ya usaban require_roles.
+    _=Depends(require_roles(*_ROLES_HOSPITALIZACIONES)),
 ):
     """Lista pacientes en hospitalización"""
     query = db.query(Hospitalizacion)
@@ -72,9 +77,7 @@ def listar_hospitalizados(
 def dar_alta_paciente(
     hosp_id: int,
     db: Session = Depends(get_db),
-    # Sin guard hasta la Tarea 06 (decisión 9): mismo criterio que
-    # POST /api/hospitalizaciones/ (registro clínico, admin/veterinario).
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_HOSPITALIZACIONES)),
 ):
     """Registra el egreso de un paciente"""
     db_hosp = db.query(Hospitalizacion).filter(Hospitalizacion.id == hosp_id).first()

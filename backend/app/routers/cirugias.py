@@ -10,11 +10,18 @@ from app.services import orden_service
 
 router = APIRouter(prefix="/api/cirugias", tags=["Quirófano"])
 
+# Tarea 10 (fix de auth): admin + veterinario, sin recepcionista -- misma
+# regla que clinico.py._ROLES_CLINICO_LECTURA. La fila 15 de la matriz de
+# permisos le daria a recepcion una vista recortada (sin diagnostico ni
+# tratamiento), pero eso exige un schema propio que hoy no existe; esta
+# tarea es exclusivamente auth, sin tocar esquemas. Queda anotado como deuda.
+_ROLES_CIRUGIAS = ("admin", "veterinario")
+
 @router.post("/", response_model=CirugiaResponse, status_code=status.HTTP_201_CREATED)
 def registrar_cirugia(
     cirugia: CirugiaCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_CIRUGIAS)),
 ):
     """Registra un informe de cirugía"""
     db_cirugia = Cirugia(**cirugia.model_dump())
@@ -57,7 +64,7 @@ def historial_quirurgico(
     # HALLAZGO DE SEGURIDAD (Tarea 10): unico endpoint del router sin guard --
     # el POST ya usaba require_roles. Mismo admin/veterinario (ver clinico.py
     # para la nota completa sobre por que no se suma recepcionista todavia).
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_CIRUGIAS)),
 ):
     """Obtiene el historial de cirugías de una mascota"""
     return db.query(Cirugia).filter(Cirugia.mascota_id == mascota_id).all()

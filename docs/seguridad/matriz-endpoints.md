@@ -3,9 +3,11 @@
 > Inventario completo, endpoint por endpoint, de los 22 routers en
 > `backend/app/routers/`. Nace de la Tarea 10 ("Routers sin autenticación"),
 > que encontró que el fix de `facturas.py` (commit `96484b0`) era un caso
-> aislado de un agujero mucho más ancho: 8 de los 22 routers tenían al menos
-> un endpoint sin ninguna dependencia de autenticación, y 2 más tenían sesión
-> exigida pero sin chequeo de rol donde la matriz de permisos lo pedía.
+> aislado de un agujero mucho más ancho: **12 de los 22 routers** tenían al
+> menos un endpoint sin ninguna dependencia de autenticación —4 completamente
+> abiertos (0% de sus rutas gateadas) y 8 con gate parcial (algunas rutas
+> sueltas)—, y 2 más tenían sesión exigida pero sin chequeo de rol donde la
+> matriz de permisos lo pedía.
 >
 > `backend/app/main.py:160-181` monta los 22 routers con
 > `app.include_router(...)` sin `dependencies=` global — no hay ninguna capa
@@ -302,11 +304,12 @@ inventario de los 22 routers.
 
 - **22/22 routers auditados endpoint por endpoint** (no solo por conteo de
   `grep`, como pedía el punto 2 de la tarea).
-- **8 routers** tenían al menos un endpoint sin ninguna dependencia de auth:
-  `mascotas`, `propietarios`, `reportes`, `citas` (0% gateados los cuatro),
-  `inventario`, `catalogo` (0% en parte de sus rutas), `consultas`,
-  `servicios`, `clinico`, `cirugias`, `hospitalizaciones`, `pruebas` (gate
-  parcial — algunas rutas sueltas).
+- **12 routers** tenían al menos un endpoint sin ninguna dependencia de auth:
+  - **4 completamente abiertos** (0% de sus rutas gateadas): `mascotas`,
+    `propietarios`, `reportes`, `citas`.
+  - **8 con gate parcial** (algunas rutas sueltas, el resto ya gateado):
+    `inventario`, `catalogo`, `consultas`, `servicios`, `clinico`,
+    `cirugias`, `hospitalizaciones`, `pruebas`.
 - **2 routers** (`inventario`, `catalogo`) tenían endpoints con sesión
   exigida pero **sin chequeo de rol**, contradiciendo la matriz de permisos.
 - **1 suposición previa corregida**: `POST /api/citas/` no es el

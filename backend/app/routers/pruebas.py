@@ -10,11 +10,18 @@ from app.services import orden_service
 
 router = APIRouter(prefix="/api/pruebas", tags=["Laboratorio y Diagnostico"])
 
+# Tarea 10 (fix de auth): admin + veterinario, sin recepcionista -- misma
+# regla que clinico.py._ROLES_CLINICO_LECTURA. La fila 15 de la matriz de
+# permisos le daria a recepcion una vista recortada (sin diagnostico ni
+# tratamiento), pero eso exige un schema propio que hoy no existe; esta
+# tarea es exclusivamente auth, sin tocar esquemas. Queda anotado como deuda.
+_ROLES_PRUEBAS = ("admin", "veterinario")
+
 @router.post("/", response_model=PruebaComplementariaResponse, status_code=status.HTTP_201_CREATED)
 def registrar_prueba(
     prueba: PruebaComplementariaCreate,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Registra una nueva prueba de laboratorio o diagnostico"""
     # Validar mascota
@@ -64,10 +71,8 @@ def listar_pruebas(
     tipo: Optional[str] = None,
     db: Session = Depends(get_db),
     # HALLAZGO DE SEGURIDAD (Tarea 10): este GET y el de abajo (obtener_prueba)
-    # no tenian guard -- POST/PUT/DELETE ya lo usaban. Mismo admin/veterinario
-    # (ver clinico.py para la nota completa sobre por que no se suma
-    # recepcionista todavia).
-    _=Depends(require_roles("admin", "veterinario")),
+    # no tenian guard -- POST/PUT/DELETE ya lo usaban.
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Lista pruebas complementarias con filtros"""
     query = db.query(PruebaComplementaria)
@@ -85,7 +90,7 @@ def listar_pruebas(
 def obtener_prueba(
     prueba_id: int,
     db: Session = Depends(get_db),
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Obtiene una prueba especifica por ID"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()
@@ -98,9 +103,7 @@ def actualizar_prueba(
     prueba_id: int,
     prueba_update: PruebaComplementariaUpdate,
     db: Session = Depends(get_db),
-    # Sin guard hasta la Tarea 06 (decisión 9): mismo criterio que
-    # POST /api/pruebas/ (registro clínico, admin/veterinario).
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Actualiza la informacion de una prueba"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()
@@ -118,9 +121,7 @@ def actualizar_prueba(
 def eliminar_prueba(
     prueba_id: int,
     db: Session = Depends(get_db),
-    # Sin guard hasta la Tarea 06 (decisión 9): elimina un registro clínico,
-    # mismo criterio que el resto de este router (admin/veterinario).
-    _=Depends(require_roles("admin", "veterinario")),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Elimina una prueba"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()

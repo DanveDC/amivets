@@ -75,10 +75,14 @@ async function createServicioConReceta(request, { inventarioId, cantidad, unidad
 /** Lee el stock crudo (número JSON) de un material.
  * GET /api/inventario/{id} exige sesión desde Tarea 10 (el router no tenía
  * NINGUNA autenticación -- hallazgo de seguridad, hoy corregido). Resuelve su
- * propio token de admin para no tocar los ~25 call sites existentes. */
+ * propio token de admin para no tocar los ~25 call sites existentes -- pero
+ * cacheado a nivel de módulo (hallazgo de revisión): sin esto, stockOf() hace
+ * un login real de más por cada una de sus ~26 llamadas en este archivo.
+ */
+let _stockOfAdminToken = null;
 async function stockOf(request, id) {
-  const token = await getAdminToken(request);
-  const body = await (await request.get(`/api/inventario/${id}`, { headers: authHeaders(token) })).json();
+  if (!_stockOfAdminToken) _stockOfAdminToken = await getAdminToken(request);
+  const body = await (await request.get(`/api/inventario/${id}`, { headers: authHeaders(_stockOfAdminToken) })).json();
   return body.stock_actual;
 }
 
