@@ -1746,19 +1746,97 @@
             <section id="sec-reportes" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Reportes y KPIs</h2>
+                    <p style="color:var(--text-secondary); font-size:0.85rem; margin:0.25rem 0 0;">Este mes, comparado con el mes anterior.</p>
                 </div>
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <h3>Citas Hoy</h3>
-                        <div class="value" id="kpiCitas">0</div>
+
+                <!-- Tarea 11 (revisión de bocetos): panel superior fiel a
+                     docs/diseno/pantallas/Reportes.html — valores literales
+                     (grid de 4, radios 8px, sombra 0 1px 2px rgba(0,0,0,.03)).
+                     "Patologías más frecuentes" del boceto no se implementa:
+                     Consulta.diagnostico es texto libre, no hay catálogo de
+                     diagnósticos para agrupar (el boceto mismo lo anota como
+                     "Requiere catálogo de diagnósticos") — se deja un estado
+                     vacío explicando por qué, no datos falsos. -->
+                <div class="rp-dash" id="rpDash">
+                    <div class="rp-kpi-grid">
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Ingresos del mes</span>
+                            <span class="rp-kpi-value" id="rpKpiIngresos">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiIngresosDelta"></span>
+                        </div>
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Atenciones</span>
+                            <span class="rp-kpi-value" id="rpKpiAtenciones">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiAtencionesDelta"></span>
+                        </div>
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Ticket promedio</span>
+                            <span class="rp-kpi-value" id="rpKpiTicket">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiTicketDelta"></span>
+                        </div>
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Pacientes nuevos</span>
+                            <span class="rp-kpi-value" id="rpKpiNuevos">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiNuevosDelta"></span>
+                        </div>
                     </div>
-                    <div class="kpi-card">
-                        <h3>Pacientes Atendidos</h3>
-                        <div class="value" id="kpiPacientes">0</div>
-                    </div>
-                    <div class="kpi-card">
-                        <h3>Bajo Stock</h3>
-                        <div class="value warning" id="kpiStock">0</div>
+
+                    <div class="rp-main-grid">
+                        <div class="rp-main-col">
+                            <section class="rp-panel">
+                                <div class="rp-panel-head">
+                                    <div class="rp-panel-title-wrap">
+                                        <span class="rp-panel-title">Ingresos por servicio</span>
+                                        <span class="rp-panel-sub" id="rpServiciosSub">Este mes</span>
+                                    </div>
+                                    <div class="rp-pill-group" id="rpServiciosRango">
+                                        <button type="button" class="rp-pill rp-pill--active" data-rp-rango="este_mes">Mes</button>
+                                        <button type="button" class="rp-pill" data-rp-rango="trimestre">Trimestre</button>
+                                        <button type="button" class="rp-pill" data-rp-rango="este_anio">Año</button>
+                                    </div>
+                                </div>
+                                <div id="rpServiciosBars" class="rp-bars">
+                                    <p class="rp-empty-text">Cargando…</p>
+                                </div>
+                            </section>
+
+                            <section class="rp-panel" style="padding:16px 4px 8px;">
+                                <div class="rp-panel-head" style="padding:0 14px;">
+                                    <span class="rp-panel-title">Producción por médico</span>
+                                    <span class="rp-panel-sub" id="rpProduccionSub"></span>
+                                </div>
+                                <table class="rp-table" id="rpProduccionTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Médico</th>
+                                            <th>Atenciones</th>
+                                            <th>Ingresos</th>
+                                            <th>Participación</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rpProduccionBody">
+                                        <tr><td colspan="5" class="rp-empty-text">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
+
+                        <div class="rp-side-col">
+                            <section class="rp-panel">
+                                <span class="rp-panel-title" style="margin-bottom:5px; display:block;">Por tipo de mascota</span>
+                                <div id="rpEspecies" class="rp-especies">
+                                    <p class="rp-empty-text">Cargando…</p>
+                                </div>
+                            </section>
+
+                            <section class="rp-panel">
+                                <span class="rp-panel-title" style="margin-bottom:5px; display:block;">Patologías más frecuentes</span>
+                                <div class="av-empty" style="padding:1.25rem 0.5rem;">
+                                    <p class="av-empty-text" style="margin:0; font-size:0.82rem;">Requiere un catálogo de diagnósticos: <code>Consulta.diagnostico</code> es texto libre hoy y no se puede agrupar por patología. Pendiente de modelo — ver <code>docs/revision-integral-11.md</code>.</p>
+                                </div>
+                            </section>
+                        </div>
                     </div>
                 </div>
 
@@ -1766,15 +1844,15 @@
                     <h3 style="margin-bottom: 0.75rem; color: var(--text-primary);">Indicadores por Período</h3>
 
                     <div id="kpiRangoFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
                         <span style="width:1px; align-self:stretch; background:var(--border);"></span>
                         <input type="date" id="kpiFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                         <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
                         <input type="date" id="kpiFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                        <button type="button" id="btnAplicarRangoKpi" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Aplicar rango</button>
+                        <button type="button" id="btnAplicarRangoKpi" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Aplicar rango</button>
                     </div>
                     <p id="kpiRangoActual" style="font-size:0.85rem; color: var(--text-secondary); margin: 0 0 1rem 0; font-weight: 600;"></p>
 
@@ -1821,15 +1899,15 @@
                                 <option value="">Seleccioná un veterinario...</option>
                             </select>
                             <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
                             <span style="width:1px; align-self:stretch; background:var(--border);"></span>
                             <input type="date" id="consVetFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                             <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
                             <input type="date" id="consVetFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                            <button type="button" id="btnAplicarConsVet" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Aplicar</button>
+                            <button type="button" id="btnAplicarConsVet" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Aplicar</button>
                         </div>
                         <p id="consVetRangoActual" style="font-size:0.85rem; color: var(--text-secondary); margin: 0 0 1rem 0; font-weight: 600;"></p>
 
@@ -1868,15 +1946,15 @@
                                     <option value="">Seleccioná un veterinario...</option>
                                 </select>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
                                 <input type="date" id="liqFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                                 <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
                                 <input type="date" id="liqFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                                <button type="button" id="btnLiqPreview" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Ver desglose</button>
+                                <button type="button" id="btnLiqPreview" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver desglose</button>
                             </div>
 
                             <div id="liqPreviewWrap" style="overflow-x:auto;">
@@ -1892,7 +1970,7 @@
                                 <select id="liqHistVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                                     <option value="">Todos los veterinarios</option>
                                 </select>
-                                <button type="button" id="btnLiqHistRefrescar" class="btn-secondary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Actualizar</button>
+                                <button type="button" id="btnLiqHistRefrescar" class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;">Actualizar</button>
                             </div>
 
                             <div id="liqHistLista">

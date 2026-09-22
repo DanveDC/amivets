@@ -5,8 +5,9 @@ from sqlalchemy import func, desc
 from typing import List, Dict, Any, Optional
 
 from app.core.database import get_db
-from app.models.models import DetalleFactura, Inventario, Consulta, Usuario
+from app.models.models import DetalleFactura, Inventario, Consulta, Usuario, ServicioConsulta, Mascota
 from app.routers.usuarios import require_roles
+from app.services import consumo_service
 
 router = APIRouter(prefix="/api/reportes", tags=["Reportes y Analitica"])
 
@@ -99,8 +100,17 @@ def rendimiento_veterinarios(
     _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
 ):
     """
-    Retorna el rendimiento por veterinario (cantidad de consultas realizadas).
-    Agrupa por veterinario_id (FK a Usuario), no por el texto libre legado.
+    Retorna el rendimiento por veterinario (cantidad de consultas realizadas
+    e ingresos atribuidos a sus consultas). Agrupa por veterinario_id (FK a
+    Usuario), no por el texto libre legado.
+
+    `ingresos` (Tarea 11, boceto Reportes.html — "Producción por médico"):
+    suma precio_unitario*cantidad de los servicios EJECUTADO/FACTURADO
+    (consumo_service.ESTADOS_CONSUMIDOS) anexados a las consultas del
+    veterinario. Es una consulta separada de la de consultas_realizadas
+    -y se combinan en Python, no con un JOIN único- porque un JOIN
+    ServicioConsulta duplicaría cada Consulta por cada servicio que tiene,
+    inflando total_consultas.
     """
     dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
 
@@ -125,8 +135,35 @@ def rendimiento_veterinarios(
         .all()
     )
 
+    ingresos_query = (
+        db.query(
+            Consulta.veterinario_id,
+            func.sum(ServicioConsulta.precio_unitario * ServicioConsulta.cantidad).label("ingresos")
+        )
+        .join(ServicioConsulta, ServicioConsulta.consulta_id == Consulta.id)
+        .filter(
+            Consulta.estado != "ANULADA",
+            ServicioConsulta.is_deleted.is_(False),
+            ServicioConsulta.estado.in_(consumo_service.ESTADOS_CONSUMIDOS),
+        )
+    )
+    if dt_inicio:
+        ingresos_query = ingresos_query.filter(Consulta.fecha_consulta >= dt_inicio)
+    if dt_fin:
+        ingresos_query = ingresos_query.filter(Consulta.fecha_consulta <= dt_fin)
+
+    ingresos_por_vet = {
+        r[0]: float(r[1]) if r[1] is not None else 0.0
+        for r in ingresos_query.group_by(Consulta.veterinario_id).all()
+    }
+
     return [
-        {"veterinario_id": r[0], "veterinario": r[1], "consultas_realizadas": r[2]}
+        {
+            "veterinario_id": r[0],
+            "veterinario": r[1],
+            "consultas_realizadas": r[2],
+            "ingresos": ingresos_por_vet.get(r[0], 0.0),
+        }
         for r in resultados
     ]
 
@@ -310,4 +347,112 @@ def cuentas_por_cobrar(
         "total_pendiente": total_pendiente,
         "cantidad_facturas": len(detalle),
         "detalle": detalle
+    }
+
+
+# ── Tarea 11 — nuevos KPI que pide Reportes.html y que el backend no
+# exponía todavía. Ninguno toca el modelo de datos ni requiere migración:
+# son agregaciones sobre columnas que ya existen (ServicioConsulta.tipo_
+# servicio, Mascota.especie, Mascota.fecha_registro). "Patologías más
+# frecuentes" del boceto se deja afuera a propósito: Consulta.diagnostico
+# es texto libre (ver docs/diseno/pantallas/README.md), no hay catálogo de
+# diagnósticos para agrupar, y el boceto mismo lo marca como "Requiere
+# catálogo de diagnósticos" — no se mockea.
+
+@router.get("/kpi/ingresos-por-tipo-servicio")
+def ingresos_por_tipo_servicio(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
+):
+    """
+    Ingresos y cantidad de servicios por tipo_servicio (boceto: "Ingresos
+    por servicio" — Consultas/Cirugías/Hospitalización/Laboratorio/
+    Estética/Vacunas/Productos). Solo servicios EJECUTADO/FACTURADO
+    (consumo_service.ESTADOS_CONSUMIDOS), no borrados.
+    """
+    dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
+
+    query = db.query(
+        ServicioConsulta.tipo_servicio,
+        func.sum(ServicioConsulta.precio_unitario * ServicioConsulta.cantidad).label("total_ingresos"),
+        func.count(ServicioConsulta.id).label("cantidad"),
+    ).filter(
+        ServicioConsulta.is_deleted.is_(False),
+        ServicioConsulta.estado.in_(consumo_service.ESTADOS_CONSUMIDOS),
+    )
+    if dt_inicio:
+        query = query.filter(ServicioConsulta.created_at >= dt_inicio)
+    if dt_fin:
+        query = query.filter(ServicioConsulta.created_at <= dt_fin)
+
+    resultados = query.group_by(ServicioConsulta.tipo_servicio).order_by(desc("total_ingresos")).all()
+
+    return [
+        {
+            "tipo_servicio": r[0],
+            "total_ingresos": float(r[1]) if r[1] is not None else 0.0,
+            "cantidad": r[2],
+        }
+        for r in resultados
+    ]
+
+
+@router.get("/kpi/mascotas-por-especie")
+def atenciones_por_especie(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
+):
+    """
+    Atenciones (consultas no anuladas) agrupadas por especie de la
+    mascota (boceto: "Por tipo de mascota"). Cuenta consultas, no
+    mascotas distintas -- el boceto mide "% de atenciones", no "% del
+    padrón de pacientes".
+    """
+    dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
+
+    query = (
+        db.query(Mascota.especie, func.count(Consulta.id).label("atenciones"))
+        .join(Consulta, Consulta.mascota_id == Mascota.id)
+        .filter(Consulta.estado != "ANULADA")
+    )
+    if dt_inicio:
+        query = query.filter(Consulta.fecha_consulta >= dt_inicio)
+    if dt_fin:
+        query = query.filter(Consulta.fecha_consulta <= dt_fin)
+
+    resultados = query.group_by(Mascota.especie).order_by(desc("atenciones")).all()
+
+    return [{"especie": r[0], "atenciones": r[1]} for r in resultados]
+
+
+@router.get("/kpi/pacientes-nuevos")
+def pacientes_nuevos(
+    fecha_inicio: Optional[str] = None,
+    fecha_fin: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_REPORTES)),
+):
+    """
+    Mascotas registradas (Mascota.fecha_registro) dentro del rango dado.
+    El "% del total atendido" del boceto lo calcula el front combinando
+    esto con /kpi/consultas (pacientes_unicos) del mismo rango.
+    """
+    dt_inicio, dt_fin = _rango_utc(fecha_inicio, fecha_fin)
+
+    query = db.query(func.count(Mascota.id))
+    if dt_inicio:
+        query = query.filter(Mascota.fecha_registro >= dt_inicio)
+    if dt_fin:
+        query = query.filter(Mascota.fecha_registro <= dt_fin)
+
+    total = query.scalar() or 0
+
+    return {
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "pacientes_nuevos": total,
     }

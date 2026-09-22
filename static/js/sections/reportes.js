@@ -9,32 +9,264 @@ import { showNotification, escapeHtml } from '../core/ui.js';
 
 // ============ REPORTES MODULE ============
 export const loadReportes = async () => {
-    try {
-        // En un caso real, llamaríamos a endpoints de reportes/stats
-        // Simulamos stats básicos con las APIs existentes por ahora
-        const citas = await fetchAPI('/citas/?skip=0&limit=100');
-        const today = new Date().toLocaleDateString('en-CA');
-        const safeCitas = Array.isArray(citas) ? citas : [];
-        const citasHoy = safeCitas.filter(c => {
-            if (!c) return false;
-            const fecha = (c.fecha_cita || c.fecha || '').toString();
-            return fecha && typeof fecha.startsWith === 'function' && fecha.startsWith(today);
-        }).length;
-
-        // const reporteKpis = await fetchAPI('/reportes/kpis'); // Si existiera
-
-        document.getElementById('kpiCitas').textContent = citasHoy;
-        document.getElementById('kpiPacientes').textContent = safeCitas.filter(c => c && c.estado === 'FINALIZADO').length; // Approx
-
-        // El stock ya se actualiza en loadInventario si se visita
-    } catch (error) {
-        console.error('Error cargando reportes', error);
-    }
-
+    initRpDashboard();
     initKpiRango();
     initConsultasPorVeterinario();
     if (localStorage.getItem('role') === 'admin') {
         initLiquidaciones();
+    }
+};
+
+// ============ PANEL SUPERIOR (Tarea 11 — boceto Reportes.html) ============
+// Cuatro KPI + "Ingresos por servicio" + "Producción por médico" + "Por tipo
+// de mascota". Reemplaza el bloque anterior (Citas Hoy/Pacientes Atendidos/
+// Bajo Stock), que el propio código admitía como aproximado ("simulamos
+// stats básicos con las APIs existentes") y nunca llegó a mostrar el stock
+// real. "Patologías más frecuentes" no se implementa -- ver el estado vacío
+// fijo en index.html y docs/revision-integral-11.md.
+
+const RP_TIPO_LABELS = {
+    CONSULTA: { nombre: 'Consultas', unidad: 'atenciones' },
+    CIRUGIA: { nombre: 'Cirugías', unidad: 'procedimientos' },
+    HOSPITALIZACION: { nombre: 'Hospitalización', unidad: 'días-cama' },
+    LABORATORIO: { nombre: 'Laboratorio', unidad: 'estudios' },
+    ESTETICA: { nombre: 'Estética', unidad: 'servicios' },
+    VACUNACION: { nombre: 'Vacunas', unidad: 'dosis' },
+    INSUMO: { nombre: 'Productos', unidad: 'ventas' },
+    PROCEDIMIENTO: { nombre: 'Procedimientos', unidad: 'procedimientos' },
+    IMAGEN: { nombre: 'Imágenes', unidad: 'estudios' },
+};
+
+const rpTipoInfo = (tipo) => RP_TIPO_LABELS[tipo] || { nombre: tipo, unidad: 'servicios' };
+
+const rpRangoTrimestre = () => {
+    const hoy = new Date();
+    const anio = hoy.getUTCFullYear();
+    const mes = hoy.getUTCMonth();
+    return {
+        inicio: kpiFechaISOUTC(new Date(Date.UTC(anio, mes - 2, 1))),
+        fin: kpiFechaISOUTC(hoy)
+    };
+};
+
+const rpRango = (tipo) => (tipo === 'trimestre' ? rpRangoTrimestre() : kpiCalcularRango(tipo));
+
+const rpDiasEnRango = (inicio, fin) => {
+    const d1 = new Date(`${inicio}T00:00:00Z`);
+    const d2 = new Date(`${fin}T00:00:00Z`);
+    return Math.max(1, Math.round((d2 - d1) / 86400000) + 1);
+};
+
+const rpFormatMoney = (valor) => `$ ${Number(valor || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+
+const rpSetDelta = (elId, actual, anterior) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (anterior === null || anterior === undefined || anterior === 0 || actual === null || actual === undefined) {
+        el.textContent = anterior === 0 && actual ? 'sin datos del período anterior' : '';
+        el.className = 'rp-kpi-delta';
+        return;
+    }
+    const variacion = ((actual - anterior) / anterior) * 100;
+    const signo = variacion >= 0 ? '+' : '';
+    el.textContent = `${signo}${variacion.toFixed(0)}% vs. período anterior`;
+    el.className = `rp-kpi-delta ${variacion >= 0 ? 'rp-kpi-value--up' : 'rp-kpi-value--down'}`;
+};
+
+const cargarRpKpis = async () => {
+    const actual = kpiCalcularRango('este_mes');
+    const anterior = kpiCalcularRango('mes_anterior');
+
+    try {
+        const [ingActual, ingAnterior, consActual, nuevos] = await Promise.all([
+            fetchAPI(`/reportes/finanzas/ingresos?fecha_inicio=${actual.inicio}&fecha_fin=${actual.fin}`),
+            fetchAPI(`/reportes/finanzas/ingresos?fecha_inicio=${anterior.inicio}&fecha_fin=${anterior.fin}`),
+            fetchAPI(`/reportes/kpi/consultas?fecha_inicio=${actual.inicio}&fecha_fin=${actual.fin}`),
+            fetchAPI(`/reportes/kpi/pacientes-nuevos?fecha_inicio=${actual.inicio}&fecha_fin=${actual.fin}`),
+        ]);
+
+        document.getElementById('rpKpiIngresos').textContent = rpFormatMoney(ingActual?.total_ingresos);
+        rpSetDelta('rpKpiIngresosDelta', ingActual?.total_ingresos, ingAnterior?.total_ingresos);
+
+        const dias = rpDiasEnRango(actual.inicio, actual.fin);
+        const atenciones = consActual?.consultas_atendidas || 0;
+        document.getElementById('rpKpiAtenciones').textContent = atenciones.toLocaleString('es-AR');
+        const promedioEl = document.getElementById('rpKpiAtencionesDelta');
+        if (promedioEl) {
+            promedioEl.textContent = `promedio ${(atenciones / dias).toFixed(1)} por día`;
+            promedioEl.className = 'rp-kpi-delta';
+        }
+
+        document.getElementById('rpKpiTicket').textContent = rpFormatMoney(ingActual?.ticket_promedio);
+        rpSetDelta('rpKpiTicketDelta', ingActual?.ticket_promedio, ingAnterior?.ticket_promedio);
+
+        const pacientesNuevos = nuevos?.pacientes_nuevos || 0;
+        document.getElementById('rpKpiNuevos').textContent = pacientesNuevos.toLocaleString('es-AR');
+        const nuevosEl = document.getElementById('rpKpiNuevosDelta');
+        if (nuevosEl) {
+            const totalAtendido = consActual?.pacientes_unicos || 0;
+            // "Pacientes nuevos" (registros nuevos, /kpi/pacientes-nuevos) y
+            // "total atendido" (mascotas con consulta, /kpi/consultas) miden
+            // cosas distintas -- un alta sin turno agendado todavía no queda
+            // "atendida". No son subconjunto uno del otro necesariamente, así
+            // que el "% del total atendido" del boceto solo se muestra cuando
+            // es una lectura razonable (<=100%); si no, el número crudo solo
+            // dice menos mentiras que un porcentaje de más de 100%.
+            const pct = totalAtendido ? (pacientesNuevos / totalAtendido) * 100 : null;
+            nuevosEl.textContent = (pct !== null && pct <= 100)
+                ? `${pct.toFixed(0)}% del total atendido`
+                : 'altas del mes (no todas con turno atendido todavía)';
+            nuevosEl.className = 'rp-kpi-delta';
+        }
+    } catch (error) {
+        console.error('Error cargando KPIs del panel de reportes', error);
+    }
+};
+
+const cargarRpServicios = async (tipoRango) => {
+    const wrap = document.getElementById('rpServiciosBars');
+    const sub = document.getElementById('rpServiciosSub');
+    if (!wrap) return;
+    const { inicio, fin } = rpRango(tipoRango);
+    if (sub) {
+        const etiquetas = { este_mes: 'Este mes', trimestre: 'Último trimestre', este_anio: 'Este año' };
+        sub.textContent = `${etiquetas[tipoRango] || 'Este mes'} · en pesos`;
+    }
+
+    wrap.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+    try {
+        const filas = await fetchAPI(`/reportes/kpi/ingresos-por-tipo-servicio?fecha_inicio=${inicio}&fecha_fin=${fin}`);
+        const datos = Array.isArray(filas) ? filas.filter(f => f.total_ingresos > 0) : [];
+        if (datos.length === 0) {
+            wrap.innerHTML = '<p class="rp-empty-text">Sin servicios facturados en el rango seleccionado.</p>';
+            return;
+        }
+        const max = Math.max(...datos.map(d => d.total_ingresos));
+        wrap.innerHTML = datos.map(d => {
+            const info = rpTipoInfo(d.tipo_servicio);
+            const pct = Math.max(2, (d.total_ingresos / max) * 100);
+            return `
+                <div class="rp-bar-row">
+                    <span class="rp-bar-label">${escapeHtml(info.nombre)}</span>
+                    <div class="rp-bar-track">
+                        <div class="rp-bar-fill" style="width:${pct.toFixed(1)}%"></div>
+                        <span class="rp-bar-amount">${rpFormatMoney(d.total_ingresos)}</span>
+                        <span class="rp-bar-count">${d.cantidad} ${info.unidad}</span>
+                    </div>
+                </div>`;
+        }).join('');
+    } catch (error) {
+        console.error('Error cargando ingresos por tipo de servicio', error);
+        wrap.innerHTML = '<p class="rp-empty-text">Error al cargar. Reintentá más tarde.</p>';
+    }
+};
+
+const cargarRpProduccion = async () => {
+    const body = document.getElementById('rpProduccionBody');
+    const sub = document.getElementById('rpProduccionSub');
+    if (!body) return;
+    const { inicio, fin } = kpiCalcularRango('este_mes');
+    if (sub) sub.textContent = kpiFormatFecha(fin).slice(3); // "mm/yyyy" a mes/año legible corto
+
+    try {
+        const filas = await fetchAPI(`/reportes/kpi/rendimiento?fecha_inicio=${inicio}&fecha_fin=${fin}`);
+        const datos = Array.isArray(filas) ? filas : [];
+        if (datos.length === 0) {
+            body.innerHTML = '<tr><td colspan="5" class="rp-empty-text">Sin consultas este mes.</td></tr>';
+            return;
+        }
+        // El total de la participación va sobre TODO el dataset (es "cuánto
+        // de la producción total es mía"), pero la tabla solo muestra el
+        // top 10 por ingresos -- boceto: 4 médicos. Una clínica real tiene
+        // un puñado; una tabla de centenas de filas no es "Producción por
+        // médico", es un volcado.
+        const totalIngresos = datos.reduce((acc, d) => acc + (d.ingresos || 0), 0);
+        const ordenados = [...datos].sort((a, b) => (b.ingresos || 0) - (a.ingresos || 0));
+        const TOP_N = 10;
+        const visibles = ordenados.slice(0, TOP_N);
+        body.innerHTML = visibles.map(d => {
+            const pct = totalIngresos > 0 ? (d.ingresos / totalIngresos) * 100 : 0;
+            return `
+                <tr>
+                    <td>${escapeHtml(d.veterinario || '—')}</td>
+                    <td class="rp-num" style="color:var(--text-secondary)">${d.consultas_realizadas}</td>
+                    <td class="rp-num" style="font-weight:500">${rpFormatMoney(d.ingresos)}</td>
+                    <td><div class="rp-progress"><div class="rp-progress-fill" style="width:${pct.toFixed(0)}%"></div></div></td>
+                    <td class="rp-num" style="color:var(--text-secondary); text-align:right;">${pct.toFixed(0)}%</td>
+                </tr>`;
+        }).join('') + (ordenados.length > TOP_N
+            ? `<tr><td colspan="5" class="rp-empty-text">+ ${ordenados.length - TOP_N} veterinario(s) más, no mostrados.</td></tr>`
+            : '');
+    } catch (error) {
+        console.error('Error cargando producción por médico', error);
+        body.innerHTML = '<tr><td colspan="5" class="rp-empty-text">Error al cargar.</td></tr>';
+    }
+};
+
+const RP_ESPECIE_BUCKET = (especie) => {
+    const e = (especie || '').trim().toLowerCase();
+    if (e === 'perro') return 'Perros';
+    if (e === 'gato') return 'Gatos';
+    return 'Otras';
+};
+
+const cargarRpEspecies = async () => {
+    const wrap = document.getElementById('rpEspecies');
+    if (!wrap) return;
+    const { inicio, fin } = kpiCalcularRango('este_mes');
+
+    wrap.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+    try {
+        const filas = await fetchAPI(`/reportes/kpi/mascotas-por-especie?fecha_inicio=${inicio}&fecha_fin=${fin}`);
+        const datos = Array.isArray(filas) ? filas : [];
+        if (datos.length === 0) {
+            wrap.innerHTML = '<p class="rp-empty-text">Sin atenciones este mes.</p>';
+            return;
+        }
+        const buckets = {};
+        let total = 0;
+        datos.forEach(d => {
+            const key = RP_ESPECIE_BUCKET(d.especie);
+            buckets[key] = (buckets[key] || 0) + d.atenciones;
+            total += d.atenciones;
+        });
+        const orden = ['Perros', 'Gatos', 'Otras'].filter(k => buckets[k]);
+        wrap.innerHTML = orden.map(nombre => {
+            const count = buckets[nombre];
+            const pct = total > 0 ? (count / total) * 100 : 0;
+            return `
+                <div class="rp-especie-row">
+                    <div class="rp-especie-head">
+                        <span class="rp-especie-nombre">${nombre}</span>
+                        <span class="rp-especie-pct">${pct.toFixed(0)}%</span>
+                    </div>
+                    <div class="rp-progress" style="width:100%;"><div class="rp-progress-fill" style="width:${pct.toFixed(0)}%"></div></div>
+                    <span class="rp-especie-count">${count} atenciones</span>
+                </div>`;
+        }).join('');
+    } catch (error) {
+        console.error('Error cargando distribución por especie', error);
+        wrap.innerHTML = '<p class="rp-empty-text">Error al cargar.</p>';
+    }
+};
+
+let rpListenersBound = false;
+
+const initRpDashboard = () => {
+    cargarRpKpis();
+    cargarRpServicios('este_mes');
+    cargarRpProduccion();
+    cargarRpEspecies();
+
+    if (!rpListenersBound) {
+        document.querySelectorAll('#rpServiciosRango .rp-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#rpServiciosRango .rp-pill').forEach(b => b.classList.remove('rp-pill--active'));
+                btn.classList.add('rp-pill--active');
+                cargarRpServicios(btn.dataset.rpRango);
+            });
+        });
+        rpListenersBound = true;
     }
 };
 
@@ -147,6 +379,9 @@ const renderKpiServiciosChart = (servicios) => {
 
     if (kpiServiciosChart) kpiServiciosChart.destroy();
 
+    // Tarea 11 (revisión de bocetos): el índigo (#4F46E5) no es del sistema
+    // -- var(--primary) es el único acento (docs/diseno/pantallas/README.md).
+    const tealChart = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#0C7A89';
     kpiServiciosChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -154,8 +389,8 @@ const renderKpiServiciosChart = (servicios) => {
             datasets: [{
                 label: 'Unidades vendidas',
                 data: servicios.map(s => s.total_solicitudes),
-                backgroundColor: 'rgba(79, 70, 229, 0.6)',
-                borderColor: '#4F46E5',
+                backgroundColor: tealChart,
+                borderColor: tealChart,
                 borderWidth: 1
             }]
         },
@@ -275,7 +510,7 @@ const renderConsultasPorVeterinario = (data) => {
                 <td style="padding: 0.75rem 1rem;">${c.motivo || '-'}</td>
                 <td style="padding: 0.75rem 1rem;">${servicios}</td>
                 <td style="padding: 0.75rem 1rem; text-align: right;">
-                    <button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${c.id}, ${c.mascota_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Ver consulta</button>
+                    <button class="av-btn" onclick="verConsultaCompleta(${c.id}, ${c.mascota_id})" style="height:30px; padding:0 10px; font-size:12.5px;">Ver consulta</button>
                 </td>
             </tr>`;
     }).join('');
@@ -360,7 +595,7 @@ const cargarTarifas = async () => {
                     <input type="number" min="0" step="0.01" id="liqTarifaInput${v.id}" value="${v.tarifa_consulta ?? ''}" placeholder="Sin configurar" style="width:120px; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px;">
                 </td>
                 <td style="padding: 0.6rem 0.75rem; text-align:right;">
-                    <button class="btn-secondary btn-sm" onclick="guardarTarifaVeterinario(${v.id})" style="padding:0.35rem 0.75rem; font-size:0.8rem; border-radius:6px;">Guardar</button>
+                    <button class="av-btn" onclick="guardarTarifaVeterinario(${v.id})" style="height:30px; padding:0 10px; font-size:12.5px;">Guardar</button>
                 </td>
             </tr>
         `).join('');
@@ -444,7 +679,7 @@ const renderLiqPreview = (data) => {
         </table>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
             <div style="font-size:1.1rem; font-weight:700; color: var(--text-primary);">Total: ${kpiFormatMoney(data.total)}</div>
-            <button type="button" id="btnLiqConfirmar" class="btn-primary btn-sm" style="padding:0.5rem 1rem;">Confirmar cálculo</button>
+            <button type="button" id="btnLiqConfirmar" class="av-btn av-btn--primary" style="height:34px; padding:0 14px;">Confirmar cálculo</button>
         </div>
     `;
 
