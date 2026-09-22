@@ -141,7 +141,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     expect(directo.mascota_id).toBe(S.mascota.id);
 
     // Visible en el historial de servicios directos de la mascota.
-    const lista = await (await request.get(`/api/servicios/?mascota_id=${S.mascota.id}`)).json();
+    const lista = await (await request.get(`/api/servicios/?mascota_id=${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     expect(Array.isArray(lista)).toBe(true);
     const enLista = lista.find((s) => s.id === directo.id);
     expect(enLista, 'el servicio directo aparece en GET /api/servicios/?mascota_id=').toBeTruthy();
@@ -174,7 +174,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     // verifica por su efecto observable: la línea de factura queda ligada al
     // servicio_id (arriba) y el servicio sigue vivo en el historial (no se borra
     // al facturar).
-    const listaPost = await (await request.get(`/api/servicios/?mascota_id=${S.mascota.id}`)).json();
+    const listaPost = await (await request.get(`/api/servicios/?mascota_id=${S.mascota.id}`, { headers: authHeaders(S.token) })).json();
     expect(listaPost.some((s) => s.id === directo.id)).toBe(true);
   });
 
@@ -411,5 +411,13 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
     expect(detalle.id).toBe(una.id);
     expect(detalle.estado).toBe('CERRADA');
     expect(Array.isArray(detalle.servicios)).toBe(true);
+  });
+
+  test('Tarea 10 — GET /api/servicios/ (único endpoint sin gate del router) rechaza sin token', async ({ request }) => {
+    // servicios.py: POST, PATCH, DELETE, /tomar y /bandeja ya usaban
+    // require_roles; listar_servicios_mascota (GET /) era el único sin
+    // ninguna dependencia de auth.
+    const res = await request.get(`/api/servicios/?mascota_id=${S.mascota.id}`, { headers: {} });
+    expect(res.status()).toBe(401);
   });
 });

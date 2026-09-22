@@ -23,6 +23,27 @@ from app.routers.servicios import (
 
 router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
 
+# HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): este router SI usa
+# require_roles/get_current_admin en 6 de sus 11 endpoints, pero 5 quedaron
+# sueltos sin ninguna dependencia de auth -- obtener_consulta, listar_consultas,
+# listar_recetas_por_consulta, descargar_receta_pdf y descargar_consulta_pdf.
+# Ni la tabla heuristica del enunciado de la tarea ni la matriz de permisos
+# listaban este router como afectado; se encontro barriendo endpoint por
+# endpoint como pide el punto 2 de la tarea.
+#
+# admin + recepcionista + veterinario, igual que el resto de los endpoints de
+# este router y que MASCOTAS_ROLES del front (consultorio.js y agenda.js son
+# los unicos callers, ambos bajo esos tres roles). La fila 15 de la matriz
+# (docs/diseno/ordenes-de-servicio.md, decision 9, 9.3) le da a recepcion una
+# vista RECORTADA (sin diagnostico/tratamiento) via un schema propio -- ese
+# recorte de schema no existe todavia y está fuera de alcance de esta tarea
+# ("exclusivamente autenticacion y autorizacion", no tocar esquemas). Darle a
+# recepcion el mismo `ConsultaResponse` completo que admin/veterinario es mas
+# de lo que la matriz pide para esa fila; se documenta la tension y se deja
+# para cuando exista el schema recortado, en vez de dejar el endpoint abierto
+# o excluir a recepcion de un flujo que hoy usa (cobrar la consulta).
+_ROLES_CONSULTA_LECTURA = ("admin", "recepcionista", "veterinario")
+
 
 @router.post("/", response_model=ConsultaResponse, status_code=status.HTTP_201_CREATED)
 def crear_consulta(
@@ -47,7 +68,8 @@ def crear_consulta(
 @router.get("/{consulta_id}", response_model=ConsultaResponse)
 def obtener_consulta(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Obtiene una consulta por ID"""
     consulta = ConsultaService.obtener_consulta(db, consulta_id)
@@ -70,7 +92,8 @@ def listar_consultas(
     fecha_fin: Optional[str] = None,
     estado_pago: Optional[str] = None,
     estado: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Lista todas las consultas con filtros opcionales.
 
@@ -164,7 +187,8 @@ def crear_receta(
 @router.get("/{consulta_id}/recetas", response_model=List[RecetaResponse])
 def listar_recetas_por_consulta(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Trae las recetas y su detalle asociadas a una consulta"""
     recetas = db.query(Receta).filter(Receta.consulta_id == consulta_id).all()
@@ -174,7 +198,8 @@ def listar_recetas_por_consulta(
 def descargar_receta_pdf(
     consulta_id: int,
     receta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Genera y descarga el PDF de una receta médica"""
     receta = db.query(Receta).filter(Receta.id == receta_id, Receta.consulta_id == consulta_id).first()
@@ -277,7 +302,8 @@ def actualizar_servicio_consulta(
 @router.get("/{consulta_id}/pdf")
 def descargar_consulta_pdf(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Genera y descarga el PDF del resumen de una consulta"""
     pdf_content = PDFService.generar_consulta_pdf(db, consulta_id)

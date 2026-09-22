@@ -388,6 +388,13 @@ def listar_servicios_mascota(
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
     db: Session = Depends(get_db),
+    # HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): unico endpoint de este
+    # router sin Depends(require_roles) -- los otros 4 (POST, PATCH, DELETE,
+    # /tomar, /bandeja) ya lo tenian. admin/recepcionista/veterinario, igual
+    # que el resto del router y que MASCOTAS_ROLES del front. `gestor` queda
+    # afuera de esta lectura general (no tiene pantalla que la use; su vista
+    # es /bandeja, ya gateada aparte).
+    _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """Feed de servicios de una mascota. Excluye los borrados lógicamente.
 

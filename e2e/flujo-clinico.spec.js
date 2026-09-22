@@ -399,4 +399,99 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
       expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
     }
   });
+
+  test('mascotas: TODOS los endpoints rechazan sin token (Tarea 10 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // Mismo hallazgo que facturas.py (96484b0), pero en mascotas.py: NINGUN
+    // endpoint tenía Depends(require_roles). Confirmado en vivo con curl:
+    // GET /api/mascotas/ sin token devolvía 200 con el padrón completo de
+    // pacientes, y DELETE /api/mascotas/{id} sin token devolvía 204 y
+    // borraba (desactivaba) una mascota real.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/mascotas/', sinToken),
+      () => request.get(`/api/mascotas/${S.mascota.id}`, sinToken),
+      () => request.post('/api/mascotas/', {
+        ...sinToken,
+        data: { nombre: 'x', especie: 'Perro', propietario_id: S.propietarioB.id },
+      }),
+      () => request.post(`/api/mascotas/${S.mascota.id}/transferir`, {
+        ...sinToken,
+        data: { nuevo_propietario_id: S.propietarioB.id },
+      }),
+      () => request.get(`/api/mascotas/${S.mascota.id}/peso-history`, sinToken),
+      () => request.put(`/api/mascotas/${S.mascota.id}`, { ...sinToken, data: {} }),
+      () => request.delete(`/api/mascotas/${S.mascota.id}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('propietarios: TODOS los endpoints rechazan sin token (Tarea 10 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // Mismo hallazgo, propietarios.py: expone el padrón completo de tutores,
+    // cédula incluida, sin ningún control.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/propietarios/', sinToken),
+      () => request.get(`/api/propietarios/${S.propietarioB.id}`, sinToken),
+      () => request.post('/api/propietarios/', {
+        ...sinToken,
+        data: { nombre: 'x', apellido: 'y', cedula: `${Date.now()}`, telefono: '0', direccion: 'x' },
+      }),
+      () => request.put(`/api/propietarios/${S.propietarioB.id}`, { ...sinToken, data: {} }),
+      () => request.delete(`/api/propietarios/${S.propietarioB.id}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('citas: TODOS los endpoints rechazan sin token, incluido POST / (Tarea 10 — corrige la suposición de que era el QR público)', async ({ request }) => {
+    // Los 6 estaban abiertos. POST /api/citas/ NO es el agendamiento público
+    // por QR -- ese es /api/admin/supabase/citas-qr (ver el comentario de
+    // cabecera de backend/app/routers/citas.py). El único caller real de
+    // POST /api/citas/ es agenda.js, dentro del shell autenticado.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/citas/', sinToken),
+      () => request.get(`/api/citas/${S.cita.id}`, sinToken),
+      () => request.post('/api/citas/', {
+        ...sinToken,
+        data: {
+          veterinario_id: S.vet.id,
+          propietario_id: S.propietarioB.id,
+          mascota_id: S.mascota.id,
+          fecha_cita: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+          tipo: 'x',
+        },
+      }),
+      () => request.put(`/api/citas/${S.cita.id}/checkin`, { ...sinToken, data: { estado: 'En espera' } }),
+      () => request.put(`/api/citas/${S.cita.id}`, { ...sinToken, data: {} }),
+      () => request.delete(`/api/citas/${S.cita.id}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('consultas: los 5 GET que habían quedado sueltos (gate parcial) rechazan sin token (Tarea 10)', async ({ request }) => {
+    // Este router SÍ usaba require_roles en 7 de sus 12 endpoints, pero 5
+    // GET (detalle, listado, recetas, y los dos PDF) no tenían ninguna
+    // dependencia de auth -- ni la tabla heurística del enunciado ni la
+    // matriz de permisos señalaban este router.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get(`/api/consultas/${S.consulta.id}`, sinToken),
+      () => request.get('/api/consultas/', sinToken),
+      () => request.get(`/api/consultas/${S.consulta.id}/recetas`, sinToken),
+      () => request.get(`/api/consultas/${S.consulta.id}/pdf`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
 });

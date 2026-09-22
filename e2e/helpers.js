@@ -66,9 +66,15 @@ function testTag(label) {
 
 /**
  * Creates a throwaway inventory product for a test via the API.
+ *
+ * POST /api/inventario/ exige rol admin desde Tarea 10 (el router no tenía
+ * NINGUNA autenticación -- hallazgo de seguridad, hoy corregido). Mismo
+ * criterio que createTestFactura: fallback incondicional a token de admin
+ * para no tocar los ~15 call sites existentes.
  * @param {import('@playwright/test').APIRequestContext} request
  */
-async function createTestProduct(request, overrides = {}) {
+async function createTestProduct(request, overrides = {}, token = null) {
+  const authToken = token || (await getAdminToken(request));
   const codigo = testTag('SKU');
   const payload = {
     codigo,
@@ -79,17 +85,19 @@ async function createTestProduct(request, overrides = {}) {
     precio_unitario: 100,
     ...overrides,
   };
-  const res = await request.post('/api/inventario/', { data: payload });
+  const res = await request.post('/api/inventario/', { headers: authHeaders(authToken), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test product: ${res.status()} ${await res.text()}`);
   }
   return res.json();
 }
 
-/** Soft-deletes (deactivates) a test product. Best-effort — never throws. */
-async function deleteTestProduct(request, id) {
+/** Soft-deletes (deactivates) a test product. Best-effort — never throws.
+ * Mismo fallback de token admin que createTestProduct (Tarea 10). */
+async function deleteTestProduct(request, id, token = null) {
   try {
-    await request.delete(`/api/inventario/${id}`);
+    const authToken = token || (await getAdminToken(request));
+    await request.delete(`/api/inventario/${id}`, { headers: authHeaders(authToken) });
   } catch (_) {
     // best-effort cleanup
   }
@@ -134,16 +142,21 @@ async function deleteTestUser(request, token, id) {
 // These mirror the createTestUser/deleteTestUser style: the "create" helpers
 // throw loudly if the backend rejects the payload (so a broken contract fails
 // the test at the setup line), while every "delete"/cleanup helper is
-// best-effort and never throws. propietarios/mascotas/citas/facturas still
-// have no auth dependency in this stack. `consultas` itself (POST/PUT) also
-// doesn't -- only DELETE (get_current_admin, unrelated to this fix) and the
-// endpoints that hang off a consulta (servicios, recetas) require a token
-// now (Tarea 06, decisión 9: `require_roles` ya no deja pasar peticiones sin
-// sesión).
+// best-effort and never throws.
+//
+// propietarios/mascotas/citas require a token since Tarea 10 (el router no
+// tenía NINGUNA autenticación -- hallazgo de seguridad, hoy corregido:
+// admin/recepcionista/veterinario). `consultas` (POST/PUT) y `facturas` ya
+// exigían token desde antes (Tarea 06 / la propia Tarea 10 encontró y cerró
+// además 5 GET sueltos de consultas.py). Mismo criterio que createTestFactura
+// (commit 96484b0): fallback incondicional a token de admin en las funciones
+// de creación/borrado para no tocar los ~20 call sites existentes que nunca
+// pasaban token.
 // ===========================================================================
 
 /** Creates a throwaway propietario via the API. */
-async function createTestPropietario(request, overrides = {}) {
+async function createTestPropietario(request, overrides = {}, token = null) {
+  const authToken = token || (await getAdminToken(request));
   const tag = testTag('prop');
   const payload = {
     nombre: tag,
@@ -156,7 +169,7 @@ async function createTestPropietario(request, overrides = {}) {
     direccion: 'Calle Falsa 123',
     ...overrides,
   };
-  const res = await request.post('/api/propietarios/', { data: payload });
+  const res = await request.post('/api/propietarios/', { headers: authHeaders(authToken), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test propietario: ${res.status()} ${await res.text()}`);
   }
@@ -164,16 +177,18 @@ async function createTestPropietario(request, overrides = {}) {
 }
 
 /** Soft-deletes (deactivates) a test propietario. Best-effort — never throws. */
-async function deleteTestPropietario(request, id) {
+async function deleteTestPropietario(request, id, token = null) {
   try {
-    await request.delete(`/api/propietarios/${id}`);
+    const authToken = token || (await getAdminToken(request));
+    await request.delete(`/api/propietarios/${id}`, { headers: authHeaders(authToken) });
   } catch (_) {
     // best-effort cleanup
   }
 }
 
 /** Creates a throwaway mascota tied to `propietarioId` via the API. */
-async function createTestMascota(request, propietarioId, overrides = {}) {
+async function createTestMascota(request, propietarioId, overrides = {}, token = null) {
+  const authToken = token || (await getAdminToken(request));
   const tag = testTag('pet');
   const payload = {
     nombre: tag,
@@ -185,7 +200,7 @@ async function createTestMascota(request, propietarioId, overrides = {}) {
     propietario_id: propietarioId,
     ...overrides,
   };
-  const res = await request.post('/api/mascotas/', { data: payload });
+  const res = await request.post('/api/mascotas/', { headers: authHeaders(authToken), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test mascota: ${res.status()} ${await res.text()}`);
   }
@@ -193,9 +208,10 @@ async function createTestMascota(request, propietarioId, overrides = {}) {
 }
 
 /** Soft-deletes (deactivates) a test mascota. Best-effort — never throws. */
-async function deleteTestMascota(request, id) {
+async function deleteTestMascota(request, id, token = null) {
   try {
-    await request.delete(`/api/mascotas/${id}`);
+    const authToken = token || (await getAdminToken(request));
+    await request.delete(`/api/mascotas/${id}`, { headers: authHeaders(authToken) });
   } catch (_) {
     // best-effort cleanup
   }
@@ -211,7 +227,8 @@ async function createTestVeterinario(request, token, overrides = {}) {
 }
 
 /** Creates a cita in the internal agenda (/api/citas) via the API. */
-async function createTestCita(request, { veterinarioId, propietarioId, mascotaId, ...overrides } = {}) {
+async function createTestCita(request, { veterinarioId, propietarioId, mascotaId, ...overrides } = {}, token = null) {
+  const authToken = token || (await getAdminToken(request));
   const payload = {
     veterinario_id: veterinarioId,
     propietario_id: propietarioId,
@@ -222,7 +239,7 @@ async function createTestCita(request, { veterinarioId, propietarioId, mascotaId
     observaciones: 'PWTEST cita',
     ...overrides,
   };
-  const res = await request.post('/api/citas/', { data: payload });
+  const res = await request.post('/api/citas/', { headers: authHeaders(authToken), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test cita: ${res.status()} ${await res.text()}`);
   }
@@ -230,9 +247,10 @@ async function createTestCita(request, { veterinarioId, propietarioId, mascotaId
 }
 
 /** Soft-cancels a test cita (DELETE just flips estado to CANCELADA). Best-effort. */
-async function cancelTestCita(request, id) {
+async function cancelTestCita(request, id, token = null) {
   try {
-    await request.delete(`/api/citas/${id}`);
+    const authToken = token || (await getAdminToken(request));
+    await request.delete(`/api/citas/${id}`, { headers: authHeaders(authToken) });
   } catch (_) {
     // best-effort cleanup
   }
@@ -293,7 +311,11 @@ async function cerrarTestOrden(request, id, token = null) {
 async function createTestConsulta(request, { mascotaId, veterinarioId, ...overrides } = {}, token = null) {
   let ordenId = overrides.orden_id;
   if (!ordenId) {
-    const mascotaRes = await request.get(`/api/mascotas/${mascotaId}`);
+    // GET /api/mascotas/{id} exige sesión desde Tarea 10 (antes no tenía
+    // ninguna autenticación); se resuelve el token acá arriba para esta
+    // llamada interna y para abrir la orden, igual que POST /api/ordenes/.
+    const ordenToken = token || (await getAdminToken(request));
+    const mascotaRes = await request.get(`/api/mascotas/${mascotaId}`, { headers: authHeaders(ordenToken) });
     if (!mascotaRes.ok()) {
       throw new Error(
         `[amivets-e2e] Could not resolve propietario of mascota ${mascotaId} to open an orden: ` +
@@ -301,10 +323,6 @@ async function createTestConsulta(request, { mascotaId, veterinarioId, ...overri
       );
     }
     const mascota = await mascotaRes.json();
-    // POST /api/ordenes/ exige sesión; si el spec no pasó token (caso raro),
-    // se usa el de admin para que el fallo que se quiera probar sea el de
-    // /api/consultas/, no el de la orden.
-    const ordenToken = token || (await getAdminToken(request));
     const orden = await createTestOrden(
       request,
       { propietarioId: mascota.propietario_id, mascotaId, veterinarioId },
@@ -411,7 +429,10 @@ async function createTestRecepcionista(request, adminToken, overrides = {}) {
 async function createTestServicioDirecto(request, mascotaId, overrides = {}, token = null) {
   let ordenId = overrides.orden_id;
   if (!ordenId) {
-    const mascotaRes = await request.get(`/api/mascotas/${mascotaId}`);
+    // GET /api/mascotas/{id} exige sesión desde Tarea 10 -- mismo criterio
+    // que createTestConsulta.
+    const ordenToken = token || (await getAdminToken(request));
+    const mascotaRes = await request.get(`/api/mascotas/${mascotaId}`, { headers: authHeaders(ordenToken) });
     if (!mascotaRes.ok()) {
       throw new Error(
         `[amivets-e2e] Could not resolve propietario of mascota ${mascotaId} to open an orden: ` +
@@ -419,7 +440,6 @@ async function createTestServicioDirecto(request, mascotaId, overrides = {}, tok
       );
     }
     const mascota = await mascotaRes.json();
-    const ordenToken = token || (await getAdminToken(request));
     const orden = await createTestOrden(
       request,
       { propietarioId: mascota.propietario_id, mascotaId },
@@ -553,7 +573,9 @@ async function facturarDesdeConsulta(request, consultaId, body = {}, token = nul
 }
 
 // ===========================================================================
-// Catálogo de servicios (/api/catalogo) — no auth in this stack.
+// Catálogo de servicios (/api/catalogo) — admin+veterinario desde Tarea 10
+// (antes: escritura con sesión pero sin chequeo de rol; lectura sin
+// autenticación alguna en 4 de sus 11 endpoints).
 // ===========================================================================
 
 /** Creates a throwaway catalog service via the API. Throws on rejection.
@@ -581,10 +603,13 @@ async function createTestCatalogoServicio(request, overrides = {}) {
   return res.json();
 }
 
-/** Soft-deletes (activo=False) a test catalog service. Best-effort — never throws. */
-async function deleteTestCatalogoServicio(request, id) {
+/** Soft-deletes (activo=False) a test catalog service. Best-effort — never throws.
+ * DELETE /api/catalogo/{id} exige admin/veterinario desde Tarea 10; pasa un
+ * token de admin para que la limpieza realmente funcione. */
+async function deleteTestCatalogoServicio(request, id, token = null) {
   try {
-    await request.delete(`/api/catalogo/${id}`);
+    const authToken = token || (await getAdminToken(request));
+    await request.delete(`/api/catalogo/${id}`, { headers: authHeaders(authToken) });
   } catch (_) {
     // best-effort cleanup
   }

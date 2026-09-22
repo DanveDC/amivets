@@ -7,17 +7,45 @@ from zoneinfo import ZoneInfo
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.models import Cita, CitaEstado, Mascota, Propietario
+from app.models.models import Cita, CitaEstado, Mascota, Propietario, Usuario
 from app.schemas.schemas import CitaCreate, CitaUpdate, CitaResponse, CitaStatusUpdate
+from app.routers.usuarios import require_roles
 
 CLINIC_TZ = ZoneInfo(settings.CLINIC_TIMEZONE)
 
 router = APIRouter(prefix="/api/citas", tags=["Agenda y Citas"])
 
+# HALLAZGO DE SEGURIDAD (Tarea 10): este router nunca tuvo Depends(require_roles)
+# en NINGUN endpoint -- los 6 estaban abiertos.
+#
+# CORRECCION a una suposicion previa (docs/tareas/10, docs/diseno/
+# ordenes-de-servicio.md §9.4): se asumio que POST /api/citas/ (agendar_cita)
+# era el endpoint del agendamiento publico por QR y por eso tenia que quedar
+# anonimo. Verificado en vivo, NO es asi:
+#   - static/agendar.html no llama a /api/citas/ en ningun lado. Llama a
+#     /api/admin/supabase/citas-qr (supabase_admin.py:227-257), que ya es
+#     publico a proposito -- documentado, con rate limit de slowapi
+#     (@limiter.limit("5/minute")) y un payload de texto libre
+#     (nombre_cliente, telefono, nombre_mascota) pensado para un visitante sin
+#     cuenta. Esa cita queda en una tabla de staging en Supabase
+#     (`citas_agendadas`, estado "pendiente") hasta que el staff la revisa.
+#   - CitaCreate (el payload de POST /api/citas/) exige `mascota_id` y
+#     `propietario_id` que YA EXISTEN en la base de Postgres -- un visitante
+#     anonimo del QR no tiene forma de conocer esos IDs internos.
+#   - El unico caller real es agenda.js:231 (`fetchAPI('/citas/', {method:
+#     'POST', ...})`), dentro de la seccion "Agenda" del shell, ya restringida
+#     a ADMISION_ROLES en el front (static/js/core/router.js:47,57).
+# Es un endpoint interno de mostrador (recepcion agenda una cita para un
+# paciente/tutor que ya existe), no el QR. Se gatea igual que el resto del
+# router.
+_ROLES_CITAS = ("admin", "recepcionista", "veterinario")
+
+
 @router.post("/", response_model=CitaResponse, status_code=status.HTTP_201_CREATED)
 def agendar_cita(
     cita: CitaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CITAS)),
 ):
     """Agenda una nueva cita con verificación de disponibilidad"""
     # Solo impedir citas de días anteriores a hoy, usando la fecha civil de la
@@ -79,7 +107,8 @@ def listar_citas(
     fecha_fin: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CITAS)),
 ):
     """Lista las citas, opcionalmente filtrando por fecha (YYYY-MM-DD), estado, veterinario, mascota, tipo o rango de fechas"""
     query = db.query(Cita)
@@ -108,7 +137,8 @@ def listar_citas(
 @router.get("/{cita_id}", response_model=CitaResponse)
 def obtener_cita(
     cita_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CITAS)),
 ):
     """Obtiene una cita por ID"""
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
@@ -120,7 +150,8 @@ def obtener_cita(
 def checkin_paciente(
     cita_id: int,
     status_update: CitaStatusUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CITAS)),
 ):
     """Sistema de Check-in: Actualiza el estado del flujo del paciente (En espera, En consulta, Finalizado)"""
     estado = status_update.estado
@@ -152,7 +183,8 @@ def checkin_paciente(
 def actualizar_cita(
     cita_id: int,
     cita_update: CitaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CITAS)),
 ):
     """Actualiza datos generales de la cita"""
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
@@ -169,7 +201,8 @@ def actualizar_cita(
 @router.delete("/{cita_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancelar_cita(
     cita_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CITAS)),
 ):
     """Cancela (elimina logica o fisica) una cita"""
     cita = db.query(Cita).filter(Cita.id == cita_id).first()
