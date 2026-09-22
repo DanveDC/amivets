@@ -19,6 +19,18 @@
 // - Facturar una orden no tiene endpoint propio: se arma con POST /api/facturas/
 //   (propietario_id + detalles[].servicio_id), el mismo patrón que ya usa
 //   sections/hoy.js para el servicio directo.
+// - FIX DE SEGURIDAD DE PLATA (post etapa 7, antes de etapa 8): si la orden
+//   tiene una línea CONSULTA viva, su consulta_id VA en el body de arriba.
+//   crear_factura (facturacion_service.py) sólo setea Factura.consulta_id
+//   cuando se lo pasan explícito -- nunca lo deriva de detalles[].servicio_id.
+//   Y Factura.consulta_id es el campo que mantiene viva la liquidación del
+//   veterinario (Decisión 3, docs/diseno/ordenes-de-servicio.md): sin él, la
+//   consulta nunca vuelve elegible en _consultas_elegibles y el veterinario
+//   deja de cobrar en silencio. Ver referencia_id de la línea CONSULTA
+//   (= consultas.id, misma convención que crear_linea_consulta en
+//   orden_service.py). NO se resuelve el bridge de facturación-por-orden
+//   completo acá (obtener_items_pendientes_orden sigue sin existir, queda
+//   diferido) -- esto es el mínimo que evita perder plata real.
 
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce } from '../core/ui.js';
@@ -200,11 +212,21 @@ async function facturarOrden() {
         showNotification('No hay servicios pendientes de facturar en esta orden.', 'warning');
         return;
     }
+    // La línea CONSULTA (si la orden tiene una y sigue pendiente) ancla la
+    // factura a la consulta -- sin esto la liquidación del veterinario se
+    // rompe en silencio. Ver la nota al inicio del archivo. Se busca en
+    // `servicios` (ya filtrado a lo pendiente), no en el array crudo: si el
+    // honorario ya se facturó en una tanda anterior, NO hay que reintentar
+    // engancharlo -- crear_factura ya rechaza con 409 "consulta con factura
+    // activa", y eso rompería una segunda factura parcial legítima por el
+    // resto de los servicios.
+    const lineaConsulta = servicios.find(s => s.tipo_servicio === 'CONSULTA' && s.referencia_id);
     try {
         const factura = await fetchAPI('/facturas/', {
             method: 'POST',
             body: JSON.stringify({
                 propietario_id: _ordenData.propietario_id,
+                ...(lineaConsulta ? { consulta_id: lineaConsulta.referencia_id } : {}),
                 total_pagado: 0.0,
                 descuento: 0.0,
                 impuesto: 0.0,

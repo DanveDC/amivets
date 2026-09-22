@@ -35,6 +35,7 @@ const {
   agregarGestorArea,
   createTestGestor,
   createTestVeterinario,
+  createTestConsulta,
 } = require('./helpers');
 
 async function loginUI(page, username, password) {
@@ -278,6 +279,51 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       await deleteTestUser(request, adminToken, vetB.id);
       await deleteTestMascota(request, mascota.id);
       await deleteTestPropietario(request, propietario.id);
+    }
+  });
+
+  test('facturar una orden con consulta desde "Orden abierta" setea Factura.consulta_id (fix post etapa 7 — sin esto, la liquidación del veterinario se rompe en silencio)', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const propietario = await createTestPropietario(request);
+    const mascota = await createTestMascota(request, propietario.id);
+    const vet = await createTestVeterinario(request, adminToken);
+
+    const orden = await createTestOrden(
+      request,
+      { propietarioId: propietario.id, mascotaId: mascota.id, veterinarioId: vet.id },
+      adminToken,
+    );
+    const consulta = await createTestConsulta(
+      request,
+      { mascotaId: mascota.id, veterinarioId: vet.id, orden_id: orden.id },
+      adminToken,
+    );
+
+    try {
+      await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+      await page.locator('.av-launcher-card[data-target="sec-hoy"]').click();
+      const fila = page.locator(`tr[data-orden-id="${orden.id}"]`);
+      await expect(fila).toBeVisible({ timeout: 15000 });
+      await fila.click();
+      await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+
+      // La línea CONSULTA nace EJECUTADA (atajo sin despacho): nada que
+      // confirmar, se puede facturar directo.
+      await page.locator('#btnOaFacturar').click();
+      await expect(page.locator('.notification-toast')).toContainText(/[Ff]actura/, { timeout: 10000 });
+
+      // /api/facturas/ no tiene filtro por consulta_id -- se filtra por
+      // propietario_id (que sí soporta) y se busca a mano entre las suyas.
+      const facturasRes = await request.get(`/api/facturas/?propietario_id=${propietario.id}&limit=100`, { headers: authHeaders(adminToken) });
+      expect(facturasRes.ok()).toBeTruthy();
+      const facturas = await facturasRes.json();
+      const factura = (Array.isArray(facturas) ? facturas : []).find(f => f.consulta_id === consulta.id);
+      expect(factura, 'la factura emitida desde Orden abierta tiene que tener consulta_id seteado').toBeTruthy();
+      expect(factura.consulta_id).toBe(consulta.id);
+    } finally {
+      await deleteTestMascota(request, mascota.id);
+      await deleteTestPropietario(request, propietario.id);
+      await deleteTestUser(request, adminToken, vet.id);
     }
   });
 });
