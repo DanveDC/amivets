@@ -248,7 +248,7 @@ test.describe('Historial de precios — precio congelado en un documento', () =>
     expect(money(hist[0].precio_anterior)).toBe(100);
 
     // La factura ya emitida NO se recalcula: su línea sigue en P1.
-    const facturaAhora = await (await request.get(`/api/facturas/${S.factura.id}`)).json();
+    const facturaAhora = await (await request.get(`/api/facturas/${S.factura.id}`, { headers: authHeaders(S.token) })).json();
     expect(facturaAhora.detalles[0].precio_unitario, 'el detalle NO se reescribió con P2').toBeCloseTo(100, 2);
     expect(facturaAhora.detalles[0].precio_unitario).not.toBeCloseTo(250, 2);
   });

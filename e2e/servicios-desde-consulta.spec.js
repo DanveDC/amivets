@@ -224,7 +224,7 @@ test.describe.serial('Servicios desde la consulta (Tarea 09, FASE 2)', () => {
 
     // Volver a facturarla no genera una segunda factura ni re-cuenta líneas:
     // ya no quedan ítems pendientes → 400.
-    const reintento = await request.post(`/api/facturas/from-consulta/${consulta.id}`, { data: {} });
+    const reintento = await request.post(`/api/facturas/from-consulta/${consulta.id}`, { headers: authHeaders(S.token), data: {} });
     expect(reintento.status()).toBe(400);
   });
 

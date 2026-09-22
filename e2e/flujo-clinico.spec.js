@@ -371,4 +371,32 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     const reAnularRes = await request.post(`/api/facturas/${S.factura.id}/anular`, { headers: authHeaders(S.token) });
     expect(reAnularRes.status()).toBe(400);
   });
+
+  test('facturas: TODOS los endpoints rechazan sin token (hallazgo de revisión, etapa 8 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // El router completo no tenía NINGUN Depends(require_roles), desde antes
+    // de Tarea 06 -- confirmado en vivo con curl contra el stack real:
+    // POST /api/facturas/ sin token devolvía 201 y creaba una factura de
+    // verdad. Cada endpoint tiene que dar 401 sin sesión, sin excepción.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/facturas/', sinToken),
+      () => request.get(`/api/facturas/${S.factura.id}`, sinToken),
+      () => request.post('/api/facturas/', {
+        ...sinToken,
+        data: { propietario_id: S.mascota.propietario_id, detalles: [{ descripcion: 'x', cantidad: 1, precio_unitario: 1 }] },
+      }),
+      () => request.post(`/api/facturas/from-consulta/${S.consulta.id}`, sinToken),
+      () => request.put(`/api/facturas/${S.factura.id}`, { ...sinToken, data: {} }),
+      () => request.post(`/api/facturas/${S.factura.id}/anular`, sinToken),
+      () => request.get(`/api/facturas/pendientes/${S.consulta.id}`, sinToken),
+      () => request.get(`/api/facturas/mascota/${S.mascota.id}`, sinToken),
+      () => request.post(`/api/facturas/${S.factura.id}/abonar`, { ...sinToken, data: { monto: 1 } }),
+      () => request.get(`/api/facturas/${S.factura.id}/abonos`, sinToken),
+      () => request.get(`/api/facturas/${S.factura.id}/pdf`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
 });

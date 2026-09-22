@@ -541,8 +541,9 @@ async function anexarServicioConsulta(request, consultaId, overrides = {}, token
  * `body` is the optional cobro payload {metodo_pago,total_pagado,descuento,impuesto}.
  * Throws on rejection.
  */
-async function facturarDesdeConsulta(request, consultaId, body = {}) {
-  const res = await request.post(`/api/facturas/from-consulta/${consultaId}`, { data: body });
+async function facturarDesdeConsulta(request, consultaId, body = {}, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.post(`/api/facturas/from-consulta/${consultaId}`, { headers: authHeaders(authToken), data: body });
   if (!res.ok()) {
     throw new Error(
       `[amivets-e2e] Failed to facturar desde consulta ${consultaId}: ${res.status()} ${await res.text()}`
@@ -722,15 +723,17 @@ async function listarAdjuntosServicio(request, servicioId, token) {
  * Registers a single abono for the full outstanding balance of a factura,
  * flipping it to PAGADA. Returns the refreshed factura. Throws on rejection.
  */
-async function pagarFacturaCompleta(request, factura, metodoPago = 'Efectivo') {
+async function pagarFacturaCompleta(request, factura, metodoPago = 'Efectivo', token = null) {
+  const authToken = token || (await getAdminToken(request));
   const monto = Number(factura.saldo_pendiente ?? factura.total);
   const res = await request.post(`/api/facturas/${factura.id}/abonar`, {
+    headers: authHeaders(authToken),
     data: { monto, metodo_pago: metodoPago, notas: testTag('pagoFull') },
   });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to pay factura ${factura.id}: ${res.status()} ${await res.text()}`);
   }
-  const refreshed = await request.get(`/api/facturas/${factura.id}`);
+  const refreshed = await request.get(`/api/facturas/${factura.id}`, { headers: authHeaders(authToken) });
   return refreshed.json();
 }
 
@@ -882,7 +885,19 @@ async function deleteTestPrueba(request, id, token = null) {
 }
 
 /** Emits a factura (/api/facturas) via the API. */
-async function createTestFactura(request, { propietarioId, consultaId = null, detalles, ...overrides } = {}) {
+/**
+ * Creates a test factura (POST /api/facturas/). Exige sesión desde la
+ * revisión de etapa 8 (el router nunca tuvo require_roles -- hallazgo de
+ * seguridad, hoy corregido): admin/recepcionista/veterinario.
+ *
+ * A diferencia de createTestConsulta (que exige token desde etapa 4 y todos
+ * sus callers ya lo pasaban), NINGUNO de los ~15 call sites de este helper
+ * pasaba token -- el endpoint nunca lo había necesitado. Para no tener que
+ * tocar los 8 specs que lo usan, el fallback es incondicional: sin token
+ * explícito, se resuelve uno de admin acá mismo.
+ */
+async function createTestFactura(request, { propietarioId, consultaId = null, detalles, ...overrides } = {}, token = null) {
+  const authToken = token || (await getAdminToken(request));
   const payload = {
     propietario_id: propietarioId,
     consulta_id: consultaId,
@@ -892,17 +907,18 @@ async function createTestFactura(request, { propietarioId, consultaId = null, de
     ],
     ...overrides,
   };
-  const res = await request.post('/api/facturas/', { data: payload });
+  const res = await request.post('/api/facturas/', { headers: authHeaders(authToken), data: payload });
   if (!res.ok()) {
     throw new Error(`[amivets-e2e] Failed to create test factura: ${res.status()} ${await res.text()}`);
   }
   return res.json();
 }
 
-/** Voids a test factura. Best-effort — never throws. */
-async function anularTestFactura(request, id) {
+/** Voids a test factura. Best-effort — never throws. Mismo fallback que createTestFactura. */
+async function anularTestFactura(request, id, token = null) {
   try {
-    await request.post(`/api/facturas/${id}/anular`);
+    const authToken = token || (await getAdminToken(request));
+    await request.post(`/api/facturas/${id}/anular`, { headers: authHeaders(authToken) });
   } catch (_) {
     // best-effort cleanup
   }

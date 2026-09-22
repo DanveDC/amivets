@@ -9,17 +9,43 @@ from app.schemas.schemas import (
     FacturaCreate, FacturaUpdate, FacturaResponse, AbonoCreate, AbonoResponse,
     FacturaDesdeConsulta, DetalleFacturaCreate,
 )
-from app.models.models import Factura, Abono, Consulta
+from app.models.models import Factura, Abono, Consulta, Usuario
 from app.services.facturacion_service import FacturacionService
 from app.services.pdf_service import PDFService
+from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/facturas", tags=["Facturación"])
+
+# HALLAZGO DE SEGURIDAD (encontrado revisando la etapa 8 de Tarea 06, no
+# introducido por ella -- este router nunca tuvo Depends(require_roles) en
+# NINGUN endpoint, desde antes de Tarea 06). Confirmado en vivo contra el
+# stack real: POST /api/facturas/ sin token devolvia 201 y creaba una
+# factura de verdad. Se gatea TODO el router ahora.
+#
+# admin + recepcionista + veterinario en todos los endpoints (no solo
+# admin+recepcion, que es lo que dice la fila 19 de la matriz de permisos,
+# docs/diseno/ordenes-de-servicio.md decision 9): el veterinario YA
+# factura hoy en produccion via cerrarYFacturarConsulta()
+# (consultorio.js) -- POST /facturas/from-consulta/{id} -- que es el
+# cierre-y-cobro en un paso de una consulta (Tarea 09, decision 8), un
+# flujo que funciona para veterinarios desde antes de que existiera esta
+# matriz. Restringir a solo admin+recepcion rompe ese flujo YA EN USO.
+# La tension entre la matriz (fila 19: veterinario NO deberia facturar) y
+# este flujo real es una decision de producto, no algo para resolver acá
+# adivinando -- queda anotada para que el usuario la resuelva.
+#
+# gestor SI queda afuera de todo: ningun caller del frontend
+# (cmdk.js, facturacion.js, orden-abierta.js, consultorio.js, hoy.js) es
+# una pantalla alcanzable por gestor, y la matriz lo excluye en toda la
+# fila de dinero (filas 19-20).
+_ROLES_FACTURACION = ("admin", "recepcionista", "veterinario")
 
 
 @router.post("/", response_model=FacturaResponse, status_code=status.HTTP_201_CREATED)
 def crear_factura(
     factura: FacturaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """
     Crea una nueva factura y descuenta automáticamente el inventario.
@@ -37,6 +63,7 @@ def crear_factura_desde_consulta(
     consulta_id: int,
     body: Optional[FacturaDesdeConsulta] = None,
     db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Emite la factura de una consulta en un paso (Tarea 09, decisión 8).
 
@@ -88,7 +115,8 @@ def crear_factura_desde_consulta(
 @router.get("/{factura_id}", response_model=FacturaResponse)
 def obtener_factura(
     factura_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Obtiene una factura por ID con todos sus detalles"""
     factura = FacturacionService.obtener_factura(db, factura_id)
@@ -107,7 +135,8 @@ def listar_facturas(
     propietario_id: Optional[int] = None,
     estado: Optional[str] = None,
     search: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Lista todas las facturas con filtros opcionales (estado, propiedad, búsqueda)"""
     return FacturacionService.listar_facturas(db, skip, limit, propietario_id, estado, search)
@@ -117,7 +146,8 @@ def listar_facturas(
 def actualizar_factura(
     factura_id: int,
     factura: FacturaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Actualiza el estado o información de una factura"""
     factura_actualizada = FacturacionService.actualizar_factura(db, factura_id, factura)
@@ -132,7 +162,11 @@ def actualizar_factura(
 @router.post("/{factura_id}/anular", response_model=FacturaResponse)
 def anular_factura(
     factura_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Fila 20 de la matriz (decision 9): anular es exclusivo de admin --
+    # a diferencia del resto del router, acá NO se suma recepcionista ni
+    # veterinario.
+    _: Usuario = Depends(require_roles("admin")),
 ):
     """
     Anula una factura y devuelve el stock al inventario.
@@ -152,7 +186,8 @@ def anular_factura(
 @router.get("/pendientes/{consulta_id}")
 def obtener_items_pendientes(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Obtiene todos los items pendientes de cobro de una consulta"""
     return FacturacionService.obtener_items_pendientes_consulta(db, consulta_id)
@@ -160,7 +195,8 @@ def obtener_items_pendientes(
 @router.get("/mascota/{mascota_id}", response_model=List[FacturaResponse])
 def obtener_facturas_mascota(
     mascota_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Obtiene facturas asociadas a una mascota a través de sus consultas"""
     from app.models.models import Consulta, Factura
@@ -172,7 +208,8 @@ def obtener_facturas_mascota(
 def registrar_abono(
     factura_id: int,
     abono_data: AbonoCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Registra un pago parcial (abono) sobre una factura"""
     factura = db.query(Factura).filter(Factura.id == factura_id).first()
@@ -223,7 +260,8 @@ def registrar_abono(
 @router.get("/{factura_id}/abonos", response_model=List[AbonoResponse])
 def listar_abonos(
     factura_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Lista todos los abonos registrados para una factura"""
     factura = db.query(Factura).filter(Factura.id == factura_id).first()
@@ -237,7 +275,8 @@ def listar_abonos(
 def descargar_abono_pdf(
     factura_id: int,
     abono_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Genera y descarga el PDF del comprobante de abono"""
     abono = db.query(Abono).filter(Abono.id == abono_id, Abono.factura_id == factura_id).first()
@@ -260,7 +299,8 @@ def descargar_abono_pdf(
 @router.get("/{factura_id}/pdf")
 def descargar_factura_pdf(
     factura_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
     """Genera y descarga el PDF de una factura"""
     factura = FacturacionService.obtener_factura(db, factura_id)
