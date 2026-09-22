@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from app.core.database import get_db
 from app.models.models import AreaServicio, CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
-from app.routers.usuarios import get_current_user
+from app.routers.usuarios import require_roles
 from app.schemas.schemas import (
     CatalogoServicioCreate,
     CatalogoServicioUpdate,
@@ -20,6 +20,38 @@ from app.schemas.schemas import (
 from app.services.precio_service import registrar_cambio_precio, cuantizar_precio
 
 router = APIRouter(prefix="/api/catalogo", tags=["Catalogo de Servicios"])
+
+# HALLAZGO DE SEGURIDAD (Tarea 10): 4 endpoints (categorias, listar, obtener
+# por id, listar recetas) no tenian NINGUNA dependencia de auth. Los 7
+# restantes (crear/editar/desactivar servicio, ABM de receta) usaban
+# `get_current_user` -- exigian sesion, pero sin chequear `role`, lo que
+# contradice la fila 23 de la matriz de permisos (docs/diseno/
+# ordenes-de-servicio.md, decision 9, 9.3: "Editar catalogo, precios, areas,
+# requiere_adjunto" -- admin solo).
+#
+# Lectura (categorias, listar, obtener, historial-precios, recetas listar):
+# admin + recepcionista + veterinario + gestor. Es la union real de quien
+# consume estos endpoints hoy: orden-abierta.js y consultorio.js (ambos bajo
+# MASCOTAS_ROLES = admin/recepcion/veterinario) y bandeja-gestor.js (bajo
+# SERVICIOS_ROLES = admin/veterinario/gestor, resuelve el area de un item
+# via GET /catalogo/{id}).
+#
+# Escritura (crear/editar/desactivar servicio, ABM de receta): admin +
+# veterinario, NO admin-only pese a que la fila 23 dice admin solo. Tension
+# documentada, mismo criterio que facturas.py (commit 96484b0): la pestaña
+# "Catálogo" del front ya deja entrar a veterinario (router.js:59, roles:
+# ['admin','veterinario']) y catalogo.js:232 lo confirma en un comentario
+# ("Tarea 08: alta -> precio editable por cualquiera") -- el alta de un
+# servicio nuevo no bloquea el campo precio para veterinario, y en la edicion
+# el candado de precio (gatePrecioInput, historial-precios.js:344) es
+# puramente de UI: el veterinario SI puede enviar el PUT (solo se le oculta
+# el input). Restringir el router a admin-only habria roto un flujo real ya
+# en uso, asi que se respeta el flujo real: admin+veterinario en el gate del
+# endpoint, y el chequeo interno `current_user.role != "admin"` que ya existia
+# para `precio_ref`/`area_id`/`requiere_adjunto` (mas estricto que el gate del
+# endpoint) sigue intacto sin tocarlo.
+_ROLES_CATALOGO_LECTURA = ("admin", "recepcionista", "veterinario", "gestor")
+_ROLES_CATALOGO_ESCRITURA = ("admin", "veterinario")
 
 
 def _validar_area_activa(db: Session, area_id: Optional[int]) -> None:
@@ -37,7 +69,10 @@ def _validar_area_activa(db: Session, area_id: Optional[int]) -> None:
 
 
 @router.get("/categorias", response_model=List[str])
-def listar_categorias(db: Session = Depends(get_db)):
+def listar_categorias(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
     """Returns the list of unique active category names"""
     rows = (
         db.query(CatalogoServicio.categoria)
@@ -57,6 +92,7 @@ def listar_servicios(
     skip: int = 0,
     limit: int = 200,
     db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
 ):
     """List catalog services with optional category and text search filters"""
     query = db.query(CatalogoServicio)
@@ -77,7 +113,7 @@ def listar_servicios(
 def crear_servicio(
     servicio: CatalogoServicioCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
     """Create a new service in the catalog.
 
@@ -101,7 +137,11 @@ def crear_servicio(
 
 
 @router.get("/{servicio_id}", response_model=CatalogoServicioResponse)
-def obtener_servicio(servicio_id: int, db: Session = Depends(get_db)):
+def obtener_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
     """Get a catalog service by ID"""
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
@@ -114,7 +154,7 @@ def actualizar_servicio(
     servicio_id: int,
     data: CatalogoServicioUpdate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
     """Update a catalog service.
 
@@ -167,7 +207,7 @@ def historial_precios_servicio(
     desde: Optional[date] = Query(None, description="Filtra fecha_cambio desde este dia inclusive (YYYY-MM-DD)"),
     hasta: Optional[date] = Query(None, description="Filtra fecha_cambio hasta este dia inclusive (YYYY-MM-DD)"),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
 ):
     """Historial de precios de referencia del servicio, del mas nuevo al mas
     viejo (Tarea 08)."""
@@ -199,7 +239,7 @@ def historial_precios_servicio(
 def desactivar_servicio(
     servicio_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
     """Soft-delete a catalog service (sets activo=False)"""
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
@@ -218,7 +258,11 @@ def desactivar_servicio(
 
 
 @router.get("/{servicio_id}/recetas", response_model=List[RecetaServicioResponse])
-def listar_recetas_servicio(servicio_id: int, db: Session = Depends(get_db)):
+def listar_recetas_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
     """Lista los materiales declarados en la receta de un servicio del catalogo."""
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
@@ -242,7 +286,7 @@ def agregar_receta_servicio(
     servicio_id: int,
     data: RecetaServicioCreate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
     """Agrega una linea de material a la receta de un servicio.
 
@@ -297,7 +341,7 @@ def actualizar_receta_servicio(
     receta_id: int,
     data: RecetaServicioUpdate,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
     """Cambia la cantidad estandar o la unidad de una linea de receta."""
     receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
@@ -329,7 +373,7 @@ def actualizar_receta_servicio(
 def eliminar_receta_servicio(
     receta_id: int,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
     """Quita una linea de material de la receta."""
     receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()

@@ -48,7 +48,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
   });
 
   test('GET /categorias devuelve la lista de categorías activas (solo strings)', async ({ request }) => {
-    const res = await request.get('/api/catalogo/categorias');
+    const res = await request.get('/api/catalogo/categorias', { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const categorias = await res.json();
     expect(Array.isArray(categorias)).toBe(true);
@@ -151,7 +151,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
   });
 
   test('filtro por categoría y búsqueda de texto en GET /', async ({ request }) => {
-    const res = await request.get(`/api/catalogo/?categoria=FARMACIA&q=${encodeURIComponent(S.servicioAPI.nombre)}&solo_activos=true`);
+    const res = await request.get(`/api/catalogo/?categoria=FARMACIA&q=${encodeURIComponent(S.servicioAPI.nombre)}&solo_activos=true`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const items = await res.json();
     expect(items.length).toBeGreaterThanOrEqual(1);
@@ -164,12 +164,12 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(delRes.status()).toBe(204);
 
     // Ya no aparece con solo_activos=true (default).
-    const activosRes = await request.get('/api/catalogo/?limit=500');
+    const activosRes = await request.get('/api/catalogo/?limit=500', { headers: authHeaders(S.token) });
     const activos = await activosRes.json();
     expect(activos.some((s) => s.id === S.servicioAPI.id)).toBe(false);
 
     // Sigue existiendo (activo=false) — el GET puntual no filtra por activo.
-    const getRes = await request.get(`/api/catalogo/${S.servicioAPI.id}`);
+    const getRes = await request.get(`/api/catalogo/${S.servicioAPI.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).activo).toBe(false);
 
@@ -197,5 +197,29 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(recetaSinToken.status()).toBe(401);
 
     await request.delete(`/api/catalogo/${creado.id}`, { headers: authHeaders(S.token) });
+  });
+
+  test('catalogo: TODOS los endpoints rechazan sin token (Tarea 10 — 4 no tenían ninguna auth, 7 tenían login sin rol)', async ({ request }) => {
+    const servicio = await createTestCatalogoServicio(request);
+    const sinToken = { headers: {} };
+    try {
+      const checks = [
+        () => request.get('/api/catalogo/categorias', sinToken),
+        () => request.get('/api/catalogo/', sinToken),
+        () => request.post('/api/catalogo/', { ...sinToken, data: { nombre: 'x', categoria: 'FARMACIA' } }),
+        () => request.get(`/api/catalogo/${servicio.id}`, sinToken),
+        () => request.put(`/api/catalogo/${servicio.id}`, { ...sinToken, data: { nombre: 'x' } }),
+        () => request.get(`/api/catalogo/${servicio.id}/historial-precios`, sinToken),
+        () => request.delete(`/api/catalogo/${servicio.id}`, sinToken),
+        () => request.get(`/api/catalogo/${servicio.id}/recetas`, sinToken),
+        () => request.post(`/api/catalogo/${servicio.id}/recetas`, { ...sinToken, data: { inventario_id: 99999999, cantidad: 1, unidad_medida: 'unidad' } }),
+      ];
+      for (const hacerPedido of checks) {
+        const res = await hacerPedido();
+        expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+      }
+    } finally {
+      await deleteTestCatalogoServicio(request, servicio.id, S.token);
+    }
   });
 });
