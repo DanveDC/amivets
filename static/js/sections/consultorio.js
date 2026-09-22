@@ -2158,7 +2158,7 @@ const buildNotaForm = () => `
             </div>
             <div class="form-group">
                 <label for="notaTextoInput">Texto</label>
-                <textarea name="texto" id="notaTextoInput" class="form-control" rows="3" required placeholder="Ej: la dueña llamó, el animal sigue sin comer..."></textarea>
+                <textarea name="texto" id="notaTextoInput" class="form-control" rows="3" required placeholder="Ej: la tutora llamó, el animal sigue sin comer..."></textarea>
                 ${dictadoBotonHTML('notaTextoInput')}
             </div>
         </div>
