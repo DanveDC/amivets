@@ -1,3 +1,11 @@
+> **Superado** — este plan es de la Tarea 06 original (rediseño 1A), que
+> quedó reemplazada por `docs/tareas/06-sistema-por-ordenes-de-servicio.md` y
+> por `docs/diseno/navegacion-v2.md` (Decisión 1). El shell, el router y los
+> tokens que terminaron implementados son otros: `nocturne.css` y
+> `amivets.css` ya no existen (`b1d7fe0`), y la navegación es la de seis
+> módulos de `docs/diseno/arquitectura-informacion-v2.md`. Se conserva como
+> registro histórico de la propuesta descartada, no como contrato vigente.
+
 # Etapa 2 — Shell + router + troceo de `app.js`
 
 Contrato de la etapa 2 de la tarea 06. Depende de: `docs/diseno/1A-tokens.md`,
