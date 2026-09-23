@@ -1579,6 +1579,16 @@
             </section>
 
             <!-- Content Area: Inventario -->
+            <!-- sec-inventario — Tarea 11 (revisión de bocetos): reescrita
+                 fiel a docs/diseno/pantallas/Insumos.html (KPI + pills de
+                 categoría + nivel de stock). Las categorías del boceto
+                 (Medicamentos/Consumibles/...) son ilustrativas -- las
+                 pills acá salen de las categorías reales del inventario
+                 (igual criterio que /catalogo/categorias en Catálogo), no
+                 se hardcodean. La barra "Nivel" muestra % sobre el stock
+                 MÍNIMO, no un "% del máximo" -- InventarioResponse no tiene
+                 un campo de stock máximo/objetivo (ver
+                 docs/revision-integral-11.md, pendientes). -->
             <section id="sec-inventario" class="content-area spa-section">
                 <div class="content-header" style="flex-wrap:wrap; gap:0.75rem;">
                     <div>
@@ -1586,44 +1596,56 @@
                         <p style="color:var(--text-secondary); font-size:0.875rem; margin:0;">Gestión de productos, medicamentos y materiales.</p>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        <button class="av-btn" id="btnAlertasStock" style="color:var(--warning-dark); border-color:var(--warning); background:var(--warning-subtle);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Bajo Stock</button>
-                        <button class="av-btn av-btn--primary" id="btnNuevoProducto">+ Nuevo Producto</button>
+                        <button class="av-btn av-btn--primary" id="btnNuevoProducto">+ Nuevo producto</button>
                     </div>
                 </div>
 
-                <!-- Barra de búsqueda y filtro -->
-                <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap;">
-                    <input type="text" id="searchInventario" placeholder="Buscar por nombre, código o categoría..."
-                        class="search-input" style="flex:1; min-width:200px; margin:0;">
-                    <select id="filtroInventarioCategoria"
-                        style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.875rem; min-width:160px;">
-                        <option value="">Todas las categorías</option>
-                        <option value="Antibiótico">Antibiótico</option>
-                        <option value="Antiinflamatorio">Antiinflamatorio</option>
-                        <option value="Vacuna">Vacuna</option>
-                        <option value="Desparasitante">Desparasitante</option>
-                        <option value="Insumo">Insumo</option>
-                        <option value="Alimento">Alimento</option>
-                        <option value="Laboratorio">Laboratorio</option>
-                        <option value="Imagen">Imagen</option>
-                    </select>
+                <div class="rp-kpi-grid" id="invKpis" style="margin-bottom:14px;">
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Materiales activos</span>
+                        <span class="rp-kpi-value" id="invKpiActivos">—</span>
+                        <span class="rp-kpi-delta" id="invKpiActivosSub"></span>
+                    </div>
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Bajo mínimo</span>
+                        <span class="rp-kpi-value" id="invKpiBajoMinimo">—</span>
+                        <span class="rp-kpi-delta" id="invKpiBajoMinimoSub"></span>
+                    </div>
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Por reponer</span>
+                        <span class="rp-kpi-value" id="invKpiPorReponer">—</span>
+                        <span class="rp-kpi-delta" id="invKpiPorReponerSub"></span>
+                    </div>
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Valor del inventario</span>
+                        <span class="rp-kpi-value" id="invKpiValor">—</span>
+                        <span class="rp-kpi-delta">a costo de última compra</span>
+                    </div>
                 </div>
 
-                <div style="overflow-x:auto; border-radius:var(--radius-lg); border:1px solid var(--border);">
-                    <table class="consultas-table" style="margin:0;">
+                <div class="cat-toolbar">
+                    <div class="rp-pill-group" id="invCategoriaPills">
+                        <button type="button" class="rp-pill rp-pill--active" data-cat="">Todos</button>
+                    </div>
+                    <input type="text" id="searchInventario" placeholder="Buscar material..." class="search-input" style="flex:1; min-width:180px; margin:0;">
+                </div>
+
+                <div style="overflow-x:auto; border-radius:8px; border:1px solid var(--border); box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                    <table class="rp-table" style="margin:0; background:var(--surface);">
                         <thead>
                             <tr>
-                                <th>Producto / Código</th>
+                                <th>Código</th>
+                                <th>Material / Presentación</th>
                                 <th>Categoría</th>
-                                <th>Stock Actual</th>
-                                <th>Precio Unit.</th>
-                                <th>Vencimiento</th>
+                                <th>Stock actual</th>
+                                <th>Nivel</th>
+                                <th>Costo por unidad</th>
                                 <th>Estado</th>
                                 <th style="text-align:right;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="inventarioTableBody">
-                            <tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando inventario...</td></tr>
+                            <tr><td colspan="8" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando inventario...</td></tr>
                         </tbody>
                     </table>
                 </div>

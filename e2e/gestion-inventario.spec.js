@@ -143,6 +143,29 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     }
   });
 
+  // Tarea 11 (revisión de bocetos, fidelidad estructural a Insumos.html):
+  // KPI de "Bajo mínimo" y la pill homónima, que reemplazó al viejo botón
+  // "Bajo Stock" (duplicaba el renderizado completo en app.js).
+  test('KPI "Bajo mínimo" cuenta lo mismo que /alertas-stock, y la pill "Bajo mínimo" filtra la tabla', async ({ page, request }) => {
+    const lowProd = await createTestProduct(request, { stock_actual: 1, stock_minimo: 20, precio_unitario: 5, nombre: testTag('BajoMin') });
+    const okProd = await createTestProduct(request, { stock_actual: 80, stock_minimo: 5, precio_unitario: 5, nombre: testTag('BienSurtido') });
+
+    try {
+      const alertas = await (await request.get('/api/inventario/alertas-stock', { headers: authHeaders(S.token) })).json();
+
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-inventario');
+      await expect(page.locator('#invKpiBajoMinimo')).toHaveText(String(alertas.length), { timeout: 10000 });
+
+      await page.click('#invCategoriaPills .rp-pill:has-text("Bajo mínimo")');
+      await expect(page.locator('#inventarioTableBody')).toContainText(lowProd.nombre, { timeout: 5000 });
+      await expect(page.locator('#inventarioTableBody')).not.toContainText(okProd.nombre);
+    } finally {
+      await deleteTestProduct(request, lowProd.id);
+      await deleteTestProduct(request, okProd.id);
+    }
+  });
+
   test('baja por UI: confirmarEliminarProducto desactiva el producto (borrado lógico)', async ({ page, request }) => {
     page.on('dialog', (d) => d.accept()); // confirmarEliminarProducto pide confirm()
 

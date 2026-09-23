@@ -13,7 +13,7 @@
 // cargado antes (expone window.logout, usado por core/api.js).
 
 import { fetchAPI } from './core/api.js';
-import { ICONS, openModal, closeModal, debounce, showNotification } from './core/ui.js';
+import { openModal, closeModal, debounce, showNotification } from './core/ui.js';
 import { initSearchableSelect } from './core/select.js';
 import { initSession } from './core/session.js';
 import * as router from './core/router.js';
@@ -202,39 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('formMovimientoStock')?.addEventListener('submit', inventario.handleMovimientoStockSubmit);
     document.getElementById('btnNuevoProducto')?.addEventListener('click', () => openModal('modalProducto'));
     document.getElementById('searchInventario')?.addEventListener('input', debounce((e) => inventario.loadInventario(e.target.value), 300));
-    document.getElementById('filtroInventarioCategoria')?.addEventListener('change', () => inventario.loadInventario(document.getElementById('searchInventario')?.value || ''));
-    document.getElementById('btnAlertasStock')?.addEventListener('click', async () => {
-        const tbody = document.getElementById('inventarioTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Cargando alertas de stock...</td></tr>';
-        try {
-            const productos = await fetchAPI('/inventario/?bajo_stock=true&limit=200');
-            if (productos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--secondary); padding:2rem;">Todo el inventario está por encima del stock mínimo.</td></tr>';
-                return;
-            }
-            // Reusar el renderizado de loadInventario temporalmente
-            const bajStock = true;
-            tbody.innerHTML = productos.map(p => {
-                const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : '—';
-                const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:var(--accent); font-weight:700;' : '';
-                return `
-                <tr style="background:var(--accent-subtle);">
-                    <td>
-                        <div style="font-weight:600; color:var(--text-primary);">${p.nombre}</div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary);">${p.codigo}</div>
-                    </td>
-                    <td><span class="badge" style="background:var(--primary-subtle); color:var(--primary); font-size:0.75rem;">${p.categoria || '—'}</span></td>
-                    <td style="font-weight:700; color:var(--accent);">${p.stock_actual} <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">/ min ${p.stock_minimo}</span></td>
-                    <td class="num">$${(p.precio_unitario || 0).toFixed(2)}</td>
-                    <td style="${vencimientoStyle}">${vencimiento}</td>
-                    <td><span class="status-pill status-pill--warn">${ICONS.alertTriangle} BAJO</span></td>
-                    <td style="text-align:right;">
-                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${p.stock_actual})" style="font-size:0.75rem; padding:4px 8px;">${ICONS.box} Reponer</button>
-                    </td>
-                </tr>`;
-            }).join('');
-        } catch (err) { alert('Error: ' + err.message); }
-    });
+    // Tarea 11: el botón "Bajo Stock" (que duplicaba todo el renderizado de
+    // loadInventario inline, contra una tabla vieja de 7 columnas) se
+    // reemplaza por la pill "Bajo mínimo" de la propia sec-inventario --
+    // mismo filtro, un solo renderer (inventario.js::loadInventario).
     document.getElementById('btnShowModalUser')?.addEventListener('click', () => openModal('modalNuevoUsuario'));
     document.getElementById('formNuevoUsuario')?.addEventListener('submit', usuarios.handleNuevoUsuarioSubmit);
     document.getElementById('formEditarUsuario')?.addEventListener('submit', usuarios.handleEditarUsuarioSubmit);

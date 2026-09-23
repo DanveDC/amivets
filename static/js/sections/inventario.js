@@ -49,16 +49,83 @@ if (document.readyState === 'loading') {
     wireMaterialToggles();
 }
 
+// Tarea 11 (revisión de bocetos): pill de categoría activa. '' = Todos;
+// '__bajo_minimo__' es la pill sintética que reemplaza al viejo botón
+// "Bajo Stock" (que duplicaba todo el renderizado en app.js contra una
+// tabla de 7 columnas que ya no existe).
+let categoriaActiva = '';
+let pillsWired = false;
+
+const esBajoMinimo = (p) => Number(p.stock_actual) <= Number(p.stock_minimo);
+// "Por reponer": entre el mínimo y un 30% por encima (boceto Insumos.html:
+// "stock entre el mínimo y el 30%"). No cuenta lo que ya está bajo mínimo.
+const esPorReponer = (p) => {
+    const actual = Number(p.stock_actual);
+    const minimo = Number(p.stock_minimo);
+    return actual > minimo && actual <= minimo * 1.3;
+};
+
+const renderPills = (productos) => {
+    const cont = document.getElementById('invCategoriaPills');
+    if (!cont) return;
+    const categorias = [...new Set(productos.map(p => p.categoria).filter(Boolean))].sort();
+    const pillHtml = (valor, etiqueta) =>
+        `<button type="button" class="rp-pill${valor === categoriaActiva ? ' rp-pill--active' : ''}" data-cat="${valor === '__bajo_minimo__' ? '__bajo_minimo__' : (valor || '')}">${etiqueta}</button>`;
+    cont.innerHTML = [
+        pillHtml('', 'Todos'),
+        ...categorias.map(c => pillHtml(c, c)),
+        pillHtml('__bajo_minimo__', 'Bajo mínimo'),
+    ].join('');
+    if (!pillsWired) {
+        cont.addEventListener('click', (e) => {
+            const btn = e.target.closest('.rp-pill');
+            if (!btn) return;
+            categoriaActiva = btn.dataset.cat;
+            loadInventario(document.getElementById('searchInventario')?.value || '');
+        });
+        pillsWired = true;
+    }
+};
+
+const renderKpis = (todos) => {
+    // GET /inventario/ ya filtra activo==True en el backend (sin parametro
+    // solo_activos) -- 'todos' acá ya es 'todos los activos', no hace falta
+    // volver a filtrar.
+    const activos = todos;
+    const categoriasActivas = new Set(activos.map(p => p.categoria).filter(Boolean));
+    const bajoMinimo = activos.filter(esBajoMinimo);
+    const porReponer = activos.filter(esPorReponer);
+    const valorInventario = activos.reduce((acc, p) => acc + Number(p.stock_actual) * (p.precio_unitario || 0), 0);
+
+    document.getElementById('invKpiActivos').textContent = activos.length.toLocaleString('es-AR');
+    document.getElementById('invKpiActivosSub').textContent = `en ${categoriasActivas.size} categoría${categoriasActivas.size === 1 ? '' : 's'}`;
+
+    document.getElementById('invKpiBajoMinimo').textContent = bajoMinimo.length.toLocaleString('es-AR');
+    document.getElementById('invKpiBajoMinimo').className = `rp-kpi-value${bajoMinimo.length > 0 ? ' rp-kpi-value--down' : ''}`;
+    document.getElementById('invKpiBajoMinimoSub').textContent = bajoMinimo.length === 1 ? bajoMinimo[0].nombre : (bajoMinimo.length === 0 ? 'nada por debajo del mínimo' : `${bajoMinimo.length} materiales`);
+
+    document.getElementById('invKpiPorReponer').textContent = porReponer.length.toLocaleString('es-AR');
+    document.getElementById('invKpiPorReponerSub').textContent = 'stock entre el mínimo y +30%';
+
+    document.getElementById('invKpiValor').textContent = `$ ${valorInventario.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+};
+
 export const loadInventario = async (filtro = '') => {
     const tbody = document.getElementById('inventarioTableBody');
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Cargando...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Cargando...</td></tr>';
 
     try {
-        const categoriaFiltro = document.getElementById('filtroInventarioCategoria')?.value || '';
-        const url = `/inventario/?limit=200${categoriaFiltro ? `&categoria=${encodeURIComponent(categoriaFiltro)}` : ''}`;
-        let productos = await fetchAPI(url);
+        const todos = await fetchAPI('/inventario/?limit=2000');
+        renderKpis(todos);
+        renderPills(todos);
 
-        // Filtro de texto local
+        let productos = todos;
+        if (categoriaActiva === '__bajo_minimo__') {
+            productos = productos.filter(esBajoMinimo);
+        } else if (categoriaActiva) {
+            productos = productos.filter(p => p.categoria === categoriaActiva);
+        }
+
         if (filtro) {
             const q = filtro.toLowerCase();
             productos = productos.filter(p =>
@@ -69,56 +136,58 @@ export const loadInventario = async (filtro = '') => {
         }
 
         if (productos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No se encontraron productos.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-muted);">No se encontraron materiales.</td></tr>';
             return;
         }
 
         tbody.innerHTML = productos.map(p => {
             const stockActual = Number(p.stock_actual);
             const stockMinimo = Number(p.stock_minimo);
-            const bajStock = stockActual <= stockMinimo;
-            const stockColor = (bajStock || stockActual < 0) ? 'var(--accent)' : 'var(--secondary)';
-            const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : '—';
-            const vencimientoStyle = p.fecha_vencimiento && new Date(p.fecha_vencimiento) < new Date() ? 'color:var(--accent); font-weight:700;' : '';
-            const tipoPill = p.tipo_item === 'MATERIAL'
-                ? `<span class="badge" style="background:var(--secondary-subtle); color:var(--secondary-dark); font-size:0.7rem; margin-left:4px;">Material</span>`
-                : `<span class="badge" style="background:var(--surface-hover); color:var(--text-secondary); font-size:0.7rem; margin-left:4px;">Producto</span>`;
+            const bajStock = esBajoMinimo(p);
+            const vencimiento = p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : null;
+            const vencido = vencimiento && new Date(p.fecha_vencimiento) < new Date();
+            // % sobre el mínimo (no "% del máximo" del boceto: no hay campo
+            // de stock objetivo/máximo en el modelo). Se tapa en 100% para
+            // que la barra no se salga del contenedor con stock muy alto.
+            const pctMinimo = stockMinimo > 0 ? Math.min(100, (stockActual / stockMinimo) * 100) : (stockActual > 0 ? 100 : 0);
+            const barColor = bajStock ? 'var(--accent)' : (esPorReponer(p) ? 'var(--warning)' : 'var(--primary)');
+            const tipoPill = p.tipo_item === 'MATERIAL' ? 'Material' : 'Producto';
             return `
             <tr>
+                <td class="rp-num" style="color:var(--text-secondary);">${p.codigo}</td>
                 <td>
-                    <div style="font-weight:600; color:var(--text-primary);">${p.nombre}</div>
-                    <div style="font-size:0.75rem; color:var(--text-secondary);">${p.codigo}</div>
+                    <div style="font-weight:500; color:var(--text-primary);">${p.nombre}</div>
+                    <div style="font-size:12px; color:var(--text-muted);">${formatStockDisplay(p)} · ${tipoPill}${vencimiento ? ` · vence ${vencimiento}` : ''}</div>
                 </td>
+                <td><span class="av-pill">${p.categoria || '—'}</span></td>
+                <td class="rp-num" style="font-weight:500;">${fmtNum(stockActual)} <span style="font-size:11.5px; color:var(--text-muted); font-weight:400;">${p.unidad_medida || ''}</span></td>
                 <td>
-                    <span class="badge" style="background:var(--primary-subtle); color:var(--primary); font-size:0.75rem;">${p.categoria || '—'}</span>
-                    ${tipoPill}
+                    <div class="rp-progress" style="width:88px;"><div class="rp-progress-fill" style="width:${pctMinimo.toFixed(0)}%; background:${barColor};"></div></div>
+                    <span style="font-size:11px; color:var(--text-muted);">${pctMinimo.toFixed(0)}% del mínimo</span>
                 </td>
-                <td style="font-weight:700; color:${stockColor}">
-                    ${formatStockDisplay(p)}
-                    <span style="font-size:0.75rem; font-weight:400; color:var(--text-muted);">/ min ${fmtNum(p.stock_minimo)}</span>
-                </td>
-                <td class="num">$${(p.precio_unitario || 0).toFixed(2)}</td>
-                <td style="${vencimientoStyle}">${vencimiento}</td>
+                <td class="rp-num" style="color:var(--text-secondary);">$ ${(p.precio_unitario || 0).toFixed(2)}</td>
                 <td>${bajStock
-                    ? `<span class="status-pill status-pill--warn">${ICONS.alertTriangle} Bajo</span>`
-                    : `<span class="status-pill status-pill--ok">${ICONS.checkCircle} OK</span>`}</td>
+                    ? `<span class="av-pill av-pill--warn">Bajo mínimo</span>`
+                    : (vencido ? `<span class="av-pill av-pill--warn">Vencido</span>` : `<span class="av-pill av-pill--ok">Disponible</span>`)}</td>
                 <td style="text-align:right;">
                     <div class="row-actions">
-                        <button class="btn-secondary btn-sm" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${stockActual})" title="Ajustar stock" aria-label="Ajustar stock" style="font-size:0.75rem; padding:4px 8px;">${ICONS.box} Stock</button>
-                        <button class="btn-secondary btn-sm btn-historial-precios" onclick="abrirHistorialProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Historial de precios" aria-label="Historial de precios" style="font-size:0.75rem; padding:4px 8px;">${ICONS.dollar}</button>
-                        <button class="btn-secondary btn-sm" onclick="abrirEditarProducto(${p.id})" title="Editar" aria-label="Editar" style="font-size:0.75rem; padding:4px 8px;">${ICONS.edit}</button>
-                        <button class="btn-secondary btn-sm btn-row-danger" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" aria-label="Desactivar" style="font-size:0.75rem; padding:4px 8px;">${ICONS.trash}</button>
+                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${stockActual})" title="Ajustar stock" aria-label="Ajustar stock">${ICONS.box}</button>
+                        <button class="av-btn btn-historial-precios" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirHistorialProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Historial de precios" aria-label="Historial de precios">${ICONS.dollar}</button>
+                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirEditarProducto(${p.id})" title="Editar" aria-label="Editar">${ICONS.edit}</button>
+                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px; color:var(--accent); border-color:var(--accent);" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" aria-label="Desactivar">${ICONS.trash}</button>
                     </div>
                 </td>
             </tr>`;
         }).join('');
 
-        // Actualizar badge (comparación numérica decimal-safe)
-        const lowStock = productos.filter(p => Number(p.stock_actual) <= Number(p.stock_minimo)).length;
-        document.getElementById('badgeStock').textContent = lowStock > 0 ? lowStock : '';
+        const badge = document.getElementById('badgeStock');
+        if (badge) {
+            const lowStock = todos.filter(p => p.activo && esBajoMinimo(p)).length;
+            badge.textContent = lowStock > 0 ? lowStock : '';
+        }
 
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color:var(--accent);">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color:var(--accent);">Error: ${error.message}</td></tr>`;
     }
 };
 
