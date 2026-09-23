@@ -1440,6 +1440,7 @@ const switchPetTab = (rawTabName) => {
         case 'resumen':
             contentArea.innerHTML = `
                 <div id="resumenAlertas"></div>
+                <div id="resumenConstantes"></div>
                 <div id="historiaResumen" style="width: 100%; text-align: left;"></div>
                 <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-top: 1.25rem;">
                     <h3 style="margin-top: 0; color: var(--text-primary); text-align: center; font-size: 1.05rem;">Evolución de Peso</h3>
@@ -1564,9 +1565,49 @@ const renderHistoriaTab = async () => {
 
 // Tarea 09: "Resumen" funde la vieja pestaña "Historia Clínica" + "Evol. Peso" +
 // una franja de alertas del paciente (observaciones) arriba de todo.
+// Tarea 11 (revisión de bocetos, FichaMascota.html): "Constantes recientes"
+// (peso/temperatura/frecuencia cardíaca de la última consulta que las
+// registró). Reusa GET /consultas/?mascota_id -- no hay endpoint de
+// "últimas constantes", así que se pide un lote reciente y se toma la
+// primera fila con al menos un valor cargado (no todas las consultas
+// registran los tres). "Alergia" del boceto no se copia: no hay campo de
+// alergias en el modelo (Mascota.observaciones es texto libre general, no
+// un campo dedicado) -- ver docs/revision-integral-11.md, pendientes.
+const renderConstantesRecientes = async () => {
+    const box = document.getElementById('resumenConstantes');
+    if (!box || !currentMascotaId) return;
+    try {
+        const consultas = await fetchAPI(`/consultas/?mascota_id=${currentMascotaId}&limit=10`);
+        const ordenadas = (consultas || [])
+            .filter(c => c.estado !== 'ANULADA')
+            .sort((a, b) => new Date(b.fecha_consulta) - new Date(a.fecha_consulta));
+        const conConstantes = ordenadas.find(c => c.peso != null || c.temperatura != null || c.frecuencia_cardiaca != null);
+        if (!conConstantes) { box.innerHTML = ''; return; }
+
+        const fila = (label, valor) => valor == null ? '' : `
+            <div style="display:flex; justify-content:space-between; padding:7px 0; border-top:1px solid var(--border-light); font-size:13px;">
+                <span style="color:var(--text-secondary);">${label}</span>
+                <span style="font-family:var(--font-mono); font-weight:500;">${valor}</span>
+            </div>`;
+        box.innerHTML = `
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,.03); padding:16px 18px; margin-bottom:0.75rem;">
+                <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:2px;">
+                    <span style="font-size:14px; font-weight:600;">Constantes recientes</span>
+                    <span style="font-size:11.5px; color:var(--text-muted);">${new Date(conConstantes.fecha_consulta).toLocaleDateString('es-AR')}</span>
+                </div>
+                ${fila('Peso', conConstantes.peso != null ? `${Number(conConstantes.peso).toFixed(1)} kg` : null)}
+                ${fila('Temperatura', conConstantes.temperatura != null ? `${Number(conConstantes.temperatura).toFixed(1)} °C` : null)}
+                ${fila('Frec. cardíaca', conConstantes.frecuencia_cardiaca != null ? `${Number(conConstantes.frecuencia_cardiaca).toFixed(0)} lpm` : null)}
+            </div>`;
+    } catch (_) {
+        box.innerHTML = '';
+    }
+};
+
 const renderResumenTab = async () => {
     const alertBox = document.getElementById('resumenAlertas');
     renderHistoriaTab();
+    renderConstantesRecientes();
     if (!alertBox) return;
     try {
         const m = await fetchAPI(`/mascotas/${currentMascotaId}`);
