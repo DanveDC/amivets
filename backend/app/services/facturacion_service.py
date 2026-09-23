@@ -164,9 +164,16 @@ class FacturacionService:
             subtotal = subtotal or 0.0
             descuento = (factura_data.descuento or 0.0)
             impuesto = (factura_data.impuesto or 0.0)
-            pago = (factura_data.total_pagado or 0.0)
-            
+
             total = subtotal - descuento + impuesto
+            # Hallazgo de revisión (Tarea 11): total_pagado llegaba del
+            # cliente sin tope contra `total` -- antes de esta tarea siempre
+            # se mandaba 0.0 desde el único caller real (orden-abierta.js),
+            # así que no se notaba, pero el nuevo checkout ("Facturar orden",
+            # #modalFacturarOrden) ya arma total_pagado en el cliente. Se
+            # acota server-side para que un pago manipulado no pueda quedar
+            # registrado por encima del total real de la factura.
+            pago = max(0.0, min(factura_data.total_pagado or 0.0, total))
             saldo_pendiente = total - pago
             if saldo_pendiente <= 0:
                 estado = "PAGADA"
