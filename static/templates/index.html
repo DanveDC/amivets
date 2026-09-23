@@ -2245,6 +2245,64 @@
         </div>
     </div>
 
+    <!-- Modal: Facturar orden — Tarea 11 (revisión de bocetos, fidelidad
+         estructural a Facturacion.html). Antes "Facturar orden" creaba la
+         factura directo por API con total_pagado:0.0 y metodo_pago vacío,
+         sin ningún paso de revisión ni selección de forma de pago -- el
+         checkout del boceto no existía en ningún lado de la app. Reusa
+         POST /api/facturas/, que ya acepta metodo_pago y total_pagado
+         (FacturaBase); orden-abierta.js nunca los mandaba. -->
+    <div id="modalFacturarOrden" class="modal">
+        <div class="modal-content" style="max-width:460px;">
+            <div class="modal-header">
+                <h2>Facturar orden</h2>
+                <span class="close" data-modal="modalFacturarOrden" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <div style="padding:1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">
+                    <span style="font-size:14px; font-weight:600; color:var(--text-primary);">Conceptos a cobrar</span>
+                    <span id="facOrdenNumero" style="font-size:12px; color:var(--text-muted);"></span>
+                </div>
+                <div id="facOrdenConceptos" style="display:flex; flex-direction:column; gap:2px; margin-bottom:0.75rem; max-height:180px; overflow-y:auto;"></div>
+
+                <div class="cat-hr" style="margin:0.75rem 0;"></div>
+
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1rem;">
+                    <strong style="font-size:14px;">Total</strong>
+                    <span id="facOrdenTotal" class="rp-num" style="font-size:24px; font-weight:500; letter-spacing:-0.02em;">$ 0,00</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Forma de pago</label>
+                    <div id="facOrdenMetodos" style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                            <input type="radio" name="facOrdenMetodo" value="EFECTIVO" checked style="width:auto;"> Efectivo
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                            <input type="radio" name="facOrdenMetodo" value="TARJETA" style="width:auto;"> Punto de venta / Tarjeta
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                            <input type="radio" name="facOrdenMetodo" value="TRANSFERENCIA" style="width:auto;"> Transferencia / Zelle
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="checkbox" id="facOrdenPagaAhora" checked style="width:auto;">
+                    <label for="facOrdenPagaAhora" style="margin:0;">Cobrar el total ahora</label>
+                </div>
+                <p id="facOrdenPendienteNota" hidden style="font-size:12.5px; color:var(--text-muted); margin:0 0 1rem;">
+                    La factura queda pendiente de cobro; se abona después desde Facturación.
+                </p>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalFacturarOrden">Cancelar</button>
+                    <button type="button" class="av-btn av-btn--primary" id="btnConfirmarFacturarOrden">Emitir factura</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Catalogo Servicio -->
     <div id="modalCatalogoServicio" class="modal">
         <div class="modal-content" style="max-width:480px;">

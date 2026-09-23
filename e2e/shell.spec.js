@@ -469,7 +469,13 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
 
       // La línea CONSULTA nace EJECUTADA (atajo sin despacho): nada que
       // confirmar, se puede facturar directo.
+      // Tarea 11: "Facturar orden" ahora abre el checkout del boceto
+      // Facturacion.html (conceptos + forma de pago) en vez de crear la
+      // factura directo -- se confirma con "Emitir factura".
       await page.locator('#btnOaFacturar').click();
+      await expect(page.locator('#modalFacturarOrden')).toBeVisible();
+      await expect(page.locator('#facOrdenTotal')).not.toHaveText('$0.00');
+      await page.locator('#btnConfirmarFacturarOrden').click();
       await expect(page.locator('.notification-toast')).toContainText(/[Ff]actura/, { timeout: 10000 });
 
       // /api/facturas/ no tiene filtro por consulta_id -- se filtra por

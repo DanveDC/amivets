@@ -33,7 +33,7 @@
 //   diferido) -- esto es el mínimo que evita perder plata real.
 
 import { fetchAPI } from '../core/api.js';
-import { showNotification, openModal, closeModal, debounce } from '../core/ui.js';
+import { showNotification, openModal, closeModal, debounce, escapeHtml } from '../core/ui.js';
 import { money, totalServicios } from '../core/format.js';
 import { showSection } from '../core/router.js';
 
@@ -205,13 +205,47 @@ async function confirmarServicios() {
     }
 }
 
-async function facturarOrden() {
-    if (!_ordenData) return;
-    const servicios = (_ordenData.servicios || []).filter(s => !s.is_deleted && s.estado !== 'FACTURADO' && s.estado !== 'CANCELADO');
+// Tarea 11 (revisión de bocetos, fidelidad estructural a Facturacion.html):
+// antes esto llamaba a POST /facturas/ directo, sin forma de pago ni cobro
+// -- el checkout del boceto (conceptos a cobrar, forma de pago, "Emitir
+// factura") no existía en ningún lado de la app. Ahora abre
+// #modalFacturarOrden con el mismo cálculo de servicios pendientes; el POST
+// real queda en confirmarFacturarOrden().
+function serviciosPendientesDeFacturar() {
+    if (!_ordenData) return [];
+    return (_ordenData.servicios || []).filter(s => !s.is_deleted && s.estado !== 'FACTURADO' && s.estado !== 'CANCELADO');
+}
+
+function facturarOrden() {
+    const servicios = serviciosPendientesDeFacturar();
     if (servicios.length === 0) {
         showNotification('No hay servicios pendientes de facturar en esta orden.', 'warning');
         return;
     }
+    const total = servicios.reduce((acc, s) => acc + (s.precio_unitario || 0) * Math.max(1, Math.round(s.cantidad || 1)), 0);
+
+    document.getElementById('facOrdenNumero').textContent = `orden ${_ordenData.numero || _ordenId}`;
+    document.getElementById('facOrdenConceptos').innerHTML = servicios.map(s => `
+        <div style="display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0;">
+            <span style="color:var(--text-secondary);">${escapeHtml(s.nombre_servicio || s.tipo_servicio)}</span>
+            <span class="rp-num" style="white-space:nowrap;">${money((s.precio_unitario || 0) * Math.max(1, Math.round(s.cantidad || 1)))}</span>
+        </div>`).join('');
+    document.getElementById('facOrdenTotal').textContent = money(total);
+    document.querySelector('input[name="facOrdenMetodo"][value="EFECTIVO"]').checked = true;
+    document.getElementById('facOrdenPagaAhora').checked = true;
+    document.getElementById('facOrdenPendienteNota').hidden = true;
+
+    openModal('modalFacturarOrden');
+}
+
+async function confirmarFacturarOrden() {
+    const servicios = serviciosPendientesDeFacturar();
+    if (servicios.length === 0) return;
+
+    const metodoPago = document.querySelector('input[name="facOrdenMetodo"]:checked')?.value || 'EFECTIVO';
+    const pagaAhora = document.getElementById('facOrdenPagaAhora')?.checked;
+    const total = servicios.reduce((acc, s) => acc + (s.precio_unitario || 0) * Math.max(1, Math.round(s.cantidad || 1)), 0);
+
     // La línea CONSULTA (si la orden tiene una y sigue pendiente) ancla la
     // factura a la consulta -- sin esto la liquidación del veterinario se
     // rompe en silencio. Ver la nota al inicio del archivo. Se busca en
@@ -227,7 +261,8 @@ async function facturarOrden() {
             body: JSON.stringify({
                 propietario_id: _ordenData.propietario_id,
                 ...(lineaConsulta ? { consulta_id: lineaConsulta.referencia_id } : {}),
-                total_pagado: 0.0,
+                metodo_pago: metodoPago,
+                total_pagado: pagaAhora ? total : 0.0,
                 descuento: 0.0,
                 impuesto: 0.0,
                 detalles: servicios.map(s => ({
@@ -238,7 +273,8 @@ async function facturarOrden() {
                 })),
             }),
         });
-        showNotification(`Factura #${factura.numero_factura || factura.id} emitida.`, 'success');
+        closeModal('modalFacturarOrden');
+        showNotification(`Factura #${factura.numero_factura || factura.id} emitida${pagaAhora ? ' y cobrada' : ''}.`, 'success');
         await cargarOrden();
     } catch (e) {
         showNotification('No se pudo facturar la orden: ' + e.message, 'error');
@@ -424,6 +460,10 @@ export const initOrdenAbierta = () => {
 
     document.getElementById('btnOaConfirmar')?.addEventListener('click', confirmarServicios);
     document.getElementById('btnOaFacturar')?.addEventListener('click', facturarOrden);
+    document.getElementById('btnConfirmarFacturarOrden')?.addEventListener('click', confirmarFacturarOrden);
+    document.getElementById('facOrdenPagaAhora')?.addEventListener('change', (e) => {
+        document.getElementById('facOrdenPendienteNota').hidden = e.target.checked;
+    });
     document.getElementById('btnOaCerrar')?.addEventListener('click', cerrarOrden);
     document.getElementById('btnOaAnular')?.addEventListener('click', () => {
         document.getElementById('anularOrdenMotivo').value = '';
