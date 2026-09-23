@@ -852,3 +852,69 @@
   .rp-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rp-main-grid { grid-template-columns: 1fr; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   CATÁLOGO — sec-catalogo, maestro-detalle (Tarea 11, fidelidad estructural
+   a docs/diseno/pantallas/Catalogo.html). Grid 352px + 1fr, valores
+   literales del boceto (radio 8px, sombra 0 1px 2px rgba(0,0,0,.03)).
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.cat-toolbar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
+
+.cat-grid {
+  display: grid; grid-template-columns: 352px minmax(0, 1fr); gap: 14px;
+  align-items: start;
+}
+
+.cat-master {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03); padding: 16px 4px 8px;
+}
+.cat-master-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; padding: 0 14px; }
+.cat-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; max-height: 70vh; overflow-y: auto; }
+
+.cat-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px;
+  border: 1px solid transparent; background: transparent; cursor: pointer; text-align: left;
+  font-family: inherit; width: 100%;
+}
+.cat-item:hover { background: var(--surface-hover); }
+.cat-item--active { border-color: var(--primary); background: var(--primary-subtle); }
+.cat-item--inactivo { opacity: 0.55; }
+.cat-item-info { display: flex; flex-direction: column; line-height: 1.35; flex-grow: 1; min-width: 0; }
+.cat-item-nombre { font-size: 13.5px; font-weight: 450; color: var(--text-primary); }
+.cat-item--active .cat-item-nombre { font-weight: 600; }
+.cat-item-sub { font-size: 12px; color: var(--text-muted); }
+.cat-item-precio { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 500; white-space: nowrap; }
+
+.cat-detail {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03); padding: 20px 22px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.cat-detail-head { display: flex; align-items: flex-start; gap: 12px; }
+.cat-detail-heading { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; }
+.cat-detail-nombre { font-size: 21px; color: var(--text-primary); }
+.cat-detail-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cat-detail-precio { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; white-space: nowrap; }
+.cat-hr { height: 1px; background: var(--border); }
+
+.cat-detail-section { display: flex; flex-direction: column; gap: 9px; }
+.cat-detail-section-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
+.cat-agregar-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px; background: var(--surface-hover); border-radius: 6px; }
+.cat-agregar-row select, .cat-agregar-row input { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; background: var(--surface); }
+
+.cat-receta-table { margin-top: 2px; }
+.cat-cantidad-input { height: 30px; width: 56px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); text-align: center; font-family: var(--font-mono); font-size: 13px; }
+.cat-icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; display: inline-flex; }
+.cat-icon-btn:hover { color: var(--accent); }
+
+.cat-hist-list { display: flex; flex-direction: column; }
+.cat-hist-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border-light); }
+.cat-hist-row:first-child { border-top: none; }
+
+@media (max-width: 1100px) {
+  .cat-grid { grid-template-columns: 1fr; }
+  .cat-list { max-height: 40vh; }
+}

@@ -20,6 +20,8 @@ const {
   testTag,
   createTestCatalogoServicio,
   deleteTestCatalogoServicio,
+  createTestProduct,
+  deleteTestProduct,
   gotoSection,
 } = require('./helpers');
 
@@ -67,7 +69,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     await gotoSection(page, 'sec-catalogo');
     await expect(page.locator('#sec-catalogo')).toBeVisible();
 
-    await page.click('button:has-text("+ Nuevo Servicio")');
+    await page.click('button:has-text("+ Nuevo servicio")');
     await expect(page.locator('#modalCatalogoServicio')).toBeVisible();
     await page.fill('#catalogoNombre', nombre);
     await page.selectOption('#catalogoCategoria', 'LABORATORIO');
@@ -89,9 +91,10 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(creado.activo).toBe(true);
     S.servicioUI = creado;
 
-    // guardarServicio() llama cargarCatalogo() al cerrar: la fila ya está en la tabla.
+    // guardarServicio() llama cargarCatalogo() al cerrar: la lista maestra
+    // (Tarea 11, maestro-detalle) ya tiene el ítem.
     await page.fill('#catalogoSearch', nombre);
-    await expect(page.locator('#catalogoBody')).toContainText(nombre);
+    await expect(page.locator('#catalogoLista')).toContainText(nombre);
   });
 
   test('edición por UI: cambiar nombre, categoría y precio, contrastado contra la API', async ({ page, request }) => {
@@ -100,9 +103,14 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     await loginAsAdmin(page);
     await gotoSection(page, 'sec-catalogo');
     await page.fill('#catalogoSearch', S.servicioUI.nombre);
-    await expect(page.locator('#catalogoBody')).toContainText(S.servicioUI.nombre);
+    await expect(page.locator('#catalogoLista')).toContainText(S.servicioUI.nombre);
 
-    await page.click(`#catalogoBody tr:has-text("${S.servicioUI.nombre}") button:has-text("Editar")`);
+    // Maestro-detalle (Tarea 11): un solo resultado del filtro se
+    // auto-selecciona; el botón "Editar" vive en el panel de detalle, no en
+    // la fila. Igual se clickea el ítem primero para no asumir el auto-select.
+    await page.click(`.cat-item:has-text("${S.servicioUI.nombre}")`);
+    await expect(page.locator('#catalogoDetalle')).toContainText(S.servicioUI.nombre);
+    await page.click('#btnCatEditar');
     await expect(page.locator('#modalCatalogoServicio')).toBeVisible();
     // abrirModalServicio(id) hace GET /catalogo/{id} y prellena el form.
     await expect(page.locator('#catalogoNombre')).toHaveValue(S.servicioUI.nombre);
@@ -197,6 +205,77 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(recetaSinToken.status()).toBe(401);
 
     await request.delete(`/api/catalogo/${creado.id}`, { headers: authHeaders(S.token) });
+  });
+
+  // Tarea 11 (revisión de bocetos, fidelidad estructural a Catalogo.html):
+  // el panel maestro-detalle deja "Insumos que consume" e "Historial de
+  // precios" siempre visibles para el servicio seleccionado, en vez de dos
+  // pasos dentro de un modal de edición. Cubre el recorrido completo por UI.
+  test('panel de detalle: insumos que consume y su costo, agregar uno nuevo por UI, historial de precios tras una edición', async ({ page, request }) => {
+    const token = await getAdminToken(request);
+    const material = await createTestProduct(request, {
+      nombre: testTag('Gasa'),
+      tipo_item: 'MATERIAL',
+      unidad_medida: 'unidad',
+      precio_unitario: 2.5,
+    }, token);
+    const servicio = await createTestCatalogoServicio(request, { categoria: 'LABORATORIO', precio_ref: 50 });
+    await request.post(`/api/catalogo/${servicio.id}/recetas`, {
+      data: { inventario_id: material.id, cantidad: 3, unidad_medida: 'unidad' },
+      headers: authHeaders(token),
+    });
+
+    try {
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-catalogo');
+      await page.fill('#catalogoSearch', servicio.nombre);
+      await page.click(`.cat-item:has-text("${servicio.nombre}")`);
+
+      // El insumo sembrado aparece con su costo (3 * 2.50 = 7.50).
+      const filaExistente = page.locator('#catRecetaBody tr', { hasText: material.nombre });
+      await expect(filaExistente).toBeVisible();
+      await expect(filaExistente).toContainText('7,50');
+      // costo de insumos del encabezado = el total de la receta.
+      await expect(page.locator('#catalogoDetalle')).toContainText('costo de insumos $ 7,50');
+
+      // Agregar un segundo insumo por UI (no por API): otro material de prueba.
+      const material2 = await createTestProduct(request, {
+        nombre: testTag('Jeringa'),
+        tipo_item: 'MATERIAL',
+        unidad_medida: 'unidad',
+        precio_unitario: 1,
+      }, token);
+      try {
+        await page.click('#btnCatAgregarInsumo');
+        await page.selectOption('#catMaterialSelect', String(material2.id));
+        await page.fill('#catMaterialCantidad', '2');
+        await page.click('#btnCatConfirmarInsumo');
+
+        const filaNueva = page.locator('#catRecetaBody tr', { hasText: material2.nombre });
+        await expect(filaNueva).toBeVisible({ timeout: 5000 });
+
+        const recetasRes = await request.get(`/api/catalogo/${servicio.id}/recetas`, { headers: authHeaders(token) });
+        const recetas = await recetasRes.json();
+        expect(recetas.some((r) => r.inventario_id === material2.id && Number(r.cantidad) === 2)).toBe(true);
+      } finally {
+        await deleteTestProduct(request, material2.id, token);
+      }
+
+      // Historial de precios: todavía sin cambios para este servicio nuevo.
+      await expect(page.locator('.cat-hist-list')).toContainText('Sin cambios de precio registrados');
+
+      // Editar el precio por UI y confirmar que el historial inline lo refleja.
+      await page.click('#btnCatEditar');
+      await page.fill('#catalogoPrecioRef', '65');
+      await page.click('#formCatalogoServicio button[type="submit"]');
+      await expect(page.locator('#modalCatalogoServicio')).toBeHidden();
+
+      await expect(page.locator('.cat-hist-list')).toContainText('$ 65,00', { timeout: 5000 });
+      await expect(page.locator('.cat-hist-list')).not.toContainText('Sin cambios de precio registrados');
+    } finally {
+      await deleteTestCatalogoServicio(request, servicio.id, token);
+      await deleteTestProduct(request, material.id, token);
+    }
   });
 
   test('catalogo: TODOS los endpoints rechazan sin token (Tarea 10 — 4 no tenían ninguna auth, 7 tenían login sin rol)', async ({ request }) => {

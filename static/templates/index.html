@@ -2155,39 +2155,43 @@
             </section>
 
             <!-- Catalogo de Servicios -->
+            <!-- sec-catalogo — Tarea 11 (revisión de bocetos): reescrita
+                 maestro-detalle fiel a docs/diseno/pantallas/Catalogo.html
+                 (grid 352px + 1fr). El backend ya soportaba recetas e
+                 historial de precios por servicio (Tarea 07/08) -- vivían
+                 dentro del modal de edición, acá quedan siempre visibles
+                 para el servicio seleccionado, igual que dibuja el boceto. -->
             <section id="sec-catalogo" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Catálogo de Servicios</h2>
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:1rem; flex-wrap:wrap;">
-                    <div style="display:flex; gap:0.75rem; flex:1; flex-wrap:wrap;">
-                        <input type="text" id="catalogoSearch" placeholder="Buscar servicio..." class="search-input" style="flex:1; min-width:180px;" oninput="cargarCatalogo()">
-                        <select id="catalogoCategoriaFilter" style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.9rem; background:var(--surface);" onchange="cargarCatalogo()">
-                            <option value="">Todas las categorías</option>
-                        </select>
-                    </div>
-                    <button class="av-btn av-btn--primary" onclick="abrirModalServicio()">+ Nuevo Servicio</button>
+                <div class="cat-toolbar">
+                    <input type="text" id="catalogoSearch" placeholder="Buscar servicio..." class="search-input" style="flex:1; min-width:180px; margin:0;" oninput="cargarCatalogo()">
+                    <select id="catalogoCategoriaFilter" style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.9rem; background:var(--surface);" onchange="cargarCatalogo()">
+                        <option value="">Todas las categorías</option>
+                    </select>
+                    <button class="av-btn av-btn--primary" onclick="abrirModalServicio()">+ Nuevo servicio</button>
                 </div>
 
-                <div style="overflow-x:auto;">
-                    <table class="consultas-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Nombre</th>
-                                <th>Categoría</th>
-                                <th>Precio Ref ($)</th>
-                                <th>Precio Variable</th>
-                                <th>Unidad</th>
-                                <th>Activo</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="catalogoBody">
-                            <tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Cargando…</td></tr>
-                        </tbody>
-                    </table>
+                <div class="cat-grid">
+                    <section class="cat-master">
+                        <div class="cat-master-head">
+                            <span class="rp-panel-title">Servicios</span>
+                            <span class="rp-panel-sub" id="catalogoContador"></span>
+                        </div>
+                        <div class="cat-list" id="catalogoLista">
+                            <p class="rp-empty-text">Cargando…</p>
+                        </div>
+                    </section>
+
+                    <section class="cat-detail" id="catalogoDetalle">
+                        <div class="av-empty">
+                            <span class="av-empty-icon" aria-hidden="true"><i class="ph ph-list-magnifying-glass" aria-hidden="true"></i></span>
+                            <strong class="av-empty-title">Elegí un servicio</strong>
+                            <p class="av-empty-text">Seleccioná un servicio de la lista para ver su detalle, los insumos que consume y su historial de precios.</p>
+                        </div>
+                    </section>
                 </div>
             </section>
 
@@ -2265,35 +2269,11 @@
                     <label for="catalogoPrecioVariable" style="margin:0;">Precio Variable</label>
                 </div>
 
-                <div id="catalogoRecetaSection" hidden style="margin-top:1.5rem; border-top:1px solid var(--border); padding-top:1rem;">
-                    <label style="font-weight:600; color:var(--text-primary);">Materiales que consume</label>
-                    <p style="font-size:0.78rem; color:var(--text-muted); margin:0.25rem 0 0.75rem;">
-                        Cantidades estándar por aplicación; el veterinario las ajusta al aplicar el servicio.
-                    </p>
-                    <div id="catalogoRecetaLista"></div>
-                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end; margin-top:0.75rem;">
-                        <div class="form-group" style="flex:2; min-width:150px; margin:0;">
-                            <label for="recetaMaterialSelect">Material</label>
-                            <select id="recetaMaterialSelect">
-                                <option value="">Seleccionar…</option>
-                            </select>
-                        </div>
-                        <div class="form-group" style="flex:1; min-width:80px; margin:0;">
-                            <label for="recetaMaterialCantidad">Cantidad</label>
-                            <input type="number" id="recetaMaterialCantidad" step="0.001" min="0.001" placeholder="0">
-                        </div>
-                        <div class="form-group" style="flex:1; min-width:80px; margin:0;">
-                            <label for="recetaMaterialUnidad">Unidad</label>
-                            <select id="recetaMaterialUnidad">
-                                <option value="ml">ml</option>
-                                <option value="g">g</option>
-                                <option value="unidad">unidad</option>
-                            </select>
-                        </div>
-                        <button type="button" id="btnAgregarReceta" class="btn-secondary btn-sm">Agregar</button>
-                    </div>
-                    <p id="recetaError" hidden style="color:var(--accent); font-size:0.8rem; margin:0.5rem 0 0;"></p>
-                </div>
+                <!-- Tarea 11: "Materiales que consume" e "Historial de precios" se
+                     retiraron de este modal -- viven siempre visibles en el panel de
+                     detalle de sec-catalogo (boceto Catalogo.html), no hace falta
+                     abrir "Editar" para verlos o tocarlos. -->
+                <div id="catalogoRecetaSection" hidden></div>
 
                 <div class="modal-footer" style="margin-top:1.5rem;">
                     <button type="button" class="btn-secondary" data-close="modalCatalogoServicio">Cancelar</button>

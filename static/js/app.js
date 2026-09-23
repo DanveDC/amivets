@@ -104,7 +104,6 @@ Object.assign(window, {
     abrirModalServicio: catalogo.abrirModalServicio,
     guardarServicio: catalogo.guardarServicio,
     desactivarServicio: catalogo.desactivarServicio,
-    abrirHistorialServicio: catalogo.abrirHistorialServicio,
     // usuarios
     abrirEditarUsuario: usuarios.abrirEditarUsuario,
     toggleUsuarioActivo: usuarios.toggleUsuarioActivo,

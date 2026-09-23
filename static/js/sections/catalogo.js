@@ -1,26 +1,38 @@
 // sections/catalogo.js — catálogo de servicios.
-// Tarea 07 slice C: editor de receta de materiales por servicio (sección
-// "Materiales que consume" dentro del modal de edición).
+//
+// Tarea 11 (revisión de bocetos): reescrito maestro-detalle fiel a
+// docs/diseno/pantallas/Catalogo.html. El backend ya soportaba recetas
+// (Tarea 07 slice C) e historial de precios (Tarea 08) por servicio; vivían
+// dentro del modal de edición. Acá quedan siempre visibles para el servicio
+// seleccionado, igual que dibuja el boceto -- "Duración estimada" del boceto
+// no se copia: CatalogoServicio no tiene ese campo (ver
+// docs/revision-integral-11.md, pendientes).
 
 import { fetchAPI } from '../core/api.js';
-import { ICONS, showNotification, openModal, closeModal } from '../core/ui.js';
-import { abrirHistorialPrecios, gatePrecioInput } from './historial-precios.js';
-
-// Abre el panel "Historial de precios" (Tarea 08) para un servicio del catálogo.
-// Sin curva de costo: los servicios no tienen costo de compra.
-export const abrirHistorialServicio = (id, nombre, precioVariable = false) =>
-    abrirHistorialPrecios({ tipo: 'catalogo', id, nombre, precioVariable });
+import { showNotification, openModal, closeModal, escapeHtml } from '../core/ui.js';
+import { gatePrecioInput, getUsuariosMap } from './historial-precios.js';
 
 // ============================================================
-// CATALOGO DE SERVICIOS MODULE
+// ESTADO DEL PANEL MAESTRO-DETALLE
 // ============================================================
+
+let listaCache = [];          // último /catalogo?... resuelto
+let selectedId = null;
+let materialesCache = [];     // inventario filtrado a tipo_item === 'MATERIAL'
+
+const formatMoney = (n) => `$ ${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const formatFechaCorta = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '');
+};
 
 export async function cargarCategoriasSelect() {
     try {
         const cats = await fetchAPI('/catalogo/categorias');
         const filter = document.getElementById('catalogoCategoriaFilter');
         if (!filter) return;
-        // Keep first placeholder option, rebuild the rest
         filter.innerHTML = '<option value="">Todas las categorías</option>';
         (cats || []).forEach(cat => {
             const opt = document.createElement('option');
@@ -33,6 +45,10 @@ export async function cargarCategoriasSelect() {
     }
 }
 
+// ============================================================
+// LISTA MAESTRA
+// ============================================================
+
 export async function cargarCatalogo() {
     const q = (document.getElementById('catalogoSearch')?.value || '').trim();
     const cat = document.getElementById('catalogoCategoriaFilter')?.value || '';
@@ -40,130 +56,287 @@ export async function cargarCatalogo() {
     if (q) url += `&q=${encodeURIComponent(q)}`;
     if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
 
-    const tbody = document.getElementById('catalogoBody');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Cargando…</td></tr>';
+    const lista = document.getElementById('catalogoLista');
+    const contador = document.getElementById('catalogoContador');
+    if (!lista) return;
+    lista.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
 
     try {
         const items = await fetchAPI(url);
-        if (!items || !items.length) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Sin resultados.</td></tr>';
+        listaCache = Array.isArray(items) ? items : [];
+        const activos = listaCache.filter(s => s.activo).length;
+        if (contador) contador.textContent = `${activos} activos${listaCache.length !== activos ? ` · ${listaCache.length - activos} inactivos` : ''}`;
+
+        if (listaCache.length === 0) {
+            lista.innerHTML = '<p class="rp-empty-text">Sin resultados.</p>';
+            renderDetalleVacio();
             return;
         }
-        tbody.innerHTML = items.map(s => `
-            <tr style="${s.activo ? '' : 'opacity:0.5;'}">
-                <td>${s.id}</td>
-                <td style="font-weight:600;">${s.nombre}</td>
-                <td><span style="background:var(--primary-subtle); color:var(--primary); padding:2px 8px; border-radius:12px; font-size:0.75rem;">${s.categoria}</span></td>
-                <td class="num" style="font-weight:700; color:var(--secondary);">$${s.precio_ref.toFixed(2)}</td>
-                <td style="text-align:center;">${s.precio_variable ? `<span class="status-pill status-pill--muted">${ICONS.check}</span>` : ''}</td>
-                <td style="font-size:0.8rem; color:var(--text-secondary);">${s.unidad || ''}</td>
-                <td style="text-align:center;">${s.activo
-                    ? `<span class="status-pill status-pill--ok">${ICONS.checkCircle}</span>`
-                    : `<span class="status-pill status-pill--muted">${ICONS.xCircle}</span>`}</td>
-                <td>
-                    <div class="row-actions" style="justify-content:flex-start;">
-                        <button onclick="abrirModalServicio(${s.id})" class="btn-secondary btn-sm" style="font-size:0.8rem;">Editar</button>
-                        <button onclick="abrirHistorialServicio(${s.id}, '${(s.nombre || '').replace(/'/g, "\\'")}', ${!!s.precio_variable})" class="btn-secondary btn-sm btn-historial-precios" style="font-size:0.8rem;" title="Historial de precios">Historial</button>
-                        ${s.activo ? `<button onclick="desactivarServicio(${s.id})" class="btn-secondary btn-sm btn-row-danger" style="font-size:0.8rem;">Desact.</button>` : ''}
-                    </div>
-                </td>
-            </tr>
+
+        lista.innerHTML = listaCache.map(s => `
+            <button type="button" class="cat-item${s.id === selectedId ? ' cat-item--active' : ''}${s.activo ? '' : ' cat-item--inactivo'}" data-id="${s.id}">
+                <div class="cat-item-info">
+                    <span class="cat-item-nombre">${escapeHtml(s.nombre)}</span>
+                    <span class="cat-item-sub">${escapeHtml(s.categoria)}${s.activo ? '' : ' · inactivo'}</span>
+                </div>
+                <span class="cat-item-precio">${formatMoney(s.precio_ref)}</span>
+            </button>
         `).join('');
+
+        lista.querySelectorAll('.cat-item').forEach(btn => {
+            btn.addEventListener('click', () => seleccionarServicio(Number(btn.dataset.id)));
+        });
+
+        // Si el servicio seleccionado sigue en la lista filtrada, mantiene
+        // selección; si no, selecciona el primero (o vacío si no hay).
+        if (selectedId && listaCache.some(s => s.id === selectedId)) {
+            cargarDetalle(selectedId);
+        } else {
+            seleccionarServicio(listaCache[0].id);
+        }
     } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--accent);">Error: ${err.message}</td></tr>`;
+        lista.innerHTML = `<p class="rp-empty-text">Error: ${escapeHtml(err.message)}</p>`;
     }
 }
 
-// ============================================================
-// RECETA DE MATERIALES POR SERVICIO (Tarea 07 slice C)
-// ============================================================
-
-let materialesCache = [];   // inventario filtrado a tipo_item === 'MATERIAL'
-let recetaWired = false;
-
-function showRecetaError(msg) {
-    const el = document.getElementById('recetaError');
-    if (!el) return;
-    el.textContent = msg || '';
-    el.hidden = !msg;
+function seleccionarServicio(id) {
+    selectedId = id;
+    document.querySelectorAll('#catalogoLista .cat-item').forEach(btn => {
+        btn.classList.toggle('cat-item--active', Number(btn.dataset.id) === id);
+    });
+    cargarDetalle(id);
 }
 
-async function cargarMaterialesSelect() {
-    const select = document.getElementById('recetaMaterialSelect');
-    if (!select) return;
+function renderDetalleVacio() {
+    selectedId = null;
+    const detalle = document.getElementById('catalogoDetalle');
+    if (!detalle) return;
+    detalle.innerHTML = `
+        <div class="av-empty">
+            <span class="av-empty-icon" aria-hidden="true"><i class="ph ph-list-magnifying-glass" aria-hidden="true"></i></span>
+            <strong class="av-empty-title">Elegí un servicio</strong>
+            <p class="av-empty-text">Seleccioná un servicio de la lista para ver su detalle, los insumos que consume y su historial de precios.</p>
+        </div>`;
+}
+
+// Sin cache de sesión a propósito: un material nuevo en Insumos tiene que
+// aparecer en "Agregar insumo" sin recargar toda la página. /inventario/ ya
+// es la misma llamada que hacía el select del modal viejo en cada apertura.
+async function cargarMaterialesCache() {
     try {
         const items = await fetchAPI('/inventario/?limit=500');
         materialesCache = (items || []).filter(p => p.tipo_item === 'MATERIAL');
-        select.innerHTML = '<option value="">Seleccionar…</option>' + materialesCache.map(m =>
-            `<option value="${m.id}" data-unidad="${m.unidad_medida || ''}">${m.nombre}</option>`
-        ).join('');
     } catch (err) {
         console.error('Error cargando materiales:', err);
-        select.innerHTML = '<option value="">No se pudo cargar el inventario</option>';
+        materialesCache = [];
     }
+    return materialesCache;
 }
 
-function renderRecetas(lineas) {
-    const cont = document.getElementById('catalogoRecetaLista');
-    if (!cont) return;
-    if (!lineas || !lineas.length) {
-        cont.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">Sin materiales en la receta.</p>';
-        return;
-    }
-    cont.innerHTML = lineas.map(l => `
-        <div class="receta-linea" data-receta-id="${l.id}" style="display:flex; gap:0.5rem; align-items:center; padding:0.4rem 0; border-bottom:1px solid var(--border);">
-            <span style="flex:2; min-width:120px; color:var(--text-primary);">${l.inventario_nombre || ('#' + l.inventario_id)}</span>
-            <input type="number" class="receta-cantidad" value="${Number(l.cantidad)}" step="0.001" min="0.001"
-                style="flex:1; max-width:90px;" aria-label="Cantidad">
-            <span style="flex:0 0 auto; min-width:48px; color:var(--text-secondary); font-size:0.85rem;">${l.unidad_medida}</span>
-            <button type="button" class="btn-secondary btn-sm btn-row-danger receta-quitar" style="font-size:0.75rem;">Quitar</button>
-        </div>
-    `).join('');
-}
+// ============================================================
+// PANEL DE DETALLE
+// ============================================================
 
-async function cargarRecetas(servicioId) {
-    const cont = document.getElementById('catalogoRecetaLista');
-    if (!cont) return;
-    cont.innerHTML = '<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">Cargando receta…</p>';
+async function cargarDetalle(id) {
+    const detalle = document.getElementById('catalogoDetalle');
+    if (!detalle) return;
+    detalle.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+
     try {
-        const lineas = await fetchAPI(`/catalogo/${servicioId}/recetas`);
-        renderRecetas(lineas || []);
+        const [servicio, recetas, historial, usuarios, materiales] = await Promise.all([
+            fetchAPI(`/catalogo/${id}`),
+            fetchAPI(`/catalogo/${id}/recetas`),
+            fetchAPI(`/catalogo/${id}/historial-precios`),
+            getUsuariosMap(),
+            cargarMaterialesCache(),
+        ]);
+        if (id !== selectedId) return; // superseded por otra selección mientras cargaba
+        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales);
     } catch (err) {
-        cont.innerHTML = `<p style="font-size:0.8rem; color:var(--accent); margin:0;">No se pudo cargar la receta: ${err.message}</p>`;
+        detalle.innerHTML = `<p class="rp-empty-text">Error al cargar el servicio: ${escapeHtml(err.message)}</p>`;
     }
 }
 
-async function agregarReceta() {
-    const servicioId = document.getElementById('catalogoServicioId').value;
-    if (!servicioId) return;
-    const materialSelect = document.getElementById('recetaMaterialSelect');
-    const inventarioId = parseInt(materialSelect.value, 10);
-    const cantidad = parseFloat(document.getElementById('recetaMaterialCantidad').value);
-    const unidadInput = document.getElementById('recetaMaterialUnidad');
-    // Si el material no declara unidad base (data-unidad vacio), no se manda
-    // blanco/stale: se fuerza 'unidad', que es como el backend interpreta NULL.
-    let unidad = (unidadInput.value || '').trim();
-    if (!unidad) {
-        unidad = (materialSelect.selectedOptions[0]?.dataset.unidad || '').trim() || 'unidad';
-        unidadInput.value = unidad;
+function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
+    const detalle = document.getElementById('catalogoDetalle');
+    if (!detalle) return;
+
+    const materialPorId = new Map(materiales.map(m => [m.id, m]));
+    const costoLinea = (l) => (materialPorId.get(l.inventario_id)?.precio_unitario || 0) * Number(l.cantidad || 0);
+    const costoTotal = recetas.reduce((acc, l) => acc + costoLinea(l), 0);
+
+    const filasReceta = recetas.length === 0
+        ? '<tr><td colspan="4" class="rp-empty-text">Sin insumos en la receta.</td></tr>'
+        : recetas.map(l => `
+            <tr data-receta-id="${l.id}">
+                <td>${escapeHtml(l.inventario_nombre || ('#' + l.inventario_id))}</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:7px;">
+                        <input type="number" class="cat-cantidad-input receta-cantidad" value="${Number(l.cantidad)}" step="0.001" min="0.001" aria-label="Cantidad">
+                        <span style="font-size:12.5px; color:var(--text-muted);">${escapeHtml(l.unidad_medida || '')}</span>
+                    </div>
+                </td>
+                <td class="rp-num" style="color:var(--text-secondary);">${formatMoney(costoLinea(l))}</td>
+                <td style="text-align:right;">
+                    <button type="button" class="cat-icon-btn receta-quitar" title="Quitar" aria-label="Quitar insumo">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </td>
+            </tr>`).join('');
+
+    const filasHistorial = historial.length === 0
+        ? '<p class="rp-empty-text">Sin cambios de precio registrados.</p>'
+        : historial.map(h => {
+            const quien = h.usuario_id != null ? escapeHtml(usuarios.get(h.usuario_id) || ('#' + h.usuario_id)) : '—';
+            const pct = h.variacion_pct;
+            const pctTxt = pct == null ? '—' : `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+            const pctColor = pct == null ? 'var(--text-muted)' : (pct >= 0 ? 'var(--secondary)' : 'var(--accent)');
+            return `
+                <div class="cat-hist-row">
+                    <span class="rp-num" style="color:var(--text-secondary); width:92px;">${formatFechaCorta(h.fecha_cambio)}</span>
+                    <span class="rp-num" style="font-weight:500; width:72px;">${formatMoney(h.precio_nuevo)}</span>
+                    <span class="rp-num" style="width:60px; color:${pctColor};">${pctTxt}</span>
+                    <span style="flex-grow:1; text-align:right; color:var(--text-muted); font-size:12px;">${quien}</span>
+                </div>`;
+        }).join('');
+
+    detalle.innerHTML = `
+        <div class="cat-detail-head">
+            <div class="cat-detail-heading">
+                <span class="ser cat-detail-nombre">${escapeHtml(servicio.nombre)}</span>
+                <div class="cat-detail-pills">
+                    <span class="av-pill">${escapeHtml(servicio.categoria)}</span>
+                    <span class="av-pill ${servicio.activo ? 'av-pill--ok' : 'av-pill--neutral'}">${servicio.activo ? 'Activo' : 'Inactivo'}</span>
+                    ${servicio.precio_variable ? '<span class="av-pill av-pill--warn">Precio variable</span>' : ''}
+                </div>
+            </div>
+            <div class="cat-detail-precio">
+                <span class="rp-num" style="font-size:26px; font-weight:500; letter-spacing:-0.02em;">${formatMoney(servicio.precio_ref)}</span>
+                <span style="font-size:12px; color:var(--text-secondary);">costo de insumos ${formatMoney(costoTotal)}</span>
+            </div>
+            <button type="button" class="av-btn" id="btnCatEditar">Editar</button>
+        </div>
+
+        <div class="cat-hr"></div>
+
+        <div class="cat-detail-section">
+            <div class="cat-detail-section-head">
+                <span style="font-size:14px; font-weight:600;">Insumos que consume</span>
+                <span style="font-size:12px; color:var(--text-muted);">se descuentan al aplicar el servicio</span>
+                <div class="av-spacer"></div>
+                <button type="button" class="av-btn" id="btnCatAgregarInsumo">+ Agregar insumo</button>
+            </div>
+            <div id="catAgregarInsumoRow" class="cat-agregar-row" hidden>
+                <select id="catMaterialSelect"><option value="">Seleccionar…</option></select>
+                <input type="number" id="catMaterialCantidad" step="0.001" min="0.001" placeholder="Cantidad" style="width:100px;">
+                <select id="catMaterialUnidad">
+                    <option value="ml">ml</option>
+                    <option value="g">g</option>
+                    <option value="unidad">unidad</option>
+                    <option value="par">par</option>
+                </select>
+                <button type="button" class="av-btn av-btn--primary" id="btnCatConfirmarInsumo">Agregar</button>
+                <span id="catInsumoError" class="rp-empty-text" style="padding:0; display:none;"></span>
+            </div>
+            <table class="rp-table cat-receta-table">
+                <thead><tr><th>Material</th><th>Cantidad</th><th>Costo</th><th></th></tr></thead>
+                <tbody id="catRecetaBody">${filasReceta}</tbody>
+            </table>
+        </div>
+
+        <div class="cat-hr"></div>
+
+        <div class="cat-detail-section">
+            <div class="cat-detail-section-head">
+                <span style="font-size:14px; font-weight:600;">Historial de precios</span>
+                <span style="font-size:12px; color:var(--text-muted);">${historial.length} cambio${historial.length === 1 ? '' : 's'} registrado${historial.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="cat-hist-list">${filasHistorial}</div>
+        </div>
+    `;
+
+    document.getElementById('btnCatEditar')?.addEventListener('click', () => abrirModalServicio(servicio.id));
+
+    const filaVacia = document.getElementById('catRecetaBody');
+    filaVacia?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.receta-quitar');
+        if (!btn) return;
+        const row = btn.closest('[data-receta-id]');
+        if (row) quitarReceta(row.dataset.recetaId);
+    });
+    filaVacia?.addEventListener('change', (e) => {
+        const inp = e.target.closest('.receta-cantidad');
+        if (!inp) return;
+        const row = inp.closest('[data-receta-id]');
+        if (row) actualizarRecetaCantidad(row.dataset.recetaId, inp.value);
+    });
+
+    const selectMaterial = document.getElementById('catMaterialSelect');
+    if (selectMaterial) {
+        selectMaterial.innerHTML = '<option value="">Seleccionar…</option>' + materiales.map(m =>
+            `<option value="${m.id}" data-unidad="${escapeHtml(m.unidad_medida || '')}">${escapeHtml(m.nombre)}</option>`
+        ).join('');
+        selectMaterial.addEventListener('change', (e) => {
+            const unidad = (e.target.selectedOptions[0]?.dataset.unidad || '').trim();
+            const unidadSelect = document.getElementById('catMaterialUnidad');
+            if (unidadSelect && unidad) unidadSelect.value = unidad;
+        });
     }
-    showRecetaError('');
-    if (!inventarioId) { showRecetaError('Elegí un material.'); return; }
-    if (!(cantidad > 0)) { showRecetaError('Ingresá una cantidad mayor a 0.'); return; }
+
+    document.getElementById('btnCatAgregarInsumo')?.addEventListener('click', async () => {
+        const row = document.getElementById('catAgregarInsumoRow');
+        if (!row) return;
+        row.hidden = !row.hidden;
+        if (!row.hidden) {
+            // Refresca la lista de materiales al abrir -- si se dio de alta
+            // uno nuevo en Insumos después de entrar al detalle, tiene que
+            // aparecer sin recargar toda la pantalla.
+            const materialesFrescos = await cargarMaterialesCache();
+            const select = document.getElementById('catMaterialSelect');
+            if (select) {
+                select.innerHTML = '<option value="">Seleccionar…</option>' + materialesFrescos.map(m =>
+                    `<option value="${m.id}" data-unidad="${escapeHtml(m.unidad_medida || '')}">${escapeHtml(m.nombre)}</option>`
+                ).join('');
+            }
+        }
+    });
+    document.getElementById('btnCatConfirmarInsumo')?.addEventListener('click', () => agregarReceta(servicio.id));
+}
+
+// ============================================================
+// RECETA DE MATERIALES (Tarea 07 slice C) — ahora sobre el panel de detalle
+// ============================================================
+
+function showInsumoError(msg) {
+    const el = document.getElementById('catInsumoError');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.display = msg ? 'inline' : 'none';
+}
+
+async function agregarReceta(servicioId) {
+    const materialSelect = document.getElementById('catMaterialSelect');
+    const inventarioId = parseInt(materialSelect?.value, 10);
+    const cantidad = parseFloat(document.getElementById('catMaterialCantidad')?.value);
+    const unidadSelect = document.getElementById('catMaterialUnidad');
+    let unidad = (unidadSelect?.value || '').trim();
+    if (!unidad) unidad = (materialSelect?.selectedOptions[0]?.dataset.unidad || '').trim() || 'unidad';
+
+    showInsumoError('');
+    if (!inventarioId) { showInsumoError('Elegí un material.'); return; }
+    if (!(cantidad > 0)) { showInsumoError('Ingresá una cantidad mayor a 0.'); return; }
+
     try {
         await fetchAPI(`/catalogo/${servicioId}/recetas`, {
             method: 'POST',
             body: JSON.stringify({ inventario_id: inventarioId, cantidad, unidad_medida: unidad }),
         });
-        document.getElementById('recetaMaterialSelect').value = '';
-        document.getElementById('recetaMaterialCantidad').value = '';
-        await cargarRecetas(servicioId);
+        await cargarDetalle(servicioId);
     } catch (err) {
         if (/ya está en la receta|ya esta en la receta|409/i.test(err.message)) {
-            showRecetaError('Ese material ya está en la receta');
+            showInsumoError('Ese material ya está en la receta.');
         } else {
-            showRecetaError('Error: ' + err.message);
+            showInsumoError('Error: ' + err.message);
         }
     }
 }
@@ -171,65 +344,32 @@ async function agregarReceta() {
 async function quitarReceta(recetaId) {
     try {
         await fetchAPI(`/catalogo/recetas/${recetaId}`, { method: 'DELETE' });
-        const servicioId = document.getElementById('catalogoServicioId').value;
-        await cargarRecetas(servicioId);
+        if (selectedId) await cargarDetalle(selectedId);
     } catch (err) {
-        showRecetaError('Error al quitar: ' + err.message);
+        showNotification('Error al quitar insumo: ' + err.message, 'error');
     }
 }
 
 async function actualizarRecetaCantidad(recetaId, valor) {
     const cantidad = parseFloat(valor);
-    if (!(cantidad > 0)) { showRecetaError('La cantidad debe ser mayor a 0.'); return; }
+    if (!(cantidad > 0)) { showNotification('La cantidad debe ser mayor a 0.', 'error'); return; }
     try {
-        await fetchAPI(`/catalogo/recetas/${recetaId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ cantidad }),
-        });
-        showRecetaError('');
+        await fetchAPI(`/catalogo/recetas/${recetaId}`, { method: 'PUT', body: JSON.stringify({ cantidad }) });
+        if (selectedId) await cargarDetalle(selectedId);
     } catch (err) {
-        showRecetaError('Error al actualizar: ' + err.message);
+        showNotification('Error al actualizar cantidad: ' + err.message, 'error');
     }
 }
 
-function wireRecetaUI() {
-    if (recetaWired) return;
-    const section = document.getElementById('catalogoRecetaSection');
-    if (!section) return;
-    recetaWired = true;
-
-    document.getElementById('btnAgregarReceta')?.addEventListener('click', agregarReceta);
-
-    const lista = document.getElementById('catalogoRecetaLista');
-    lista?.addEventListener('click', (e) => {
-        const btn = e.target.closest('.receta-quitar');
-        if (!btn) return;
-        const row = btn.closest('[data-receta-id]');
-        if (row) quitarReceta(row.dataset.recetaId);
-    });
-    lista?.addEventListener('change', (e) => {
-        const inp = e.target.closest('.receta-cantidad');
-        if (!inp) return;
-        const row = inp.closest('[data-receta-id]');
-        if (row) actualizarRecetaCantidad(row.dataset.recetaId, inp.value);
-    });
-
-    document.getElementById('recetaMaterialSelect')?.addEventListener('change', (e) => {
-        const unidad = (e.target.selectedOptions[0]?.dataset.unidad || '').trim();
-        // Material sin unidad declarada -> 'unidad' (no dejar el valor previo pegado).
-        document.getElementById('recetaMaterialUnidad').value = unidad || 'unidad';
-    });
-}
+// ============================================================
+// MODAL DE METADATA (nombre / categoría / precio / unidad) — CRUD
+// ============================================================
 
 export async function abrirModalServicio(id = null) {
     document.getElementById('catalogoServicioId').value = '';
     document.getElementById('formCatalogoServicio').reset();
     document.getElementById('modalCatalogoTitle').textContent = id ? 'Editar Servicio' : 'Nuevo Servicio';
 
-    const recetaSection = document.getElementById('catalogoRecetaSection');
-    showRecetaError('');
-
-    // Tarea 08: alta -> precio editable por cualquiera; edición -> solo admin.
     const precioInput = document.getElementById('catalogoPrecioRef');
     const precioHint = document.getElementById('catalogoPrecioRefHint');
     const motivoGroup = document.getElementById('catalogoMotivoGroup');
@@ -251,15 +391,6 @@ export async function abrirModalServicio(id = null) {
             showNotification('Error cargando servicio: ' + err.message, 'error');
             return;
         }
-        // La receta solo existe para un servicio ya persistido.
-        wireRecetaUI();
-        if (recetaSection) recetaSection.hidden = false;
-        cargarMaterialesSelect();
-        cargarRecetas(id);
-    } else if (recetaSection) {
-        recetaSection.hidden = true;
-        const lista = document.getElementById('catalogoRecetaLista');
-        if (lista) lista.innerHTML = '';
     }
     openModal('modalCatalogoServicio');
 }
@@ -277,7 +408,6 @@ export async function guardarServicio(e) {
     };
     try {
         if (id) {
-            // Tarea 08: motivo opcional del cambio de precio (solo lo ve el admin).
             const motivo = document.getElementById('catalogoMotivo')?.value.trim();
             if (motivo) payload.motivo = motivo;
             await fetchAPI(`/catalogo/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -287,6 +417,7 @@ export async function guardarServicio(e) {
             showNotification('Servicio creado', 'success');
         }
         closeModal('modalCatalogoServicio');
+        if (id) selectedId = Number(id);
         cargarCatalogo();
     } catch (err) {
         showNotification('Error: ' + err.message, 'error');

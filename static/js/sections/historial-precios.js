@@ -57,7 +57,10 @@ const renderVariacion = (vaRaw, vpRaw) => {
 // GET /usuarios/ es admin-only; para no-admin devolvemos un mapa vacío y la
 // tabla cae a `#<id>`. Filas de migración traen usuario_id = null -> `—`.
 let usuariosMapCache = null;
-const getUsuariosMap = async () => {
+// Exportado (Tarea 11): catalogo.js lo reusa para el historial de precios
+// inline del panel maestro-detalle (boceto Catalogo.html), en vez de
+// duplicar la resolución usuario_id -> username.
+export const getUsuariosMap = async () => {
     if (usuariosMapCache) return usuariosMapCache;
     if (getRole() !== 'admin') {
         usuariosMapCache = new Map();
