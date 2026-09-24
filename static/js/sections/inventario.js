@@ -3,7 +3,7 @@
 // contenido_por_envase, merma_al_abrir) y presentación de stock decimal.
 
 import { fetchAPI } from '../core/api.js';
-import { ICONS, showNotification, openModal, closeModal } from '../core/ui.js';
+import { ICONS, showNotification, openModal, closeModal, escapeHtml, escapeJsAttr } from '../core/ui.js';
 import { abrirHistorialPrecios, gatePrecioInput } from './historial-precios.js';
 
 // Abre el panel "Historial de precios" (Tarea 08) para un material/producto.
@@ -70,7 +70,7 @@ const renderPills = (productos) => {
     if (!cont) return;
     const categorias = [...new Set(productos.map(p => p.categoria).filter(Boolean))].sort();
     const pillHtml = (valor, etiqueta) =>
-        `<button type="button" class="rp-pill${valor === categoriaActiva ? ' rp-pill--active' : ''}" data-cat="${valor === '__bajo_minimo__' ? '__bajo_minimo__' : (valor || '')}">${etiqueta}</button>`;
+        `<button type="button" class="rp-pill${valor === categoriaActiva ? ' rp-pill--active' : ''}" data-cat="${escapeHtml(valor === '__bajo_minimo__' ? '__bajo_minimo__' : (valor || ''))}">${escapeHtml(etiqueta)}</button>`;
     cont.innerHTML = [
         pillHtml('', 'Todos'),
         ...categorias.map(c => pillHtml(c, c)),
@@ -156,10 +156,10 @@ export const loadInventario = async (filtro = '') => {
             <tr>
                 <td class="rp-num" style="color:var(--text-secondary);">${p.codigo}</td>
                 <td>
-                    <div style="font-weight:500; color:var(--text-primary);">${p.nombre}</div>
-                    <div style="font-size:12px; color:var(--text-muted);">${formatStockDisplay(p)} · ${tipoPill}${vencimiento ? ` · vence ${vencimiento}` : ''}</div>
+                    <div style="font-weight:500; color:var(--text-primary);">${escapeHtml(p.nombre)}</div>
+                    <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(formatStockDisplay(p))} · ${tipoPill}${vencimiento ? ` · vence ${escapeHtml(vencimiento)}` : ''}</div>
                 </td>
-                <td><span class="av-pill">${p.categoria || '—'}</span></td>
+                <td><span class="av-pill">${escapeHtml(p.categoria || '—')}</span></td>
                 <td class="rp-num" style="font-weight:500;">${fmtNum(stockActual)} <span style="font-size:11.5px; color:var(--text-muted); font-weight:400;">${p.unidad_medida || ''}</span></td>
                 <td>
                     <div class="rp-progress" style="width:88px;"><div class="rp-progress-fill" style="width:${pctMinimo.toFixed(0)}%; background:${barColor};"></div></div>
@@ -171,10 +171,10 @@ export const loadInventario = async (filtro = '') => {
                     : (vencido ? `<span class="av-pill av-pill--warn">Vencido</span>` : `<span class="av-pill av-pill--ok">Disponible</span>`)}</td>
                 <td style="text-align:right;">
                     <div class="row-actions">
-                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirMovimientoStock(${p.id}, '${p.nombre.replace(/'/g, "\\'")}', ${stockActual})" title="Ajustar stock" aria-label="Ajustar stock">${ICONS.box}</button>
-                        <button class="av-btn btn-historial-precios" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirHistorialProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Historial de precios" aria-label="Historial de precios">${ICONS.dollar}</button>
+                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirMovimientoStock(${p.id}, '${escapeJsAttr(p.nombre)}', ${stockActual})" title="Ajustar stock" aria-label="Ajustar stock">${ICONS.box}</button>
+                        <button class="av-btn btn-historial-precios" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirHistorialProducto(${p.id}, '${escapeJsAttr(p.nombre)}')" title="Historial de precios" aria-label="Historial de precios">${ICONS.dollar}</button>
                         <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px;" onclick="abrirEditarProducto(${p.id})" title="Editar" aria-label="Editar">${ICONS.edit}</button>
-                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px; color:var(--accent); border-color:var(--accent);" onclick="confirmarEliminarProducto(${p.id}, '${p.nombre.replace(/'/g, "\\'")}')" title="Desactivar" aria-label="Desactivar">${ICONS.trash}</button>
+                        <button class="av-btn" style="height:28px; padding:0 8px; font-size:11.5px; color:var(--accent); border-color:var(--accent);" onclick="confirmarEliminarProducto(${p.id}, '${escapeJsAttr(p.nombre)}')" title="Desactivar" aria-label="Desactivar">${ICONS.trash}</button>
                     </div>
                 </td>
             </tr>`;

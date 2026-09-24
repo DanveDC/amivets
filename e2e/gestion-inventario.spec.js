@@ -166,6 +166,34 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     }
   });
 
+  test('un nombre con HTML/comillas no se ejecuta ni rompe la fila (XSS almacenado, inventario.js::loadInventario)', async ({ page, request }) => {
+    // <b>x</b> prueba el innerHTML sin escapar; la comilla doble prueba la
+    // fuga del argumento onclick="fn('...')" (escapeJsAttr, no solo escapeHtml).
+    const nombreMalicioso = `${testTag('xss')}<b>x</b>"`;
+    const prod = await createTestProduct(request, { nombre: nombreMalicioso });
+
+    try {
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-inventario');
+      await page.fill('#searchInventario', prod.codigo);
+      const fila = page.locator(`#inventarioTableBody tr:has-text("${prod.codigo}")`);
+      await expect(fila).toBeVisible();
+
+      // Se ve como texto plano -- ningún <b> real en el DOM de la fila.
+      await expect(fila.locator('b')).toHaveCount(0);
+      await expect(fila).toContainText(nombreMalicioso);
+
+      // Los botones de acción siguen andando: si escapeJsAttr no escapara la
+      // comilla, el atributo onclick se cortaría ahí y el botón quedaría roto
+      // (sin abrir el modal, sin error de JS visible en el test).
+      await fila.locator('button[title="Ajustar stock"]').click();
+      await expect(page.locator('#modalMovimientoStock')).toBeVisible();
+      await expect(page.locator('#movStockNombre')).toHaveText(nombreMalicioso);
+    } finally {
+      await deleteTestProduct(request, prod.id);
+    }
+  });
+
   test('baja por UI: confirmarEliminarProducto desactiva el producto (borrado lógico)', async ({ page, request }) => {
     page.on('dialog', (d) => d.accept()); // confirmarEliminarProducto pide confirm()
 
