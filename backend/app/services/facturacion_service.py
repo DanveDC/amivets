@@ -131,17 +131,34 @@ class FacturacionService:
             subtotal = 0.0
             detalles_factura = []
             movimientos = []
-            
+
+            # BLOQUEO DE FILAS PARA CONCURRENCIA: se bloquean TODOS los
+            # productos referenciados por la factura en una sola consulta
+            # ordenada por id (después de ServicioConsulta, que ya se bloqueó
+            # arriba). Si en cambio se bloqueara una fila por línea en el
+            # orden en que el cliente las mandó, dos facturas concurrentes con
+            # los mismos productos en orden inverso podrían deadlockearse.
+            producto_ids = {
+                d.producto_id for d in factura_data.detalles if d.producto_id
+            }
+            productos_bloqueados = {}
+            if producto_ids:
+                productos_bloqueados = {
+                    p.id: p
+                    for p in db.query(Inventario)
+                    .filter(Inventario.id.in_(producto_ids))
+                    .order_by(Inventario.id)
+                    .with_for_update()
+                    .all()
+                }
+
             for detalle_data in factura_data.detalles:
                 precio = detalle_data.precio_unitario
-                
+
                 # Si hay producto_id, aplicar lógica de inventario estricta
                 if detalle_data.producto_id:
-                    # BLOQUEO DE FILA PARA CONCURRENCIA
-                    producto = db.query(Inventario).filter(
-                        Inventario.id == detalle_data.producto_id
-                    ).with_for_update().first()
-                    
+                    producto = productos_bloqueados.get(detalle_data.producto_id)
+
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto {detalle_data.producto_id} no encontrado")
                     
@@ -375,17 +392,46 @@ class FacturacionService:
                 detail="La factura ya está anulada"
             )
         
+        # Orden de bloqueo global consistente con crear_factura: ServicioConsulta
+        # (por id) ANTES que Inventario (por id). Si esta función bloqueara
+        # Inventario primero y recién más abajo tocara ServicioConsulta, una
+        # anulación y una creación de factura concurrentes que comparten
+        # productos y servicios podrían bloquearse en orden inverso
+        # (deadlock). Se calcula acá arriba para poder bloquear ambos
+        # conjuntos de filas en ese orden antes de mutar nada.
+        servicio_ids = [d.servicio_id for d in factura.detalles if d.servicio_id]
+        if servicio_ids:
+            db.query(ServicioConsulta).filter(
+                ServicioConsulta.id.in_(servicio_ids)
+            ).order_by(ServicioConsulta.id).with_for_update().all()
+
         # Devolver stock SOLO por las líneas que efectivamente se descontaron al
         # facturar: producto_id presente Y no cubiertas por un consumo al
         # aplicar el servicio. Evita la devolución de más (audit §2 fila 5).
-        for detalle in factura.detalles:
-            if not detalle.producto_id:
-                continue
-            if _consumo_en_ledger(db, detalle.servicio_id):
-                continue
-            producto = db.query(Inventario).filter(
-                Inventario.id == detalle.producto_id
-            ).with_for_update().first()
+        #
+        # BLOQUEO DE FILAS PARA CONCURRENCIA: se bloquean TODOS los productos
+        # a devolver en una sola consulta ordenada por id (en vez de una fila
+        # por línea en el orden en que vienen los detalles) para no
+        # deadlockear con otra transacción que bloquee los mismos productos
+        # en orden inverso.
+        detalles_a_devolver = [
+            d for d in factura.detalles
+            if d.producto_id and not _consumo_en_ledger(db, d.servicio_id)
+        ]
+        producto_ids = {d.producto_id for d in detalles_a_devolver}
+        productos_bloqueados = {}
+        if producto_ids:
+            productos_bloqueados = {
+                p.id: p
+                for p in db.query(Inventario)
+                .filter(Inventario.id.in_(producto_ids))
+                .order_by(Inventario.id)
+                .with_for_update()
+                .all()
+            }
+
+        for detalle in detalles_a_devolver:
+            producto = productos_bloqueados.get(detalle.producto_id)
             if producto:
                 producto.stock_actual += detalle.cantidad
                 db.add(MovimientoInventario(
@@ -403,7 +449,6 @@ class FacturacionService:
         # pendientes, si no obtener_items_pendientes_consulta no devuelve nada y
         # la consulta no se puede volver a facturar nunca (Tarea 09). Se reabre
         # también el ciclo clínico para que vuelva a la bandeja de trabajo.
-        servicio_ids = [d.servicio_id for d in factura.detalles if d.servicio_id]
         if servicio_ids:
             db.query(ServicioConsulta).filter(
                 ServicioConsulta.id.in_(servicio_ids)
