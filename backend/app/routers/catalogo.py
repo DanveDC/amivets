@@ -1,17 +1,78 @@
+from datetime import date, datetime, time, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import CatalogoServicio
-from app.schemas.schemas import CatalogoServicioCreate, CatalogoServicioUpdate, CatalogoServicioResponse
+from app.models.models import AreaServicio, CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
+from app.routers.usuarios import require_roles
+from app.schemas.schemas import (
+    CatalogoServicioCreate,
+    CatalogoServicioUpdate,
+    CatalogoServicioResponse,
+    RecetaServicioCreate,
+    RecetaServicioUpdate,
+    RecetaServicioResponse,
+    HistorialPrecioRead,
+)
+from app.services.precio_service import registrar_cambio_precio, cuantizar_precio
 
 router = APIRouter(prefix="/api/catalogo", tags=["Catalogo de Servicios"])
 
+# HALLAZGO DE SEGURIDAD (Tarea 10): 4 endpoints (categorias, listar, obtener
+# por id, listar recetas) no tenian NINGUNA dependencia de auth. Los 7
+# restantes (crear/editar/desactivar servicio, ABM de receta) usaban
+# `get_current_user` -- exigian sesion, pero sin chequear `role`, lo que
+# contradice la fila 23 de la matriz de permisos (docs/diseno/
+# ordenes-de-servicio.md, decision 9, 9.3: "Editar catalogo, precios, areas,
+# requiere_adjunto" -- admin solo).
+#
+# Lectura (categorias, listar, obtener, historial-precios, recetas listar):
+# admin + recepcionista + veterinario + gestor. Es la union real de quien
+# consume estos endpoints hoy: orden-abierta.js y consultorio.js (ambos bajo
+# MASCOTAS_ROLES = admin/recepcion/veterinario) y bandeja-gestor.js (bajo
+# SERVICIOS_ROLES = admin/veterinario/gestor, resuelve el area de un item
+# via GET /catalogo/{id}).
+#
+# Escritura (crear/editar/desactivar servicio, ABM de receta): admin +
+# veterinario, NO admin-only pese a que la fila 23 dice admin solo. Tension
+# documentada, mismo criterio que facturas.py (commit 96484b0): la pestaña
+# "Catálogo" del front ya deja entrar a veterinario (router.js:59, roles:
+# ['admin','veterinario']) y catalogo.js:232 lo confirma en un comentario
+# ("Tarea 08: alta -> precio editable por cualquiera") -- el alta de un
+# servicio nuevo no bloquea el campo precio para veterinario, y en la edicion
+# el candado de precio (gatePrecioInput, historial-precios.js:344) es
+# puramente de UI: el veterinario SI puede enviar el PUT (solo se le oculta
+# el input). Restringir el router a admin-only habria roto un flujo real ya
+# en uso, asi que se respeta el flujo real: admin+veterinario en el gate del
+# endpoint, y el chequeo interno `current_user.role != "admin"` que ya existia
+# para `precio_ref`/`area_id`/`requiere_adjunto` (mas estricto que el gate del
+# endpoint) sigue intacto sin tocarlo.
+_ROLES_CATALOGO_LECTURA = ("admin", "recepcionista", "veterinario", "gestor")
+_ROLES_CATALOGO_ESCRITURA = ("admin", "veterinario")
+
+
+def _validar_area_activa(db: Session, area_id: Optional[int]) -> None:
+    """area_id=None es válido (atajo sin despacho, decisión 4). Si viene con
+    valor, el área tiene que existir y estar activa -- despachar a un área de
+    baja dejaría trabajo en una cola que nadie mira."""
+    if area_id is None:
+        return
+    area = db.query(AreaServicio).filter(AreaServicio.id == area_id).first()
+    if not area or not area.activo:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El área indicada no existe o no está activa",
+        )
+
 
 @router.get("/categorias", response_model=List[str])
-def listar_categorias(db: Session = Depends(get_db)):
+def listar_categorias(
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
     """Returns the list of unique active category names"""
     rows = (
         db.query(CatalogoServicio.categoria)
@@ -31,6 +92,7 @@ def listar_servicios(
     skip: int = 0,
     limit: int = 200,
     db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
 ):
     """List catalog services with optional category and text search filters"""
     query = db.query(CatalogoServicio)
@@ -51,9 +113,23 @@ def listar_servicios(
 def crear_servicio(
     servicio: CatalogoServicioCreate,
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
-    """Create a new service in the catalog"""
-    nuevo = CatalogoServicio(**servicio.model_dump())
+    """Create a new service in the catalog.
+
+    `area_id` / `requiere_adjunto` (Tarea 06, decisiones 5 y 7) son admin-only
+    (fila 23 de la matriz de permisos) -- mismo criterio que ya aplica
+    `actualizar_servicio` sobre `precio_ref`.
+    """
+    payload = servicio.model_dump()
+    if (payload.get("area_id") is not None or payload.get("requiere_adjunto") is not None) and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador puede asignar área o requiere_adjunto",
+        )
+    _validar_area_activa(db, payload.get("area_id"))
+
+    nuevo = CatalogoServicio(**payload)
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
@@ -61,7 +137,11 @@ def crear_servicio(
 
 
 @router.get("/{servicio_id}", response_model=CatalogoServicioResponse)
-def obtener_servicio(servicio_id: int, db: Session = Depends(get_db)):
+def obtener_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
     """Get a catalog service by ID"""
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
@@ -74,13 +154,46 @@ def actualizar_servicio(
     servicio_id: int,
     data: CatalogoServicioUpdate,
     db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
 ):
-    """Update a catalog service"""
+    """Update a catalog service.
+
+    El precio de referencia (`precio_ref`) NO pasa por el loop generico: si el
+    payload lo trae y (cuantizado) difiere del actual, lo escribe
+    `registrar_cambio_precio` -- que ademas historiza -- y exige rol admin
+    (Tarea 08). El resto de los campos (nombre, categoria, unidad,
+    `precio_variable`, etc.) siguen por setattr.
+    """
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
-    for key, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    payload.pop("motivo", None)  # no es columna; solo alimenta el historial
+    precio_nuevo = payload.pop("precio_ref", None)
+
+    if precio_nuevo is not None and cuantizar_precio(precio_nuevo) != cuantizar_precio(servicio.precio_ref):
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Solo un administrador puede cambiar precios")
+        registrar_cambio_precio(
+            db,
+            entidad_row=servicio,
+            precio_nuevo=precio_nuevo,
+            usuario_id=current_user.id,
+            motivo=data.motivo,
+        )
+
+    # area_id / requiere_adjunto (Tarea 06, decisiones 5 y 7, etapa 5):
+    # admin-only, mismo criterio que precio_ref arriba (fila 23 de la matriz).
+    if ("area_id" in payload or "requiere_adjunto" in payload) and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador puede editar área o requiere_adjunto",
+        )
+    if "area_id" in payload:
+        _validar_area_activa(db, payload["area_id"])
+
+    for key, value in payload.items():
         setattr(servicio, key, value)
 
     db.commit()
@@ -88,13 +201,185 @@ def actualizar_servicio(
     return servicio
 
 
+@router.get("/{servicio_id}/historial-precios", response_model=List[HistorialPrecioRead])
+def historial_precios_servicio(
+    servicio_id: int,
+    desde: Optional[date] = Query(None, description="Filtra fecha_cambio desde este dia inclusive (YYYY-MM-DD)"),
+    hasta: Optional[date] = Query(None, description="Filtra fecha_cambio hasta este dia inclusive (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
+    """Historial de precios de referencia del servicio, del mas nuevo al mas
+    viejo (Tarea 08)."""
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    q = db.query(HistorialPrecioServicio).filter(
+        HistorialPrecioServicio.catalogo_servicio_id == servicio_id
+    )
+    if desde is not None:
+        q = q.filter(
+            HistorialPrecioServicio.fecha_cambio
+            >= datetime.combine(desde, time.min, tzinfo=timezone.utc)
+        )
+    if hasta is not None:
+        q = q.filter(
+            HistorialPrecioServicio.fecha_cambio
+            < datetime.combine(hasta, time.min, tzinfo=timezone.utc) + timedelta(days=1)
+        )
+
+    return q.order_by(
+        HistorialPrecioServicio.fecha_cambio.desc(),
+        HistorialPrecioServicio.id.desc(),
+    ).all()
+
+
 @router.delete("/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)
-def desactivar_servicio(servicio_id: int, db: Session = Depends(get_db)):
+def desactivar_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
+):
     """Soft-delete a catalog service (sets activo=False)"""
     servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
     if not servicio:
         raise HTTPException(status_code=404, detail="Servicio no encontrado")
 
     servicio.activo = False
+    db.commit()
+    return None
+
+
+# ========== ABM de receta de servicio (Tarea 07, slice A) ==========
+# La receta declara que materiales de inventario consume un servicio del
+# catalogo y en que cantidad estandar. Sin logica de consumo aca: descontar
+# stock al aplicar el servicio es slice B.
+
+
+@router.get("/{servicio_id}/recetas", response_model=List[RecetaServicioResponse])
+def listar_recetas_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
+    """Lista los materiales declarados en la receta de un servicio del catalogo."""
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    return (
+        db.query(RecetaServicio)
+        .options(joinedload(RecetaServicio.inventario))
+        .filter(RecetaServicio.catalogo_servicio_id == servicio_id)
+        .order_by(RecetaServicio.id)
+        .all()
+    )
+
+
+@router.post(
+    "/{servicio_id}/recetas",
+    response_model=RecetaServicioResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def agregar_receta_servicio(
+    servicio_id: int,
+    data: RecetaServicioCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
+):
+    """Agrega una linea de material a la receta de un servicio.
+
+    404 si el servicio o el material no existen; 409 si ese material ya
+    figura en la receta de ese servicio (candado de la UNIQUE en DB).
+    """
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    material = db.query(Inventario).filter(Inventario.id == data.inventario_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material de inventario no encontrado")
+
+    # La linea de receta debe descontarse en la MISMA unidad en que se stockea el
+    # material: "5 g" contra un material en "ml" restaria 5 de un saldo en ml (M1).
+    unidad_material = material.unidad_medida or "unidad"
+    if data.unidad_medida != unidad_material:
+        raise HTTPException(
+            status_code=422,
+            detail=f"La unidad de la receta ('{data.unidad_medida}') no coincide con la del material '{material.nombre}' ('{unidad_material}')",
+        )
+
+    ya_existe = (
+        db.query(RecetaServicio)
+        .filter(
+            RecetaServicio.catalogo_servicio_id == servicio_id,
+            RecetaServicio.inventario_id == data.inventario_id,
+        )
+        .first()
+    )
+    if ya_existe:
+        raise HTTPException(
+            status_code=409,
+            detail="Ese material ya esta en la receta de este servicio",
+        )
+
+    receta = RecetaServicio(
+        catalogo_servicio_id=servicio_id,
+        inventario_id=data.inventario_id,
+        cantidad=data.cantidad,
+        unidad_medida=data.unidad_medida,
+    )
+    db.add(receta)
+    db.commit()
+    db.refresh(receta)
+    return receta
+
+
+@router.put("/recetas/{receta_id}", response_model=RecetaServicioResponse)
+def actualizar_receta_servicio(
+    receta_id: int,
+    data: RecetaServicioUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
+):
+    """Cambia la cantidad estandar o la unidad de una linea de receta."""
+    receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
+    if not receta:
+        raise HTTPException(status_code=404, detail="Linea de receta no encontrada")
+
+    cambios = data.model_dump(exclude_unset=True)
+
+    # Misma regla que el POST (M1): si se cambia la unidad, tiene que seguir
+    # coincidiendo con la unidad base del material.
+    if cambios.get("unidad_medida") is not None:
+        inv = db.query(Inventario).filter(Inventario.id == receta.inventario_id).first()
+        unidad_material = (inv.unidad_medida or "unidad") if inv else "unidad"
+        if cambios["unidad_medida"] != unidad_material:
+            raise HTTPException(
+                status_code=422,
+                detail=f"La unidad de la receta ('{cambios['unidad_medida']}') no coincide con la del material ('{unidad_material}')",
+            )
+
+    for key, value in cambios.items():
+        setattr(receta, key, value)
+
+    db.commit()
+    db.refresh(receta)
+    return receta
+
+
+@router.delete("/recetas/{receta_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_receta_servicio(
+    receta_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_CATALOGO_ESCRITURA)),
+):
+    """Quita una linea de material de la receta."""
+    receta = db.query(RecetaServicio).filter(RecetaServicio.id == receta_id).first()
+    if not receta:
+        raise HTTPException(status_code=404, detail="Linea de receta no encontrada")
+
+    db.delete(receta)
     db.commit()
     return None

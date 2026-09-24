@@ -40,6 +40,13 @@ services:
     # `docker compose exec backend curl http://localhost:8000/health`.
     expose:
       - "8000"
+    volumes:
+      # Adjuntos (Tarea 06, decisión 8): volumen nombrado propio, NUNCA
+      # bajo static/ -- nginx sirve static/ sin pasar por FastAPI
+      # (nginx.conf `location /static/`), y un adjunto solo puede salir por
+      # el endpoint autenticado GET /api/adjuntos/{id}. nginx NO monta este
+      # volumen.
+      - adjuntos_data:/app/data/adjuntos
     depends_on:
       db:
         condition: service_healthy
@@ -63,6 +70,7 @@ services:
 
 volumes:
   postgres_data:
+  adjuntos_data:
 
 networks:
   veterinaria_network:

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AmiVets · Sistema de diseño 1A — componentes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="../../static/css/nocturne.css">
+<link rel="stylesheet" href="../../static/css/amivets.css">
+<style>
+  /* page scaffolding only — every component style comes from the two sheets above */
+  body { padding: 0; }
+  .doc { max-width: 1100px; margin: 0 auto; padding: var(--space-8) var(--space-6) 80px; }
+  .doc > header { margin-bottom: var(--space-8); }
+  .doc h1 { font-size: 32px; }
+  .doc-lead { color: var(--color-neutral-400); font-size: 15px; max-width: 68ch; }
+  section.block { margin-top: 44px; padding-top: var(--space-6); border-top: 1px solid var(--color-divider); }
+  section.block > h2 { font-size: 20px; margin-bottom: var(--space-2); }
+  section.block > p.note { color: var(--color-neutral-500); font-size: 13px; margin-bottom: var(--space-6); max-width: 64ch; }
+  .demo { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; background: var(--color-bg); }
+  .demo--col { flex-direction: column; }
+  .demo + .demo { margin-top: var(--space-4); }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-3); }
+  .sw { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--color-divider); }
+  .sw i { display: block; height: 56px; }
+  .sw span { display: block; padding: 6px 8px; font-size: 11px; color: var(--color-neutral-400); font-variant-numeric: tabular-nums; }
+  .frame { border: 1px solid var(--color-divider); border-radius: var(--radius-lg); overflow: hidden; width: 100%; }
+</style>
+</head>
+<body>
+<main class="doc">
+  <header>
+    <div class="av-eyebrow">Tarea 06 · Propuesta 1A</div>
+    <h1>Sistema de diseño — componentes</h1>
+    <p class="doc-lead">Todo lo que se ve acá sale de <code>static/css/nocturne.css</code> (design system Nocturne, sin tocar) y <code>static/css/amivets.css</code> (capa 1A). La fuente de verdad textual es <code>docs/diseno/1A-tokens.md</code>. Si algo del sistema no aparece en esta página, no existe.</p>
+  </header>
+
+  <!-- ── COLOR ─────────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Color</h2>
+    <p class="note">Fondo oscuro, un solo acento (blurple). El contraste viene de las rampas tonales, no de la saturación. El acento vive en líneas, bordes e íconos — nunca como relleno de área grande.</p>
+    <div class="swatches">
+      <div class="sw"><i style="background:var(--color-bg)"></i><span>--color-bg</span></div>
+      <div class="sw"><i style="background:var(--color-surface)"></i><span>--color-surface</span></div>
+      <div class="sw"><i style="background:var(--color-text)"></i><span>--color-text</span></div>
+      <div class="sw"><i style="background:var(--color-accent)"></i><span>--color-accent</span></div>
+      <div class="sw"><i style="background:var(--color-warning)"></i><span>--color-warning</span></div>
+      <div class="sw"><i style="background:var(--color-danger)"></i><span>--color-danger</span></div>
+      <div class="sw"><i style="background:var(--color-success)"></i><span>--color-success</span></div>
+    </div>
+    <p class="note" style="margin-top:var(--space-6)">Rampa neutral 100 → 900</p>
+    <div class="swatches">
+      <div class="sw"><i style="background:var(--color-neutral-100)"></i><span>neutral-100</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-200)"></i><span>neutral-200</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-300)"></i><span>neutral-300</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-400)"></i><span>neutral-400</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-500)"></i><span>neutral-500</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-600)"></i><span>neutral-600</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-700)"></i><span>neutral-700</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-800)"></i><span>neutral-800</span></div>
+      <div class="sw"><i style="background:var(--color-neutral-900)"></i><span>neutral-900</span></div>
+    </div>
+    <p class="note" style="margin-top:var(--space-6)">Rampa de acento 100 → 900</p>
+    <div class="swatches">
+      <div class="sw"><i style="background:var(--color-accent-100)"></i><span>accent-100</span></div>
+      <div class="sw"><i style="background:var(--color-accent-200)"></i><span>accent-200</span></div>
+      <div class="sw"><i style="background:var(--color-accent-300)"></i><span>accent-300</span></div>
+      <div class="sw"><i style="background:var(--color-accent-400)"></i><span>accent-400</span></div>
+      <div class="sw"><i style="background:var(--color-accent-500)"></i><span>accent-500</span></div>
+      <div class="sw"><i style="background:var(--color-accent-600)"></i><span>accent-600</span></div>
+      <div class="sw"><i style="background:var(--color-accent-700)"></i><span>accent-700</span></div>
+      <div class="sw"><i style="background:var(--color-accent-800)"></i><span>accent-800</span></div>
+      <div class="sw"><i style="background:var(--color-accent-900)"></i><span>accent-900</span></div>
+    </div>
+  </section>
+
+  <!-- ── TIPOGRAFÍA ────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Tipografía</h2>
+    <p class="note">Inter en peso 400/500/600. Los títulos no pasan de 500 — la jerarquía es tamaño y espacio. Toda cifra lleva <code>tabular-nums</code>.</p>
+    <div class="demo demo--col">
+      <h1>H1 · 42px — Displasia de cadera</h1>
+      <h2>H2 · 32px — Panel de indicadores</h2>
+      <h3>H3 · 25px — Consultas del paciente</h3>
+      <h4>H4 · 20px — Consulta en curso</h4>
+      <h5>H5 · 16px — Historial</h5>
+      <h6>H6 · 13px — Presupuesto</h6>
+      <p style="font-size:15px">Cuerpo · 15px / 1.55 — Carprofeno 100&nbsp;mg cada 24&nbsp;h por 7&nbsp;días. Reposo y control en 10 días.</p>
+      <p class="av-num" style="font-size:24px;font-weight:600">$85,84</p>
+      <p class="av-eyebrow">Eyebrow / kicker · 11px</p>
+    </div>
+  </section>
+
+  <!-- ── BOTONES ───────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Botones</h2>
+    <p class="note">Outline siempre. El primario es un borde de acento sobre transparente, nunca un relleno. Todo botón que sea solo ícono lleva <code>aria-label</code>.</p>
+    <div class="demo">
+      <button class="btn btn-primary"><i class="ph ph-plus"></i>Nuevo</button>
+      <button class="btn btn-secondary"><i class="ph ph-calendar-plus"></i>Agendar</button>
+      <button class="btn btn-ghost"><i class="ph ph-plus-circle"></i>Agregar servicio</button>
+      <button class="btn btn-primary" disabled>Deshabilitado</button>
+      <button class="btn btn-icon btn-secondary" aria-label="Editar"><i class="ph ph-pencil-simple"></i></button>
+    </div>
+    <div class="demo" style="max-width:320px;margin-top:var(--space-6)">
+      <button class="btn btn-primary btn-block"><i class="ph ph-check"></i>Cerrar consulta y facturar</button>
+      <button class="btn btn-secondary btn-block">Guardar como presupuesto</button>
+    </div>
+  </section>
+
+  <!-- ── TAGS / BADGES ─────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Tags y badges</h2>
+    <div class="demo">
+      <span class="tag tag-accent">En sala · 3</span>
+      <span class="tag tag-outline">Perros</span>
+      <span class="tag tag-neutral">#0</span>
+      <span class="tag tag-accent">Borrador · guardado hace 12&nbsp;s</span>
+      <span class="tag tag-outline av-text-warning" style="border-color:var(--color-warning)">1 vencida</span>
+      <span class="tag tag-outline av-text-success" style="border-color:var(--color-success)">Cobrado</span>
+    </div>
+  </section>
+
+  <!-- ── FORMULARIOS ───────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Campos de formulario</h2>
+    <div class="demo demo--col" style="max-width:420px">
+      <div class="field">
+        <label for="c1">Motivo de consulta</label>
+        <input id="c1" class="input" value="Cojera en miembro posterior derecho">
+      </div>
+      <div class="av-form-grid av-form-grid--4" style="width:100%">
+        <div class="field"><label for="c2">Peso</label><input id="c2" class="input" value="32,4"></div>
+        <div class="field"><label for="c3">Temp.</label><input id="c3" class="input" value="38,9"></div>
+        <div class="field"><label for="c4">FC</label><input id="c4" class="input" value="96"></div>
+        <div class="field"><label for="c5">FR</label><input id="c5" class="input" placeholder="—"></div>
+      </div>
+      <div class="field">
+        <label for="c6">Tratamiento y plan</label>
+        <textarea id="c6" class="input">Carprofeno 100 mg c/24 h por 7 días. Reposo.</textarea>
+      </div>
+      <label class="radio"><input type="radio" name="r" checked><span class="dot"></span>Con seguimiento</label>
+      <label class="radio"><input type="radio" name="r"><span class="dot"></span>Sin seguimiento</label>
+      <div class="seg" style="width:100%">
+        <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="pago" checked>Efectivo</label>
+        <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="pago">Tarjeta</label>
+        <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="pago">Transfer.</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CARDS ─────────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Cards</h2>
+    <div class="demo">
+      <div class="card" style="max-width:260px">
+        <span class="card-kicker">Cuenta</span>
+        <div class="card-title">$0,00</div>
+        <p class="card-body">Sin pendientes · 8 facturas pagadas</p>
+        <div class="card-meta"><i class="ph ph-receipt"></i>Cargar servicio →</div>
+      </div>
+      <div class="card elev-md" style="max-width:260px">
+        <span class="card-kicker">Vacunas</span>
+        <div class="card-title av-text-warning">1 vencida</div>
+        <p class="card-body">Rabia desde el 04 feb · séxtuple al día</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TABLA ─────────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Tabla</h2>
+    <p class="note">Reglas de fila que se desvanecen 48px en cada extremo. Columnas numéricas a la derecha con <code>tabular-nums</code>.</p>
+    <div class="av-scroll-x">
+      <table class="table" style="min-width:520px">
+        <thead><tr><th>Propietario</th><th>Cédula</th><th>Mascotas</th><th style="text-align:right">Saldo</th></tr></thead>
+        <tbody>
+          <tr><td>Valentina Ramírez<div class="av-faint" style="font-size:11px">0414-555 2211</div></td><td class="av-muted av-num">EXP-000804</td><td class="av-muted">Linconl, Nala</td><td style="text-align:right" class="av-num">$0,00</td></tr>
+          <tr><td>Jorge Zambelli<div class="av-faint" style="font-size:11px">0412-330 8842</div></td><td class="av-muted av-num">EXP-000597</td><td class="av-muted">Astro</td><td style="text-align:right" class="av-num av-text-warning">$45,00</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── DIÁLOGO ───────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Diálogo</h2>
+    <p class="note">Reservado para confirmaciones cortas. Formularios largos van a página o panel, no a modal.</p>
+    <div class="demo">
+      <div class="dialog elev-lg" style="position:static">
+        <div class="dialog-title">Anular factura F-2026-0418</div>
+        <div class="dialog-body">Esta acción repone el stock descontado y no se puede deshacer.</div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary">Cancelar</button>
+          <button class="btn btn-primary av-text-danger" style="border-color:var(--color-danger)">Anular</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SHELL 1A ──────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Shell — barra superior + navegación</h2>
+    <p class="note">Reemplaza el sidebar de 11 ítems. Pestaña activa con línea de acento de 2px por debajo.</p>
+    <div class="frame">
+      <div class="av-topbar">
+        <a class="av-brand" href="#"><i class="ph ph-paw-print"></i>AmiVets</a>
+        <div class="av-search"><i class="ph ph-magnifying-glass"></i>Buscar paciente, dueño o factura<span class="av-kbd">⌘K</span></div>
+        <div class="av-row-actions av-spacer">
+          <span class="av-user">Dra. Ramírez</span>
+          <button class="btn btn-primary" style="font-size:13px"><i class="ph ph-plus"></i>Nuevo</button>
+        </div>
+      </div>
+      <nav class="av-tabs">
+        <button class="av-tab" aria-current="page">Consultorio</button>
+        <button class="av-tab">Agenda</button>
+        <button class="av-tab">Propietarios</button>
+        <button class="av-tab">Facturación</button>
+        <button class="av-tab">Inventario</button>
+        <button class="av-tab">Informes</button>
+      </nav>
+    </div>
+  </section>
+
+  <!-- ── RIEL DE PACIENTES ─────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Riel de pacientes</h2>
+    <div class="frame" style="max-width:300px">
+      <div class="av-rail" style="background:var(--color-bg)">
+        <div class="av-rail-head">
+          <span class="av-eyebrow">Pacientes</span>
+          <span class="av-faint" style="font-size:12px">1.284</span>
+        </div>
+        <input class="input" placeholder="Nombre o #historia" style="font-size:13px">
+        <div class="av-rail-filters">
+          <span class="tag tag-accent">En sala · 3</span>
+          <span class="tag tag-outline">Perros</span>
+        </div>
+        <div class="av-rail-list">
+          <button class="av-rail-item" aria-current="true">
+            <span class="av-avatar"><i class="ph ph-dog"></i></span>
+            <span style="flex:1;min-width:0">
+              <span class="av-rail-item-name" style="display:block">Linconl</span>
+              <span class="av-rail-item-sub">Pastor belga · #0</span>
+            </span>
+            <span class="av-rail-item-dot"></span>
+          </button>
+          <button class="av-rail-item">
+            <span class="av-avatar"><i class="ph ph-paw-print"></i></span>
+            <span style="flex:1;min-width:0">
+              <span class="av-rail-item-name" style="display:block">Polo Rivas</span>
+              <span class="av-rail-item-sub">Labrador · #24</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── VITALES ───────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Tira de constantes</h2>
+    <div class="av-vitals" style="max-width:760px">
+      <div class="av-vital"><div class="av-vital-label">Peso</div><div class="av-vital-value">32,4 <small>kg</small></div><div class="av-vital-note av-vital-note--up">+0,8 vs. marzo</div></div>
+      <div class="av-vital"><div class="av-vital-label">Última visita</div><div class="av-vital-value">12 mar</div><div class="av-vital-note">Control anual</div></div>
+      <div class="av-vital"><div class="av-vital-label">Vacunas</div><div class="av-vital-value av-text-warning">1 vencida</div><div class="av-vital-note">Rabia · 04 feb</div></div>
+      <div class="av-vital"><div class="av-vital-label">Alergias</div><div class="av-vital-value">Penicilina</div><div class="av-vital-note">Registrada 2023</div></div>
+      <div class="av-vital"><div class="av-vital-label">Saldo</div><div class="av-vital-value">$0,00</div><div class="av-vital-note">Sin pendientes</div></div>
+    </div>
+  </section>
+
+  <!-- ── TIMELINE ──────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Historial (timeline)</h2>
+    <p class="note">Reemplaza las ~12 pestañas del expediente actual. Filtros como tags.</p>
+    <div style="max-width:640px">
+      <div class="av-row" style="flex-wrap:wrap">
+        <h5 style="margin:0">Historial</h5>
+        <div class="av-timeline-filters">
+          <span class="tag tag-accent">Todo · 34</span>
+          <span class="tag tag-outline">Consultas 12</span>
+          <span class="tag tag-outline">Vacunas 6</span>
+        </div>
+      </div>
+      <div class="av-timeline">
+        <div class="av-timeline-row">
+          <div class="av-timeline-date">12 mar 26</div>
+          <div class="av-timeline-icon"><i class="ph ph-stethoscope"></i></div>
+          <div style="min-width:0"><div class="av-timeline-title">Consulta — control anual</div><div class="av-timeline-detail">Sin hallazgos. Peso 31,6 kg. Dra. Ramírez.</div></div>
+          <div class="av-timeline-amount">$45,00</div>
+        </div>
+        <div class="av-timeline-row">
+          <div class="av-timeline-date">04 feb 26</div>
+          <div class="av-timeline-icon av-text-warning"><i class="ph ph-warning"></i></div>
+          <div style="min-width:0"><div class="av-timeline-title">Rabia — vencida</div><div class="av-timeline-detail">Pendiente de refuerzo desde hace 7 meses</div></div>
+          <div class="av-timeline-amount">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PRESUPUESTO VIVO ──────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Panel de presupuesto vivo</h2>
+    <div class="card av-budget" style="position:static;max-width:320px">
+      <div class="av-row"><span class="av-eyebrow">Presupuesto</span><span class="tag tag-outline av-spacer">Borrador</span></div>
+      <div class="av-budget-lines">
+        <div class="av-budget-line"><div style="min-width:0"><div class="av-budget-line-name">Consulta general</div><div class="av-budget-line-detail">Dra. Ramírez</div></div><div class="av-budget-line-price">$45,00</div></div>
+        <div class="av-budget-line"><div style="min-width:0"><div class="av-budget-line-name">Radiografía · 1 placa</div><div class="av-budget-line-detail">Cadera lateral</div></div><div class="av-budget-line-price">$18,00</div></div>
+      </div>
+      <button class="btn btn-ghost" style="justify-content:flex-start"><i class="ph ph-plus-circle"></i>Agregar servicio o producto</button>
+      <div class="av-budget-subtotals">
+        <div><span>Subtotal</span><span class="av-num">$63,00</span></div>
+        <div><span>IVA 16 %</span><span class="av-num">$10,08</span></div>
+      </div>
+      <div class="av-budget-total"><span class="av-budget-total-label">Total</span><span class="av-budget-total-value">$73,08</span></div>
+      <div class="av-budget-actions">
+        <button class="btn btn-primary btn-block"><i class="ph ph-check"></i>Cerrar consulta y facturar</button>
+        <button class="btn btn-secondary btn-block">Guardar como presupuesto</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STAT / KPI ────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>KPI (Informes)</h2>
+    <div class="av-stat-grid" style="max-width:760px">
+      <div class="card av-stat"><div class="av-stat-label">Consultas del mes</div><div class="av-stat-value">342</div><div class="av-stat-change av-stat-change--up"><i class="ph ph-arrow-up av-i-sm"></i>14,8 %<span class="av-muted">vs. mes anterior</span></div></div>
+      <div class="card av-stat"><div class="av-stat-label">Canceladas / no-shows</div><div class="av-stat-value">23</div><div class="av-stat-change av-stat-change--up"><i class="ph ph-arrow-down av-i-sm"></i>25,8 %<span class="av-muted">vs. mes anterior</span></div></div>
+    </div>
+  </section>
+
+  <!-- ── ESTADOS ───────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Estados: vacío · carga · sin permisos</h2>
+    <div class="demo">
+      <div class="frame" style="max-width:340px">
+        <div class="av-empty">
+          <i class="ph ph-magnifying-glass av-empty-icon"></i>
+          <div class="av-empty-title">Sin resultados</div>
+          <div class="av-empty-text">No hay pacientes que coincidan con "borki". Probá con el número de historia.</div>
+        </div>
+      </div>
+      <div class="frame" style="max-width:340px">
+        <div class="av-empty">
+          <i class="ph ph-lock av-empty-icon"></i>
+          <div class="av-empty-title">Sin acceso</div>
+          <div class="av-empty-text">Tu rol no puede ver la sección de usuarios.</div>
+        </div>
+      </div>
+      <div class="frame" style="max-width:280px;padding:var(--space-6)">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="av-skeleton" style="height:14px;width:60%"></div>
+          <div class="av-skeleton" style="height:14px;width:90%"></div>
+          <div class="av-skeleton" style="height:14px;width:75%"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TOAST ─────────────────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Toast</h2>
+    <div class="demo demo--col" style="max-width:360px">
+      <div class="av-toast av-toast--ok"><i class="ph ph-check-circle av-text-success"></i><div>Factura F-2026-0418 cobrada. Stock actualizado.</div></div>
+      <div class="av-toast av-toast--warn"><i class="ph ph-warning av-text-warning"></i><div>Quedan 2 unidades de Carprofeno 100&nbsp;mg.</div></div>
+      <div class="av-toast av-toast--danger"><i class="ph ph-x-circle av-text-danger"></i><div>No se pudo guardar la consulta. Reintentá.</div></div>
+    </div>
+  </section>
+
+  <!-- ── COMMAND PALETTE ──────────────────────────────────────────────── -->
+  <section class="block">
+    <h2>Command palette (abierto)</h2>
+    <div class="frame" style="max-width:560px">
+      <div class="av-cmdk" style="box-shadow:none">
+        <input class="input av-cmdk-input" value="lincon" aria-label="Buscar">
+        <div class="av-cmdk-list">
+          <div class="av-cmdk-item" aria-selected="true"><i class="ph ph-dog"></i>Linconl · Pastor belga · #0</div>
+          <div class="av-cmdk-item"><i class="ph ph-user"></i>Valentina Ramírez · propietaria</div>
+          <div class="av-cmdk-item"><i class="ph ph-receipt"></i>F-2026-0418 · $85,84</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

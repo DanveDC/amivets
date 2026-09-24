@@ -36,6 +36,7 @@ const {
   anularTestFactura,
   pagarFacturaCompleta,
   setTarifaConsulta,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -59,7 +60,7 @@ async function seedCadenaLiquidable(request, token, tarifa) {
   await setTarifaConsulta(request, token, vet.id, tarifa);
   const propietario = await createTestPropietario(request);
   const mascota = await createTestMascota(request, propietario.id);
-  const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id });
+  const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id }, token);
   const factura = await createTestFactura(request, {
     propietarioId: propietario.id,
     consultaId: consulta.id,
@@ -209,7 +210,7 @@ test.describe.serial('Liquidaciones a veterinarios — /api/liquidaciones', () =
     const hoy = todayUTC();
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-reportes"]');
+    await gotoSection(page, 'sec-reportes');
     // liqSeccion es admin-only: checkAdminAccess la muestra e initLiquidaciones la puebla.
     await expect(page.locator('#liqSeccion')).toBeVisible();
 

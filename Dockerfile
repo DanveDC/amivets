@@ -44,7 +44,12 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000
 
 # Usuario no-root por seguridad
+# mkdir de /app/data/adjuntos ANTES del chown: Docker inicializa un volumen
+# nombrado nuevo copiando el contenido (y el dueño) que ya exista en esa ruta
+# de la imagen (Tarea 06, decision 8) -- sin este directorio pre-creado, el
+# volumen nace root:root y vetuser no puede escribir adjuntos.
 RUN adduser --disabled-password --gecos "" vetuser \
+    && mkdir -p /app/data/adjuntos \
     && chown -R vetuser:vetuser /app \
     && chmod +x /app/start.sh
 USER vetuser

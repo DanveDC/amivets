@@ -3,30 +3,63 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import PruebaComplementaria, Mascota, Consulta
+from app.models.models import PruebaComplementaria, Mascota, Consulta, ServicioConsulta
 from app.schemas.schemas import PruebaComplementariaCreate, PruebaComplementariaUpdate, PruebaComplementariaResponse
+from app.routers.usuarios import require_roles
+from app.services import orden_service
 
 router = APIRouter(prefix="/api/pruebas", tags=["Laboratorio y Diagnostico"])
+
+# Tarea 10 (fix de auth): admin + veterinario, sin recepcionista -- misma
+# regla que clinico.py._ROLES_CLINICO_LECTURA. La fila 15 de la matriz de
+# permisos le daria a recepcion una vista recortada (sin diagnostico ni
+# tratamiento), pero eso exige un schema propio que hoy no existe; esta
+# tarea es exclusivamente auth, sin tocar esquemas. Queda anotado como deuda.
+_ROLES_PRUEBAS = ("admin", "veterinario")
 
 @router.post("/", response_model=PruebaComplementariaResponse, status_code=status.HTTP_201_CREATED)
 def registrar_prueba(
     prueba: PruebaComplementariaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Registra una nueva prueba de laboratorio o diagnostico"""
     # Validar mascota
     mascota = db.query(Mascota).filter(Mascota.id == prueba.mascota_id).first()
     if not mascota:
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
-    
+
     # Validar consulta si se proporciona
+    consulta = None
+    orden = None
     if prueba.consulta_id:
         consulta = db.query(Consulta).filter(Consulta.id == prueba.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
-            
+        orden = orden_service.orden_de_consulta(db, prueba.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
+
     nueva_prueba = PruebaComplementaria(**prueba.dict())
     db.add(nueva_prueba)
+
+    # Espejo ServicioConsulta si la prueba cuelga de una consulta (Tarea 09,
+    # decisión 2). Mismo patrón que routers/clinico.py.
+    if consulta is not None:
+        db.flush()
+        db.add(ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
+            consulta_id=nueva_prueba.consulta_id,
+            mascota_id=consulta.mascota_id,
+            tipo_servicio="LABORATORIO" if "Lab" in (nueva_prueba.tipo or "") else "DIAGNOSTICO",
+            referencia_id=nueva_prueba.id,
+            nombre_servicio=f"ESTUDIO: {nueva_prueba.tipo}",
+            cantidad=1.0,
+            precio_unitario=nueva_prueba.precio_aplicado,
+            detalles_clinicos=f"Resultado: {(nueva_prueba.resultado or 'Pendiente')[:100]}",
+            estado="EJECUTADO",
+        ))
+
     db.commit()
     db.refresh(nueva_prueba)
     return nueva_prueba
@@ -36,7 +69,10 @@ def listar_pruebas(
     mascota_id: Optional[int] = None,
     consulta_id: Optional[int] = None,
     tipo: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # HALLAZGO DE SEGURIDAD (Tarea 10): este GET y el de abajo (obtener_prueba)
+    # no tenian guard -- POST/PUT/DELETE ya lo usaban.
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Lista pruebas complementarias con filtros"""
     query = db.query(PruebaComplementaria)
@@ -53,7 +89,8 @@ def listar_pruebas(
 @router.get("/{prueba_id}", response_model=PruebaComplementariaResponse)
 def obtener_prueba(
     prueba_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Obtiene una prueba especifica por ID"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()
@@ -65,7 +102,8 @@ def obtener_prueba(
 def actualizar_prueba(
     prueba_id: int,
     prueba_update: PruebaComplementariaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Actualiza la informacion de una prueba"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()
@@ -82,7 +120,8 @@ def actualizar_prueba(
 @router.delete("/{prueba_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_prueba(
     prueba_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(*_ROLES_PRUEBAS)),
 ):
     """Elimina una prueba"""
     prueba = db.query(PruebaComplementaria).filter(PruebaComplementaria.id == prueba_id).first()

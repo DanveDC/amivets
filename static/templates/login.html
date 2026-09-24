@@ -5,34 +5,70 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - AmiVets</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=25">
+    <link rel="stylesheet" href="/static/css/styles.css?v=31">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
 </head>
 
 <body class="login-page">
-    <div class="login-card">
-        <div class="login-card-header">
-            <h1 class="login-brand">AmiVets</h1>
-            <p class="login-subtitle">Sistema de Gestión Veterinaria</p>
+    <!-- Tarea 11 (revisión de bocetos): antes una tarjeta genérica centrada
+         con <h1>AmiVets</h1> como marca. Rehecha siguiendo
+         docs/diseno/pantallas/Login.html al pixel: panel teal 620px con
+         logo + estadísticas a la izquierda, formulario a la derecha.
+         Las clases .login-card / .btn-login / #loginForm / #username /
+         #password / #loginError / #btnLogin se conservan tal cual porque
+         static/js/auth.js y e2e/auth.spec.js las referencian directo. -->
+    <div class="login-brand-panel">
+        <img src="/static/img/logo-amivets.png" alt="AmiVets" class="login-brand-logo">
+        <div class="login-brand-copy">
+            <span class="login-brand-headline">Sistema integrado<br>de gestión</span>
+            <span class="login-brand-sub">Admisión, servicios clínicos, insumos y facturación de la clínica en un solo lugar.</span>
         </div>
+        <div class="login-brand-stats">
+            {% if pacientes_activos is not none %}
+            <div class="login-brand-stat">
+                <span class="login-brand-stat-value">{{ pacientes_activos }}</span>
+                <span class="login-brand-stat-label">Pacientes</span>
+            </div>
+            {% endif %}
+            <div class="login-brand-stat">
+                <span class="login-brand-stat-value">6</span>
+                <span class="login-brand-stat-label">Módulos</span>
+            </div>
+            <div class="login-brand-stat">
+                <span class="login-brand-stat-value">24/7</span>
+                <span class="login-brand-stat-label">Emergencias</span>
+            </div>
+        </div>
+    </div>
 
-        <form id="loginForm" class="login-form">
-            <div id="loginError" class="login-error" role="alert" aria-live="assertive"></div>
-
-            <div class="login-field">
-                <label for="username">Usuario</label>
-                <input type="text" id="username" name="username" required autocomplete="username" placeholder="Ingresá tu usuario">
+    <div class="login-form-side">
+        <div class="login-card">
+            <div class="login-card-header">
+                <span class="login-card-title">Iniciar sesión</span>
+                <p class="login-subtitle">Usa las credenciales que te asignó la clínica.</p>
             </div>
 
-            <div class="login-field">
-                <label for="password">Contraseña</label>
-                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••">
-            </div>
+            <form id="loginForm" class="login-form">
+                <div id="loginError" class="login-error" role="alert" aria-live="assertive"></div>
 
-            <button type="submit" class="btn-login" id="btnLogin">Iniciar Sesión</button>
-        </form>
+                <div class="login-fields">
+                    <div class="login-field">
+                        <label for="username">Usuario</label>
+                        <input type="text" id="username" name="username" required autocomplete="username" placeholder="Ingresá tu usuario">
+                    </div>
+
+                    <div class="login-field">
+                        <label for="password">Contraseña</label>
+                        <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
+                <span class="login-help">¿Olvidaste tu contraseña? Solicítala a un administrador de la clínica.</span>
+            </form>
+        </div>
     </div>
     <script src="/static/js/auth.js"></script>
 </body>

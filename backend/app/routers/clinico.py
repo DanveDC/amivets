@@ -1,18 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from ..core.database import get_db
 from ..core.config import settings
 from ..models import models
 from ..schemas import schemas
+from ..services import orden_service
+from .usuarios import require_roles
 
 router = APIRouter(
     prefix="/api/clinico",
     tags=["Clinico"]
 )
 
+# HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): los 5 POST de este router ya
+# usaban require_roles("admin", "veterinario"), pero los 5 GET de historial
+# (vacunaciones, desparasitaciones, hospitalizaciones, cirugias,
+# pruebas_complementarias por mascota) no tenian NINGUNA dependencia de auth.
+#
+# Se gatean con el mismo admin+veterinario que ya usan los POST del router, no
+# con admin+recepcionista+veterinario como el resto de las lecturas clinicas
+# (consultas.py, mascotas.py): la fila 15 de la matriz de permisos
+# (docs/diseno/ordenes-de-servicio.md, decision 9, 9.3) le da a recepcion una
+# vista RECORTADA de la historia clinica -- "sin diagnostico ni tratamiento" --
+# via un schema de respuesta propio que no existe todavia (fuera de alcance:
+# "exclusivamente autenticacion y autorizacion", no esquemas). Estos 5
+# endpoints devuelven el detalle clinico crudo (lote de vacuna, dosis,
+# informe quirurgico, resultado de laboratorio) sin ningun recorte posible con
+# el schema actual, asi que sumar recepcion ahora seria darle mas acceso del
+# que la matriz pide para esa fila. Queda anotado como deuda pendiente para
+# cuando exista el schema recortado, no resuelto adivinando.
+_ROLES_CLINICO_LECTURA = ("admin", "veterinario")
+
+
 @router.get("/vacunaciones/{mascota_id}")
-def obtener_vacunaciones(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_vacunaciones(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     res = db.query(models.Vacunacion).join(models.Consulta).filter(models.Consulta.mascota_id == mascota_id).all()
     # attach vacuna details
     out = []
@@ -28,14 +54,27 @@ def obtener_vacunaciones(mascota_id: int, db: Session = Depends(get_db)):
     return out
 
 @router.post("/vacunacion", response_model=schemas.VacunacionResponse)
-def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends(get_db)):
+def crear_vacunacion(
+    vacunacion: schemas.VacunacionCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     # Verify consulta exists
     consulta = db.query(models.Consulta).filter(models.Consulta.id == vacunacion.consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
-    # Verify vaccine in inventory
-    producto = db.query(models.Inventario).filter(models.Inventario.id == vacunacion.vacuna_id).first()
+    # Tarea 06 (decisión 1): no se anexa trabajo nuevo a una orden que ya no
+    # lo admite. La línea de servicio cuelga de la misma orden que la
+    # consulta, navegada por la línea CONSULTA (orden_service.orden_de_consulta).
+    orden = orden_service.orden_de_consulta(db, consulta.id)
+    if orden is not None:
+        orden_service.asegurar_recibe_trabajo(orden)
+
+    # Verify vaccine in inventory (row-lock para concurrencia, Tarea 07 decisión 6)
+    producto = db.query(models.Inventario).filter(
+        models.Inventario.id == vacunacion.vacuna_id
+    ).with_for_update().first()
     if not producto:
         raise HTTPException(status_code=404, detail="Vacuna no encontrada en inventario")
     
@@ -65,17 +104,20 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
 
     # Create Service record for the consultation cart
     servicio = models.ServicioConsulta(
+        orden_id=orden.id if orden is not None else None,
         consulta_id=vacunacion.consulta_id,
+        mascota_id=consulta.mascota_id,
         tipo_servicio="VACUNACION",
         referencia_id=db_vacunacion.id,
         nombre_servicio=f"VACUNA: {producto.nombre}",
         cantidad=1.0,
         precio_unitario=precio_aplicado,
         detalles_clinicos=f"Lote: {vacunacion.lote or 'N/D'} | Refuerzo: {vacunacion.fecha_refuerzo or 'No programado'}",
-        estado="Aplicado"
+        estado="EJECUTADO"
     )
     db.add(servicio)
-    
+    db.flush()  # id del servicio para anclar el movimiento al ledger
+
     # Add to inventory history
     mov = models.MovimientoInventario(
         producto_id=producto.id,
@@ -83,7 +125,8 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
         cantidad=1,
         costo_unitario=producto.precio_unitario, # Using price since cost wasn't explicitly captured
         lote=vacunacion.lote,
-        origen_destino=f"Aplicación clínica - Consulta #{consulta.id}"
+        origen_destino=f"Aplicación clínica - Consulta #{consulta.id}",
+        servicio_consulta_id=servicio.id
     )
     db.add(mov)
 
@@ -92,7 +135,11 @@ def crear_vacunacion(vacunacion: schemas.VacunacionCreate, db: Session = Depends
     return db_vacunacion
 
 @router.get("/desparasitaciones/{mascota_id}")
-def obtener_desparasitaciones(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_desparasitaciones(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     res = db.query(models.Desparasitacion).join(models.Consulta).filter(models.Consulta.mascota_id == mascota_id).all()
     out = []
     for d in res:
@@ -107,12 +154,22 @@ def obtener_desparasitaciones(mascota_id: int, db: Session = Depends(get_db)):
     return out
 
 @router.post("/desparasitacion", response_model=schemas.DesparasitacionResponse)
-def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Depends(get_db)):
+def crear_desparasitacion(
+    desp: schemas.DesparasitacionCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
     consulta = db.query(models.Consulta).filter(models.Consulta.id == desp.consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
 
-    producto = db.query(models.Inventario).filter(models.Inventario.id == desp.producto_id).first()
+    orden = orden_service.orden_de_consulta(db, consulta.id)
+    if orden is not None:
+        orden_service.asegurar_recibe_trabajo(orden)
+
+    producto = db.query(models.Inventario).filter(
+        models.Inventario.id == desp.producto_id
+    ).with_for_update().first()
     if not producto:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
@@ -135,23 +192,27 @@ def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Dep
 
     # Create Service record
     servicio = models.ServicioConsulta(
+        orden_id=orden.id if orden is not None else None,
         consulta_id=desp.consulta_id,
+        mascota_id=consulta.mascota_id,
         tipo_servicio="DESPARASITACION",
         referencia_id=db_desp.id,
         nombre_servicio=f"DESPARASITACIÓN: {producto.nombre}",
         cantidad=1.0,
         precio_unitario=precio_aplicado,
         detalles_clinicos=f"Tipo: {desp.tipo} | Dosis: {desp.dosis}",
-        estado="Aplicado"
+        estado="EJECUTADO"
     )
     db.add(servicio)
+    db.flush()  # id del servicio para anclar el movimiento al ledger
 
     mov = models.MovimientoInventario(
         producto_id=producto.id,
         tipo_movimiento="SALIDA",
         cantidad=1,
         costo_unitario=producto.precio_unitario,
-        origen_destino=f"Aplicación clinica - Consulta #{consulta.id}"
+        origen_destino=f"Aplicación clinica - Consulta #{consulta.id}",
+        servicio_consulta_id=servicio.id
     )
     db.add(mov)
 
@@ -160,15 +221,27 @@ def crear_desparasitacion(desp: schemas.DesparasitacionCreate, db: Session = Dep
     return db_desp
 
 @router.get("/hospitalizaciones/{mascota_id}", response_model=List[schemas.HospitalizacionResponse])
-def obtener_hospitalizaciones(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_hospitalizaciones(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     return db.query(models.Hospitalizacion).filter(models.Hospitalizacion.mascota_id == mascota_id).all()
 
 @router.post("/hospitalizacion", response_model=schemas.HospitalizacionResponse)
-def crear_hospitalizacion(hosp: schemas.HospitalizacionCreate, db: Session = Depends(get_db)):
+def crear_hospitalizacion(
+    hosp: schemas.HospitalizacionCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
+    orden = None
     if hosp.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == hosp.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, hosp.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     db_hosp = models.Hospitalizacion(
         mascota_id=hosp.mascota_id,
@@ -188,14 +261,16 @@ def crear_hospitalizacion(hosp: schemas.HospitalizacionCreate, db: Session = Dep
     if hosp.consulta_id:
         db.flush()
         servicio = models.ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=hosp.consulta_id,
+            mascota_id=consulta.mascota_id,
             tipo_servicio="HOSPITALIZACION",
             referencia_id=db_hosp.id,
             nombre_servicio=f"HOSPITALIZACIÓN: {hosp.motivo[:50]}",
             cantidad=float(hosp.dias_cama or 1),
             precio_unitario=hosp.precio_aplicado,
             detalles_clinicos=f"Ingreso: {hosp.fecha_ingreso or 'Justo ahora'} | Egreso: {hosp.fecha_egreso or 'En curso'} | Jaula: {hosp.jaula_nro or 'N/A'} | Estado: {hosp.estado_paciente or 'Estable'}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         )
         db.add(servicio)
 
@@ -204,15 +279,27 @@ def crear_hospitalizacion(hosp: schemas.HospitalizacionCreate, db: Session = Dep
     return db_hosp
 
 @router.get("/cirugias/{mascota_id}", response_model=List[schemas.CirugiaResponse])
-def obtener_cirugias(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_cirugias(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     return db.query(models.Cirugia).filter(models.Cirugia.mascota_id == mascota_id).all()
 
 @router.post("/cirugia", response_model=schemas.CirugiaResponse)
-def crear_cirugia(cir: schemas.CirugiaCreate, db: Session = Depends(get_db)):
+def crear_cirugia(
+    cir: schemas.CirugiaCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
+    orden = None
     if cir.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == cir.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, cir.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     db_cir = models.Cirugia(
         mascota_id=cir.mascota_id,
@@ -230,14 +317,16 @@ def crear_cirugia(cir: schemas.CirugiaCreate, db: Session = Depends(get_db)):
     if cir.consulta_id:
         db.flush()
         servicio = models.ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=cir.consulta_id,
+            mascota_id=consulta.mascota_id,
             tipo_servicio="CIRUGIA",
             referencia_id=db_cir.id,
             nombre_servicio=f"CIRUGÍA: {cir.tipo_procedimiento}",
             cantidad=1.0,
             precio_unitario=cir.precio_aplicado,
             detalles_clinicos=f"Riesgo ASA: {cir.riesgo_asa or 'N/D'} | Cirujano ID: {cir.cirujano_id or 'N/D'}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         )
         db.add(servicio)
 
@@ -246,15 +335,27 @@ def crear_cirugia(cir: schemas.CirugiaCreate, db: Session = Depends(get_db)):
     return db_cir
 
 @router.get("/pruebas_complementarias/{mascota_id}", response_model=List[schemas.PruebaComplementariaResponse])
-def obtener_pruebas(mascota_id: int, db: Session = Depends(get_db)):
+def obtener_pruebas(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    _: models.Usuario = Depends(require_roles(*_ROLES_CLINICO_LECTURA)),
+):
     return db.query(models.PruebaComplementaria).filter(models.PruebaComplementaria.mascota_id == mascota_id).all()
 
 @router.post("/prueba_complementaria", response_model=schemas.PruebaComplementariaResponse)
-def crear_prueba_complementaria(prueba: schemas.PruebaComplementariaCreate, db: Session = Depends(get_db)):
+def crear_prueba_complementaria(
+    prueba: schemas.PruebaComplementariaCreate,
+    db: Session = Depends(get_db),
+    _: Optional[models.Usuario] = Depends(require_roles("admin", "veterinario")),
+):
+    orden = None
     if prueba.consulta_id:
         consulta = db.query(models.Consulta).filter(models.Consulta.id == prueba.consulta_id).first()
         if not consulta:
             raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        orden = orden_service.orden_de_consulta(db, prueba.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
 
     db_prueba = models.PruebaComplementaria(
         tipo=prueba.tipo,
@@ -271,14 +372,16 @@ def crear_prueba_complementaria(prueba: schemas.PruebaComplementariaCreate, db: 
     if prueba.consulta_id:
         db.flush()
         servicio = models.ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
             consulta_id=prueba.consulta_id,
-            tipo_servicio="LABORATORIO" if "Lab" in prueba.tipo else "DIAGNOSTICO",
+            mascota_id=consulta.mascota_id,
+            tipo_servicio="LABORATORIO" if "Lab" in (prueba.tipo or "") else "DIAGNOSTICO",
             referencia_id=db_prueba.id,
             nombre_servicio=f"ESTUDIO: {prueba.tipo}",
             cantidad=1.0,
             precio_unitario=prueba.precio_aplicado,
             detalles_clinicos=f"Resultado: {prueba.resultado[:100] if prueba.resultado else 'Pendiente'} | Obs: {prueba.observaciones[:50] if prueba.observaciones else 'N/A'}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         )
         db.add(servicio)
 

@@ -78,7 +78,7 @@ def populate_demo():
             consulta_id=consulta.id, tipo_servicio="HOSPITALIZACION", referencia_id=hosp.id,
             nombre_servicio="HOSPITALIZACIÓN: OBSERVACIÓN", cantidad=1.0, precio_unitario=150.0,
             detalles_clinicos=f"Ingreso: {hosp.fecha_ingreso.strftime('%d/%m/%Y %H:%M')} | Egreso: {hosp.fecha_egreso.strftime('%d/%m/%Y %H:%M')} | Jaula: {hosp.jaula_nro} | Estado: {hosp.estado_paciente}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         ))
 
         # 4. Vacunación
@@ -94,7 +94,7 @@ def populate_demo():
                 consulta_id=consulta.id, tipo_servicio="VACUNACION", referencia_id=vac.id,
                 nombre_servicio=f"VACUNA: {vac_prod.nombre}", cantidad=1.0, precio_unitario=40.0,
                 detalles_clinicos=f"Lote: {vac.lote} | Refuerzo: {vac.fecha_refuerzo.strftime('%d/%m/%Y')}",
-                estado="Aplicado"
+                estado="EJECUTADO"
             ))
 
         # 5. Cirugía
@@ -109,7 +109,7 @@ def populate_demo():
             consulta_id=consulta.id, tipo_servicio="CIRUGIA", referencia_id=cir.id,
             nombre_servicio=f"CIRUGÍA: {cir.tipo_procedimiento}", cantidad=1.0, precio_unitario=250.0,
             detalles_clinicos=f"Riesgo ASA: {cir.riesgo_asa} | Cirujano ID: {cir.cirujano_id}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         ))
 
         # 6. Laboratorio
@@ -124,7 +124,7 @@ def populate_demo():
             consulta_id=consulta.id, tipo_servicio="LABORATORIO", referencia_id=lab.id,
             nombre_servicio=f"ESTUDIO: {lab.tipo}", cantidad=1.0, precio_unitario=45.0,
             detalles_clinicos=f"Resultado: {lab.resultado} | Obs: {lab.observaciones}",
-            estado="Aplicado"
+            estado="EJECUTADO"
         ))
 
         # 7. Desparasitación
@@ -140,7 +140,7 @@ def populate_demo():
                 consulta_id=consulta.id, tipo_servicio="DESPARASITACION", referencia_id=desp.id,
                 nombre_servicio=f"DESPARASITACIÓN: {desp_prod.nombre}", cantidad=1.0, precio_unitario=15.0,
                 detalles_clinicos=f"Tipo: {desp.tipo} | Dosis: {desp.dosis}",
-                estado="Aplicado"
+                estado="EJECUTADO"
             ))
 
         db.commit()

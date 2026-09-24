@@ -15,6 +15,7 @@ const {
   authHeaders,
   createTestUser,
   deleteTestUser,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -40,7 +41,7 @@ test.describe('Panel de administración — Usuarios', () => {
 
   test('editar usuario: cambiar nombre, correo y rol (commit 40a0955)', async ({ page, request }) => {
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     await expect(page.locator('#usuariosTableBody')).toContainText(testUser.username);
 
     const row = page.locator('#usuariosTableBody tr', { hasText: testUser.username });
@@ -97,7 +98,7 @@ test.describe('Panel de administración — Citas QR (red mockeada)', () => {
       return route.fulfill({ json: estado === 'cancelada' ? citasCanceladas : citasPendientes });
     });
 
-    await page.click('.menu-item[data-target="sec-citas-web"]');
+    await gotoSection(page, 'sec-citas-web');
     await expect(page.locator('#citasQRBody')).toContainText('Cliente Uno');
     await expect(page.locator('#citasQRBody')).toContainText('pendiente');
 
@@ -127,7 +128,7 @@ test.describe('Panel de administración — Citas QR (red mockeada)', () => {
       return route.fallback();
     });
 
-    await page.click('.menu-item[data-target="sec-citas-web"]');
+    await gotoSection(page, 'sec-citas-web');
     await expect(page.locator('#citasQRBody')).toContainText('Cliente Cancelable');
 
     page.once('dialog', (dialog) => dialog.accept());
@@ -157,7 +158,7 @@ test.describe('Panel de administración — Horarios de veterinario (red mockead
       return route.fallback();
     });
 
-    await page.click('.menu-item[data-target="sec-citas-web"]');
+    await gotoSection(page, 'sec-citas-web');
     await page.click('.qr-tab-btn[data-tab="tab-horarios"]');
     await page.selectOption('#selectVetHorario', '201');
     await page.click('button:has-text("+ Agregar Bloque")');
@@ -196,7 +197,7 @@ test.describe('Panel de administración — Horarios de veterinario (red mockead
       return route.fallback();
     });
 
-    await page.click('.menu-item[data-target="sec-citas-web"]');
+    await gotoSection(page, 'sec-citas-web');
     await page.click('.qr-tab-btn[data-tab="tab-horarios"]');
     await page.selectOption('#selectVetHorario', '202');
     // NOTE: selecting a vet does not auto-load its schedule — the grid only
@@ -226,7 +227,7 @@ test.describe('Panel de administración — Horarios de veterinario (red mockead
       })
     );
 
-    await page.click('.menu-item[data-target="sec-citas-web"]');
+    await gotoSection(page, 'sec-citas-web');
     await page.click('.qr-tab-btn[data-tab="tab-horarios"]');
     await page.selectOption('#selectVetHorario', '203');
     await page.click('button:has-text("Ver Horarios")');

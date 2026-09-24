@@ -42,6 +42,31 @@ test.describe('Autenticación', () => {
     expect(token).toBeFalsy();
   });
 
+  // Tarea 11 (revisión de bocetos) — login.html se rehizo siguiendo
+  // docs/diseno/pantallas/Login.html; esto cubre lo que un boceto estático
+  // no muestra: foco visible y que el submit funcione por teclado (Enter),
+  // no solo con el mouse en #btnLogin.
+  test('foco visible en los campos y login funciona con Enter, sin tocar el mouse', async ({ page }) => {
+    await page.goto('/login');
+
+    await page.locator('#username').focus();
+    await expect(page.locator('#username')).toBeFocused();
+    const outlineUsuario = await page.locator('#username').evaluate(
+      (el) => getComputedStyle(el).boxShadow
+    );
+    expect(outlineUsuario, 'el input de usuario debe tener --focus-ring visible al enfocarse').not.toBe('none');
+
+    await page.locator('#username').fill(ADMIN_CREDENTIALS.username);
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#password')).toBeFocused();
+    await page.keyboard.type(ADMIN_CREDENTIALS.password);
+    await page.keyboard.press('Enter');
+
+    await page.waitForURL('**/');
+    const token = await page.evaluate(() => localStorage.getItem('token'));
+    expect(token).toBeTruthy();
+  });
+
   test('el menú de administración aparece solo para usuarios admin', async ({ page }) => {
     await page.goto('/login');
     await page.fill('#username', ADMIN_CREDENTIALS.username);
@@ -49,7 +74,9 @@ test.describe('Autenticación', () => {
     await page.click('#btnLogin');
     await page.waitForURL('**/');
 
-    const adminNav = page.locator('.nav-link.admin-only[data-target="sec-usuarios"], .menu-item.admin-only[data-target="sec-usuarios"]');
+    // The admin-only entry now lives inside the user-menu dropdown.
+    await page.locator('.av-usermenu > summary').click();
+    const adminNav = page.locator('.av-usermenu [data-target="sec-usuarios"]');
     await expect(adminNav).toBeVisible();
   });
 
@@ -66,9 +93,9 @@ test.describe('Autenticación', () => {
       await page.click('#btnLogin');
       await page.waitForURL('**/');
 
-      const adminNav = page.locator('.menu-item.admin-only[data-target="sec-usuarios"]');
-      // Element exists in the DOM but must stay hidden (display:none) for non-admins.
-      await expect(adminNav).toBeHidden();
+      const adminNav = page.locator('.av-usermenu [data-target="sec-usuarios"]');
+      // The router prunes the admin-only entry from the DOM for non-admins.
+      await expect(adminNav).toHaveCount(0);
     } finally {
       await deleteTestUser(request, token, doctor.id);
     }

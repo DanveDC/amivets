@@ -204,6 +204,13 @@ el rol es qué pestañas hay dentro de Configuración.
 
 ### La tabla de correspondencias, sección por sección
 
+> **Estado (Tarea 09, etapas 3–5, rama `redesign/minimalist-ui`):** ya está
+> implementado el núcleo de esta arquitectura para el eje consulta→servicios:
+> **Hoy** (`sec-hoy`) es la primera pestaña y el aterrizaje;
+> **Órdenes (Médico)** se eliminó y su bandeja vive en Hoy;
+> la **consulta abierta** es una pantalla propia (`sec-consulta-abierta`) en
+> vez del modal. El resto de la tabla sigue siendo propuesta.
+
 | Sección de hoy | Qué pasa con ella | El hecho que lo motiva |
 | --- | --- | --- |
 | **Consultorio** | Se renombra **Pacientes** y absorbe Propietarios | 255 consultas contra 1 cita: es la pantalla real del sistema (Hecho 1) |
@@ -398,11 +405,22 @@ real— parado en una pantalla desde la que no se puede hacer nada al respecto.
 
 ---
 
-## Dentro del paciente: de once pestañas a seis
+## Dentro del paciente: de doce pestañas a seis
 
-La ficha de un paciente tiene hoy **once pestañas** en una columna lateral. El
-documento del sistema de diseño avisó que ocho no entran en una fila de
-pestañas; en realidad son once.
+> **Estado (Tarea 09, rama `redesign/minimalist-ui`):** implementado. La ficha
+> pasó de 12 `.pet-nav-item` a **6**: `resumen`, `consultas`, `servicios`,
+> `recetas` (Fórmulas), `notas`, `facturacion` (Cobros). Las 6 pestañas por
+> tipo de servicio (vacunas, desparasitaciones, hospitalizaciones,
+> procedimientos, laboratorio, imágenes) se colapsaron en **una sola pestaña
+> "Servicios"** — una historia unificada con buscador y filtros, en vez de una
+> pestaña por tipo, porque los tipos los define el módulo de Catálogo y cambian.
+> `historia` + `peso` se fundieron en **Resumen**; `ordenes` (placeholder
+> muerto) se eliminó. El detalle de cada servicio se abre por fila, con los
+> parámetros propios de su tipo.
+
+La ficha de un paciente tenía **doce pestañas** en una columna lateral (las 11
+originales del sistema viejo más un placeholder `ordenes`). El documento del
+sistema de diseño avisó que ocho no entran en una fila de pestañas.
 
 Así se usan de verdad, contado sobre la base:
 
@@ -429,18 +447,25 @@ que existe para avisar que no hace nada.
 
 ### Las seis que quedan
 
-| Pestaña | Qué junta | Por qué |
-| --- | --- | --- |
-| **Resumen** | Historia clínica + gráfico de peso + tarjeta del dueño + alertas | Un gráfico no es una sección; es un dato del resumen |
-| **Consultas** | Igual, pero cada consulta se abre **en la misma pantalla**, no en un único modal que hace de todo (cargar la consulta, buscar ítems, agregar cargos) | Es el 57 % del contenido clínico de toda la clínica |
-| **Fórmulas** | Igual, sin el botón que avisa que no hace nada | 113 registros: el veterinario mira qué recetó la vez pasada |
-| **Preventiva** | Vacunas + desparasitaciones | Misma forma de dato: producto aplicado en una fecha, ligado a una consulta y a un ítem de inventario |
-| **Procedimientos** | Cirugías + hospitalizaciones + estudios (lab e imágenes) | Lab e imágenes son literalmente la misma tabla en el código; cirugía+hospitalización es una agrupación de este documento, no del código (ver Fusión 5) |
-| **Cobros** | Facturas del paciente | La pregunta "¿este cliente debe algo?" merece su lugar |
+| Pestaña | `data-tab` | Qué junta | Por qué |
+| --- | --- | --- | --- |
+| **Resumen** | `resumen` | Historia clínica + gráfico de peso (Chart.js, `loadWeightChart`) + alertas del paciente (observaciones) | Un gráfico no es una sección; es un dato del resumen. Funde `historia` + `peso` |
+| **Consultas** | `consultas` | Igual (filtro + tabla, `cargarConsultas`); cada consulta se abre en la pantalla `sec-consulta-abierta` | Es el 57 % del contenido clínico de toda la clínica |
+| **Servicios** | `servicios` | **Reemplaza vacunas + desparasitaciones + hospitalizaciones + procedimientos (cirugías) + laboratorio + imágenes.** Feed único `GET /api/servicios/?mascota_id&alcance=todos` (servicios anexados a consulta + directos), con buscador de texto y filtros de tipo, estado, facturado y rango de fechas. Cada fila abre un detalle **según el tipo** (lote/refuerzo para vacuna, ASA/informe para cirugía, jaula/estado para hospitalización, resultado/archivo para estudio, catálogo + `detalles_clinicos` para insumo/estética/procedimiento). El alta clínica sigue disponible detrás de "+ Registrar" (formularios `formCirugia`/`formVacuna`/`formHospitalizacion`/`formDesparasitacion`/`formPrueba`); el alta suelta detrás de "+ Servicio directo" (`#modalServicioDirecto`, `POST /api/servicios/`) | Los tipos de servicio los define el **módulo de Catálogo** (se agregan/quitan/modifican): una pestaña por tipo no escala. Lab e imágenes ya eran la misma tabla; el resto comparte el modelo `ServicioConsulta` |
+| **Fórmulas** | `recetas` | Igual (`cargarRecetasPet`), sin el botón que avisa que no hace nada | 113 registros: el veterinario mira qué recetó la vez pasada |
+| **Notas** | `notas` | Igual (`cargarNotasPet`) | Notas clínicas del paciente con dictado por voz |
+| **Cobros** | `facturacion` | Facturas del paciente (`cargarFacturasMascota`) | La pregunta "¿este cliente debe algo?" merece su lugar |
 
-Once → seis. El sistema de diseño dejó esta decisión en manos de esta fase; seis
-**sí** entran en una fila de pestañas horizontal, que es el límite que se adopta
-acá.
+Doce → seis. Seis **sí** entran en una fila de pestañas horizontal, que es el
+límite que se adopta acá. **Resumen, Consultas, Fórmulas, Notas y Cobros son
+estructurales** —siempre presentes, no dependen del catálogo—; lo único que se
+colapsa es lo que es *tipo de servicio*.
+
+> **Nota sobre Fusión 3/4/5 (Estudios / Preventiva / Procedimientos):** esas
+> agrupaciones intermedias quedaron superadas. La Tarea 09 no crea pestañas
+> "Preventiva" ni "Procedimientos": todo tipo de servicio vive en la pestaña
+> única **Servicios**, y la colisión de `id` con `data-tab="procedimientos"`
+> desaparece porque esa pestaña ya no existe.
 
 ---
 
@@ -650,12 +675,13 @@ borrarlas, y conviene sumar cobertura nueva para las cuatro secciones que hoy
 no la tienen. Cada sección que se mueva tiene que actualizar sus pruebas en el
 mismo commit, no al final.
 
-Hay además una colisión de `id` puertas adentro de la ficha del paciente: hoy
-`static/templates/index.html` (línea 1041) ya usa `data-tab="procedimientos"`
-como id de la pestaña "Cirugías" actual. La nueva pestaña fusionada
-"Procedimientos" (Fusión 5: Cirugías + Hospitalizaciones + Estudios) reutilizaría
-ese mismo id para un contenido más amplio y distinto —hay que revisarlo antes
-de renombrar, junto con los `sec-*` de arriba.
+~~Hay además una colisión de `id` puertas adentro de la ficha del paciente~~
+**(resuelto en Tarea 09):** la pestaña "Cirugías" usaba `data-tab="procedimientos"`.
+La Tarea 09 eliminó esa pestaña y las otras cinco por tipo; ahora existe una sola
+pestaña `data-tab="servicios"`. No hay nuevo id "Procedimientos" que colisione.
+`switchPetTab` mantiene un mapa de compatibilidad (`PET_TAB_LEGACY`) que traduce
+los nombres viejos (`procedimientos`, `vacunas`, `historia`, `peso`, …) a los
+seis nuevos, para no romper `onclick` heredados.
 
 **Otro aviso, este de HTML:** además del menú lateral, el `<header>` de
 `static/templates/index.html` (líneas 33-37) tiene una segunda barra de

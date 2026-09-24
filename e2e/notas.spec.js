@@ -33,6 +33,7 @@ const {
   deleteTestConsulta,
   createTestNota,
   deleteTestNota,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -51,7 +52,7 @@ async function loginAsAdmin(page) {
  */
 async function seleccionarPacientePorUI(page, mascota) {
   const nombreBase = mascota.nombre.split(' ')[0]; // el apellido va pegado en las respuestas
-  await page.click('.menu-item[data-target="sec-consultorio"]');
+  await gotoSection(page, 'sec-consultorio');
   await page.fill('#consultorioSearchMascota', nombreBase);
   const item = page.locator('#consultorioMascotasList .pet-list-item', { hasText: nombreBase }).first();
   await expect(item).toBeVisible();
@@ -84,7 +85,7 @@ test.describe.serial('Notas clínicas — /api/notas', () => {
     S.propietario = await createTestPropietario(request);
     S.mascota = await createTestMascota(request, S.propietario.id);
     S.vet = await createTestVeterinario(request, S.token);
-    S.consulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id });
+    S.consulta = await createTestConsulta(request, { mascotaId: S.mascota.id, veterinarioId: S.vet.id }, S.token);
   });
 
   test.afterAll(async ({ request }) => {
@@ -221,7 +222,7 @@ test.describe.serial('Notas clínicas — /api/notas', () => {
 
     // consulta_id de otra mascota -> 400.
     const otraMascota = await createTestMascota(request, S.propietario.id);
-    const otraConsulta = await createTestConsulta(request, { mascotaId: otraMascota.id, veterinarioId: S.vet.id });
+    const otraConsulta = await createTestConsulta(request, { mascotaId: otraMascota.id, veterinarioId: S.vet.id }, S.token);
     const mismatch = await request.post('/api/notas/', {
       headers: authHeaders(S.token),
       data: { mascota_id: S.mascota.id, texto: 'x', categoria: 'general', consulta_id: otraConsulta.id },

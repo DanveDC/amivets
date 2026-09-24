@@ -37,6 +37,7 @@ const {
   deleteTestConsulta,
   createTestFactura,
   anularTestFactura,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -92,7 +93,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     const cedula = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-propietarios"]');
+    await gotoSection(page, 'sec-propietarios');
 
     // --- Alta por el modal ---
     await page.click('#btnRegistrarPropietarioAlt');
@@ -150,11 +151,15 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
 
     // Verificación por UI: el paciente aparece en el listado de Consultorio.
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-consultorio"]');
+    await gotoSection(page, 'sec-consultorio');
     // El nombre en la respuesta viene con el apellido del dueño pegado
     // (MascotaResponse.append_apellido); el prefijo PWTEST_ del alta es estable.
     const nombreBase = S.mascota.nombre.split(' ')[0];
-    await expect(page.locator('#consultorioMascotasList')).toContainText(nombreBase);
+    // El padrón real tiene 318 mascotas y la lista muestra las primeras 50; se
+    // filtra por el buscador (input -> debounce 400ms -> /mascotas/?search=),
+    // igual que haría un usuario, antes de comprobar que la mascota aparece.
+    await page.fill('#consultorioSearchMascota', nombreBase);
+    await expect(page.locator('#consultorioMascotasList')).toContainText(nombreBase, { timeout: 10000 });
 
     // --- Edición por API + contraste ---
     const putRes = await request.put(`/api/mascotas/${S.mascota.id}`, {
@@ -238,9 +243,12 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
       mascotaId: S.mascota.id,
       veterinarioId: S.vet.id,
       peso: 12.5,
-    });
+    }, S.token);
     expect(S.consulta.mascota_id).toBe(S.mascota.id);
     expect(S.consulta.estado_pago).toBe('POR_COBRAR');
+    // Tarea 09, decisión 6: eje de ciclo de vida clínico, separado del de cobro.
+    // Una consulta nueva nace ABIERTA; se cierra al facturar (ver test de factura).
+    expect(S.consulta.estado).toBe('ABIERTA');
 
     // El historial de peso ahora sí refleja la consulta.
     const historial = await (await request.get(`/api/mascotas/${S.mascota.id}/peso-history`, { headers: authHeaders(S.token) })).json();
@@ -251,12 +259,15 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     // tipo_servicio deliberadamente NO INSUMO/VACUNACION para no tocar stock:
     // acá probamos el ciclo de estados del servicio, no el kardex.
     const servPayload = {
-      consulta_id: S.consulta.id, // el schema lo exige aunque el router lo tome del path
+      // Tarea 09: consulta_id ya es opcional en el schema (un servicio directo
+      // llega sin él). Cuando se anexa a una consulta el id manda desde el path;
+      // se sigue mandando en el body por retro-compatibilidad, es inocuo.
+      consulta_id: S.consulta.id,
       tipo_servicio: 'PROCEDIMIENTO',
       nombre_servicio: testTag('servicio'),
       cantidad: 1,
       precio_unitario: 15000,
-      estado: 'Pendiente',
+      estado: 'SOLICITADO',
     };
     const servRes = await request.post(`/api/consultas/${S.consulta.id}/servicios`, {
       headers: authHeaders(S.token),
@@ -265,7 +276,7 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     expect(servRes.status(), await servRes.text()).toBe(201);
     const servicio = await servRes.json();
     S.servicioId = servicio.id;
-    expect(servicio.estado).toBe('Pendiente');
+    expect(servicio.estado).toBe('SOLICITADO');
 
     // --- Agregar una receta ---
     const recetaRes = await request.post(`/api/consultas/${S.consulta.id}/recetas`, {
@@ -291,14 +302,14 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     // --- Cambiar el estado del servicio (PATCH) y verificar ---
     const patchRes = await request.patch(`/api/consultas/servicios/${S.servicioId}`, {
       headers: authHeaders(S.token),
-      data: { estado: 'Aplicado' },
+      data: { estado: 'EJECUTADO' },
     });
     expect(patchRes.ok(), await patchRes.text()).toBeTruthy();
-    expect((await patchRes.json()).estado).toBe('Aplicado');
+    expect((await patchRes.json()).estado).toBe('EJECUTADO');
 
     const consultaFull = await (await request.get(`/api/consultas/${S.consulta.id}`, { headers: authHeaders(S.token) })).json();
     const servicioEnConsulta = consultaFull.servicios.find((s) => s.id === S.servicioId);
-    expect(servicioEnConsulta.estado).toBe('Aplicado');
+    expect(servicioEnConsulta.estado).toBe('EJECUTADO');
   });
 
   test('factura (/api/facturas): emitir desde la consulta, abonar y anular', async ({ request }) => {
@@ -315,9 +326,11 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     expect(S.factura.estado).toBe('PENDIENTE');
     expect(S.factura.consulta_id).toBe(S.consulta.id);
 
-    // Emitir factura de una consulta la marca COBRADO.
+    // Emitir factura de una consulta la marca COBRADO y la cierra (Tarea 09,
+    // decisión 6): facturar por cualquier camino deja la consulta CERRADA.
     const consultaCobrada = await (await request.get(`/api/consultas/${S.consulta.id}`, { headers: authHeaders(S.token) })).json();
     expect(consultaCobrada.estado_pago).toBe('COBRADO');
+    expect(consultaCobrada.estado).toBe('CERRADA');
 
     // Re-facturar la misma consulta sin anular antes debe dar 409.
     const dupRes = await request.post('/api/facturas/', {
@@ -357,5 +370,128 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     // Anular de nuevo debe fallar con 400 (ya está anulada).
     const reAnularRes = await request.post(`/api/facturas/${S.factura.id}/anular`, { headers: authHeaders(S.token) });
     expect(reAnularRes.status()).toBe(400);
+  });
+
+  test('facturas: TODOS los endpoints rechazan sin token (hallazgo de revisión, etapa 8 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // El router completo no tenía NINGUN Depends(require_roles), desde antes
+    // de Tarea 06 -- confirmado en vivo con curl contra el stack real:
+    // POST /api/facturas/ sin token devolvía 201 y creaba una factura de
+    // verdad. Cada endpoint tiene que dar 401 sin sesión, sin excepción.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/facturas/', sinToken),
+      () => request.get(`/api/facturas/${S.factura.id}`, sinToken),
+      () => request.post('/api/facturas/', {
+        ...sinToken,
+        data: { propietario_id: S.mascota.propietario_id, detalles: [{ descripcion: 'x', cantidad: 1, precio_unitario: 1 }] },
+      }),
+      () => request.post(`/api/facturas/from-consulta/${S.consulta.id}`, sinToken),
+      () => request.put(`/api/facturas/${S.factura.id}`, { ...sinToken, data: {} }),
+      () => request.post(`/api/facturas/${S.factura.id}/anular`, sinToken),
+      () => request.get(`/api/facturas/pendientes/${S.consulta.id}`, sinToken),
+      () => request.get(`/api/facturas/mascota/${S.mascota.id}`, sinToken),
+      () => request.post(`/api/facturas/${S.factura.id}/abonar`, { ...sinToken, data: { monto: 1 } }),
+      () => request.get(`/api/facturas/${S.factura.id}/abonos`, sinToken),
+      () => request.get(`/api/facturas/${S.factura.id}/pdf`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('mascotas: TODOS los endpoints rechazan sin token (Tarea 10 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // Mismo hallazgo que facturas.py (96484b0), pero en mascotas.py: NINGUN
+    // endpoint tenía Depends(require_roles). Confirmado en vivo con curl:
+    // GET /api/mascotas/ sin token devolvía 200 con el padrón completo de
+    // pacientes, y DELETE /api/mascotas/{id} sin token devolvía 204 y
+    // borraba (desactivaba) una mascota real.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/mascotas/', sinToken),
+      () => request.get(`/api/mascotas/${S.mascota.id}`, sinToken),
+      () => request.post('/api/mascotas/', {
+        ...sinToken,
+        data: { nombre: 'x', especie: 'Perro', propietario_id: S.propietarioB.id },
+      }),
+      () => request.post(`/api/mascotas/${S.mascota.id}/transferir`, {
+        ...sinToken,
+        data: { nuevo_propietario_id: S.propietarioB.id },
+      }),
+      () => request.get(`/api/mascotas/${S.mascota.id}/peso-history`, sinToken),
+      () => request.put(`/api/mascotas/${S.mascota.id}`, { ...sinToken, data: {} }),
+      () => request.delete(`/api/mascotas/${S.mascota.id}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('propietarios: TODOS los endpoints rechazan sin token (Tarea 10 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // Mismo hallazgo, propietarios.py: expone el padrón completo de tutores,
+    // cédula incluida, sin ningún control.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/propietarios/', sinToken),
+      () => request.get(`/api/propietarios/${S.propietarioB.id}`, sinToken),
+      () => request.post('/api/propietarios/', {
+        ...sinToken,
+        data: { nombre: 'x', apellido: 'y', cedula: `${Date.now()}`, telefono: '0', direccion: 'x' },
+      }),
+      () => request.put(`/api/propietarios/${S.propietarioB.id}`, { ...sinToken, data: {} }),
+      () => request.delete(`/api/propietarios/${S.propietarioB.id}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('citas: TODOS los endpoints rechazan sin token, incluido POST / (Tarea 10 — corrige la suposición de que era el QR público)', async ({ request }) => {
+    // Los 6 estaban abiertos. POST /api/citas/ NO es el agendamiento público
+    // por QR -- ese es /api/admin/supabase/citas-qr (ver el comentario de
+    // cabecera de backend/app/routers/citas.py). El único caller real de
+    // POST /api/citas/ es agenda.js, dentro del shell autenticado.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get('/api/citas/', sinToken),
+      () => request.get(`/api/citas/${S.cita.id}`, sinToken),
+      () => request.post('/api/citas/', {
+        ...sinToken,
+        data: {
+          veterinario_id: S.vet.id,
+          propietario_id: S.propietarioB.id,
+          mascota_id: S.mascota.id,
+          fecha_cita: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+          tipo: 'x',
+        },
+      }),
+      () => request.put(`/api/citas/${S.cita.id}/checkin`, { ...sinToken, data: { estado: 'En espera' } }),
+      () => request.put(`/api/citas/${S.cita.id}`, { ...sinToken, data: {} }),
+      () => request.delete(`/api/citas/${S.cita.id}`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
+  });
+
+  test('consultas: los 5 GET que habían quedado sueltos (gate parcial) rechazan sin token (Tarea 10)', async ({ request }) => {
+    // Este router SÍ usaba require_roles en 7 de sus 12 endpoints, pero 5
+    // GET (detalle, listado, recetas, y los dos PDF) no tenían ninguna
+    // dependencia de auth -- ni la tabla heurística del enunciado ni la
+    // matriz de permisos señalaban este router.
+    const sinToken = { headers: {} };
+    const checks = [
+      () => request.get(`/api/consultas/${S.consulta.id}`, sinToken),
+      () => request.get('/api/consultas/', sinToken),
+      () => request.get(`/api/consultas/${S.consulta.id}/recetas`, sinToken),
+      () => request.get(`/api/consultas/${S.consulta.id}/pdf`, sinToken),
+    ];
+    for (const hacerPedido of checks) {
+      const res = await hacerPedido();
+      expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+    }
   });
 });

@@ -41,15 +41,26 @@ class PropietarioService:
         db: Session,
         skip: int = 0,
         limit: int = 100,
-        activo: Optional[bool] = None
+        activo: Optional[bool] = None,
+        search: Optional[str] = None
     ) -> List[Propietario]:
         """Lista propietarios con filtros opcionales"""
         query = db.query(Propietario)
         
         if activo is not None:
             query = query.filter(Propietario.activo == activo)
-        
-        return query.offset(skip).limit(limit).all()
+        if search:
+            texto = f"%{search}%"
+            query = query.filter(
+                (Propietario.nombre.ilike(texto))
+                | (Propietario.apellido.ilike(texto))
+                | (Propietario.cedula.ilike(texto))
+            )
+
+        # Orden explícito y estable: sin ORDER BY, con >100 filas y limit=100 el
+        # heap-scan de Postgres puede dejar afuera al recién creado (la UI filtra
+        # client-side sobre estas <=limit filas). El más nuevo primero.
+        return query.order_by(Propietario.id.desc()).offset(skip).limit(limit).all()
     
     @staticmethod
     def actualizar_propietario(

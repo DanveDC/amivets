@@ -14,9 +14,11 @@ const { test, expect } = require('@playwright/test');
 const {
   ADMIN_CREDENTIALS,
   getAdminToken,
+  authHeaders,
   testTag,
   createTestProduct,
   deleteTestProduct,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -44,7 +46,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     const nombre = testTag('prodUI');
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-inventario"]');
+    await gotoSection(page, 'sec-inventario');
     await page.click('#btnNuevoProducto');
     await expect(page.locator('#modalProducto')).toBeVisible();
 
@@ -64,7 +66,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     await expect(page.locator('#inventarioTableBody')).toContainText(nombre);
 
     // Contraste API: aparece en el listado y en GET /{id}.
-    const items = await (await request.get('/api/inventario/?limit=500')).json();
+    const items = await (await request.get('/api/inventario/?limit=500', { headers: authHeaders(S.token) })).json();
     const creado = items.find((p) => p.codigo === S.codigo);
     expect(creado, 'el producto creado por UI debe aparecer en la API').toBeTruthy();
     expect(creado.nombre).toBe(nombre);
@@ -74,12 +76,12 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     expect(creado.precio_unitario).toBeCloseTo(1500, 2);
     S.uiProd = creado;
 
-    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`);
+    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).proveedor).toBe('PWTEST Proveedor');
 
     // GET /{id} inexistente -> 404.
-    const missing = await request.get('/api/inventario/99999999');
+    const missing = await request.get('/api/inventario/99999999', { headers: authHeaders(S.token) });
     expect(missing.status()).toBe(404);
   });
 
@@ -87,7 +89,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     const nuevoNombre = `${S.uiProd.nombre}_edit`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-inventario"]');
+    await gotoSection(page, 'sec-inventario');
     await page.fill('#searchInventario', S.codigo);
     await expect(page.locator('#inventarioTableBody')).toContainText(S.uiProd.nombre);
 
@@ -106,7 +108,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     await expect(page.locator('#modalEditarProducto')).toBeHidden();
 
     // Contraste API.
-    const actualizado = await (await request.get(`/api/inventario/${S.uiProd.id}`)).json();
+    const actualizado = await (await request.get(`/api/inventario/${S.uiProd.id}`, { headers: authHeaders(S.token) })).json();
     expect(actualizado.nombre).toBe(nuevoNombre);
     expect(actualizado.precio_unitario).toBeCloseTo(2750, 2);
     expect(actualizado.stock_minimo).toBe(50);
@@ -122,7 +124,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     const okProd = await createTestProduct(request, { stock_actual: 80, stock_minimo: 5, precio_unitario: 10 });
 
     try {
-      const alertas = await (await request.get('/api/inventario/alertas-stock')).json();
+      const alertas = await (await request.get('/api/inventario/alertas-stock', { headers: authHeaders(S.token) })).json();
       expect(Array.isArray(alertas)).toBe(true);
       for (const p of alertas) expect(p.stock_actual).toBeLessThanOrEqual(p.stock_minimo);
 
@@ -133,7 +135,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
       expect(alertas.some((p) => p.id === okProd.id)).toBe(false);
 
       // El filtro equivalente del listado general.
-      const bajoStock = await (await request.get('/api/inventario/?limit=500&bajo_stock=true')).json();
+      const bajoStock = await (await request.get('/api/inventario/?limit=500&bajo_stock=true', { headers: authHeaders(S.token) })).json();
       expect(bajoStock.some((p) => p.id === S.lowProd.id)).toBe(true);
       expect(bajoStock.some((p) => p.id === okProd.id)).toBe(false);
     } finally {
@@ -141,11 +143,66 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     }
   });
 
+  // Tarea 11 (revisión de bocetos, fidelidad estructural a Insumos.html):
+  // KPI de "Bajo mínimo" y la pill homónima, que reemplazó al viejo botón
+  // "Bajo Stock" (duplicaba el renderizado completo en app.js).
+  test('KPI "Bajo mínimo" cuenta lo mismo que /alertas-stock, y la pill "Bajo mínimo" filtra la tabla', async ({ page, request }) => {
+    const lowProd = await createTestProduct(request, { stock_actual: 1, stock_minimo: 20, precio_unitario: 5, nombre: testTag('BajoMin') });
+    const okProd = await createTestProduct(request, { stock_actual: 80, stock_minimo: 5, precio_unitario: 5, nombre: testTag('BienSurtido') });
+
+    try {
+      const alertas = await (await request.get('/api/inventario/alertas-stock', { headers: authHeaders(S.token) })).json();
+
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-inventario');
+      await expect(page.locator('#invKpiBajoMinimo')).toHaveText(String(alertas.length), { timeout: 10000 });
+
+      await page.click('#invCategoriaPills .rp-pill:has-text("Bajo mínimo")');
+      await expect(page.locator('#inventarioTableBody')).toContainText(lowProd.nombre, { timeout: 5000 });
+      await expect(page.locator('#inventarioTableBody')).not.toContainText(okProd.nombre);
+    } finally {
+      await deleteTestProduct(request, lowProd.id);
+      await deleteTestProduct(request, okProd.id);
+    }
+  });
+
+  test('un nombre con HTML/comillas no se ejecuta ni rompe la fila (XSS almacenado, inventario.js::loadInventario)', async ({ page, request }) => {
+    // <b>x</b> prueba el innerHTML sin escapar; la comilla doble prueba la
+    // fuga del argumento onclick="fn('...')" (escapeJsAttr, no solo escapeHtml).
+    const nombreMalicioso = `${testTag('xss')}<b>x</b>"`;
+    // El código también es texto libre y se renderiza en la misma fila
+    // (inventario.js::loadInventario) -- probamos ambos campos.
+    const codigoMalicioso = `${testTag('xss')}<b>y</b>`.slice(0, 50);
+    const prod = await createTestProduct(request, { nombre: nombreMalicioso, codigo: codigoMalicioso });
+
+    try {
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-inventario');
+      await page.fill('#searchInventario', prod.codigo);
+      const fila = page.locator(`#inventarioTableBody tr:has-text("${prod.codigo}")`);
+      await expect(fila).toBeVisible();
+
+      // Se ve como texto plano -- ningún <b> real en el DOM de la fila.
+      await expect(fila.locator('b')).toHaveCount(0);
+      await expect(fila).toContainText(nombreMalicioso);
+      await expect(fila).toContainText(codigoMalicioso);
+
+      // Los botones de acción siguen andando: si escapeJsAttr no escapara la
+      // comilla, el atributo onclick se cortaría ahí y el botón quedaría roto
+      // (sin abrir el modal, sin error de JS visible en el test).
+      await fila.locator('button[title="Ajustar stock"]').click();
+      await expect(page.locator('#modalMovimientoStock')).toBeVisible();
+      await expect(page.locator('#movStockNombre')).toHaveText(nombreMalicioso);
+    } finally {
+      await deleteTestProduct(request, prod.id);
+    }
+  });
+
   test('baja por UI: confirmarEliminarProducto desactiva el producto (borrado lógico)', async ({ page, request }) => {
     page.on('dialog', (d) => d.accept()); // confirmarEliminarProducto pide confirm()
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-inventario"]');
+    await gotoSection(page, 'sec-inventario');
     await page.fill('#searchInventario', S.codigo);
     const row = page.locator(`#inventarioTableBody tr:has-text("${S.codigo}")`);
     await expect(row).toBeVisible();
@@ -154,17 +211,46 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     await expect(page.locator('#inventarioTableBody')).not.toContainText(S.codigo);
 
     // Contraste API: sigue existiendo con activo=false; ausente del listado (sólo activos).
-    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`);
+    const getRes = await request.get(`/api/inventario/${S.uiProd.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).activo).toBe(false);
 
-    const activos = await (await request.get('/api/inventario/?limit=500')).json();
+    const activos = await (await request.get('/api/inventario/?limit=500', { headers: authHeaders(S.token) })).json();
     expect(activos.some((p) => p.id === S.uiProd.id)).toBe(false);
 
     S.uiProd = null; // ya desactivado; nada que limpiar
 
     // DELETE sobre id inexistente -> 404.
-    const missing = await request.delete('/api/inventario/99999999');
+    const missing = await request.delete('/api/inventario/99999999', { headers: authHeaders(S.token) });
     expect(missing.status()).toBe(404);
+  });
+
+  test('inventario: TODOS los endpoints rechazan sin token (Tarea 10 — el router nunca tuvo require_roles)', async ({ request }) => {
+    // Confirmado en vivo: 6 de los 9 endpoints no tenían NINGUNA dependencia
+    // de auth; los otros 3 (PUT /{id}, historial-precios, movimientos)
+    // exigían sesión pero sin chequear rol. Acá se prueba la parte "sin
+    // token" de los 9; historial-precios.spec.js ya cubre el 403 por rol de
+    // PUT /{id} contra un veterinario.
+    const producto = await createTestProduct(request);
+    const sinToken = { headers: {} };
+    try {
+      const checks = [
+        () => request.post('/api/inventario/', { ...sinToken, data: { codigo: testTag('SKU'), nombre: 'x', categoria: 'Insumo', stock_actual: 1, stock_minimo: 1, precio_unitario: 1 } }),
+        () => request.get('/api/inventario/', sinToken),
+        () => request.get('/api/inventario/alertas-stock', sinToken),
+        () => request.get(`/api/inventario/${producto.id}`, sinToken),
+        () => request.put(`/api/inventario/${producto.id}`, { ...sinToken, data: { descripcion: 'x' } }),
+        () => request.get(`/api/inventario/${producto.id}/historial-precios`, sinToken),
+        () => request.get(`/api/inventario/${producto.id}/movimientos`, sinToken),
+        () => request.delete(`/api/inventario/${producto.id}`, sinToken),
+        () => request.post(`/api/inventario/${producto.id}/movimiento`, { ...sinToken, params: { cantidad: '1', tipo: 'ENTRADA' } }),
+      ];
+      for (const hacerPedido of checks) {
+        const res = await hacerPedido();
+        expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+      }
+    } finally {
+      await deleteTestProduct(request, producto.id, S.token);
+    }
   });
 });

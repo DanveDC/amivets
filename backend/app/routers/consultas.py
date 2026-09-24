@@ -10,26 +10,66 @@ from app.schemas.schemas import (
     RecetaCreate, RecetaResponse,
     ServicioConsultaCreate, ServicioConsultaUpdate, ServicioConsultaResponse
 )
-from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion
+from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion, Usuario
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
+from app.services import consumo_service, orden_service
+from app.routers.usuarios import require_roles, get_current_admin
+from app.routers.servicios import (
+    actualizar_servicio_impl,
+    eliminar_servicio_impl,
+    validar_tipo_servicio_por_rol,
+)
 
 router = APIRouter(prefix="/api/consultas", tags=["Consultas"])
+
+# HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): este router SI usa
+# require_roles/get_current_admin en 6 de sus 11 endpoints, pero 5 quedaron
+# sueltos sin ninguna dependencia de auth -- obtener_consulta, listar_consultas,
+# listar_recetas_por_consulta, descargar_receta_pdf y descargar_consulta_pdf.
+# Ni la tabla heuristica del enunciado de la tarea ni la matriz de permisos
+# listaban este router como afectado; se encontro barriendo endpoint por
+# endpoint como pide el punto 2 de la tarea.
+#
+# admin + recepcionista + veterinario, igual que el resto de los endpoints de
+# este router y que MASCOTAS_ROLES del front (consultorio.js y agenda.js son
+# los unicos callers, ambos bajo esos tres roles). La fila 15 de la matriz
+# (docs/diseno/ordenes-de-servicio.md, decision 9, 9.3) le da a recepcion una
+# vista RECORTADA (sin diagnostico/tratamiento) via un schema propio -- ese
+# recorte de schema no existe todavia y está fuera de alcance de esta tarea
+# ("exclusivamente autenticacion y autorizacion", no tocar esquemas). Darle a
+# recepcion el mismo `ConsultaResponse` completo que admin/veterinario es mas
+# de lo que la matriz pide para esa fila; se documenta la tension y se deja
+# para cuando exista el schema recortado, en vez de dejar el endpoint abierto
+# o excluir a recepcion de un flujo que hoy usa (cobrar la consulta).
+_ROLES_CONSULTA_LECTURA = ("admin", "recepcionista", "veterinario")
 
 
 @router.post("/", response_model=ConsultaResponse, status_code=status.HTTP_201_CREATED)
 def crear_consulta(
     consulta: ConsultaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Fila 1 de la matriz (abrir orden): admin/recepción/veterinario.
+    # `gestor` no abre consultas (Tarea 06, decisión 9).
+    _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
-    """Crea una nueva consulta"""
-    return ConsultaService.crear_consulta(db, consulta)
+    """Crea una consulta dentro de una orden (Tarea 06, decisiones 1 y 3).
+
+    `orden_id` es obligatorio: no hay consulta fuera de una orden. La orden
+    tiene que estar ABIERTA o EN_ATENCION (409 si ya está CERRADA / FACTURADA /
+    ANULADA). El alta también anexa la línea `tipo_servicio='CONSULTA'` con el
+    honorario y pasa la orden a EN_ATENCION si estaba ABIERTA.
+    """
+    orden = orden_service.obtener_orden(db, consulta.orden_id)
+    orden_service.asegurar_recibe_trabajo(orden)
+    return ConsultaService.crear_consulta(db, consulta, orden)
 
 
 @router.get("/{consulta_id}", response_model=ConsultaResponse)
 def obtener_consulta(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Obtiene una consulta por ID"""
     consulta = ConsultaService.obtener_consulta(db, consulta_id)
@@ -47,14 +87,24 @@ def listar_consultas(
     limit: int = 100,
     mascota_id: Optional[int] = None,
     veterinario: Optional[str] = None,
+    veterinario_id: Optional[int] = None,
     fecha_inicio: Optional[str] = None,
     fecha_fin: Optional[str] = None,
     estado_pago: Optional[str] = None,
-    db: Session = Depends(get_db)
+    estado: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
-    """Lista todas las consultas con filtros opcionales"""
+    """Lista todas las consultas con filtros opcionales.
+
+    `estado` filtra por el ciclo de vida clínico (ABIERTA / CERRADA / ANULADA,
+    Tarea 09, decisión 6); `estado_pago` sigue filtrando por el eje de cobro.
+    `veterinario_id` filtra por el profesional asignado (FK) — lo usa la bandeja
+    "Hoy" para que un veterinario vea solo sus consultas abiertas.
+    """
     return ConsultaService.listar_consultas(
-        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin, estado_pago
+        db, skip, limit, mascota_id, veterinario, fecha_inicio, fecha_fin,
+        estado_pago, estado, veterinario_id
     )
 
 
@@ -62,7 +112,14 @@ def listar_consultas(
 def actualizar_consulta(
     consulta_id: int,
     consulta: ConsultaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Fila 14 de la matriz (registrar diagnóstico/tratamiento): admin/
+    # veterinario. Recepción y gestor no editan datos clínicos. El payload
+    # también trae campos no clínicos (estado, veterinario_id, precio) que
+    # en la matriz completa tienen alcance distinto por fila -- ese recorte
+    # fino queda para cuando exista el modelo de orden (Fase 2); acá se
+    # cierra el hueco de autenticación con el guard más estricto del set.
+    _: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     """Actualiza una consulta existente"""
     consulta_actualizada = ConsultaService.actualizar_consulta(db, consulta_id, consulta)
@@ -77,9 +134,18 @@ def actualizar_consulta(
 @router.delete("/{consulta_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_consulta(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(get_current_admin),
 ):
-    """Elimina una consulta"""
+    """Elimina una consulta (solo admin).
+
+    Es un hard-delete en cascada (servicios, recetas, vacunaciones,
+    desparasitaciones, pruebas — ver Consulta.__mapper__ en models.py):
+    destruye historia clínica real sin posibilidad de recuperación. A
+    diferencia del resto de los routers clínicos, este SÍ exige sesión
+    (get_current_admin, 401 sin token / 403 si no es admin) — el riesgo de
+    dejarlo abierto no es comparable al de los demás endpoints.
+    """
     if not ConsultaService.eliminar_consulta(db, consulta_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -91,9 +157,10 @@ def eliminar_consulta(
 def crear_receta(
     consulta_id: int,
     receta_data: RecetaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Optional[Usuario] = Depends(require_roles("admin", "veterinario")),
 ):
-    """Crea una receta médica para una consulta"""
+    """Crea una receta médica para una consulta (admin / veterinario)"""
     consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
@@ -120,7 +187,8 @@ def crear_receta(
 @router.get("/{consulta_id}/recetas", response_model=List[RecetaResponse])
 def listar_recetas_por_consulta(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Trae las recetas y su detalle asociadas a una consulta"""
     recetas = db.query(Receta).filter(Receta.consulta_id == consulta_id).all()
@@ -130,7 +198,8 @@ def listar_recetas_por_consulta(
 def descargar_receta_pdf(
     consulta_id: int,
     receta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Genera y descarga el PDF de una receta médica"""
     receta = db.query(Receta).filter(Receta.id == receta_id, Receta.consulta_id == consulta_id).first()
@@ -152,17 +221,42 @@ def descargar_receta_pdf(
 def agregar_servicio_consulta(
     consulta_id: int,
     servicio_data: ServicioConsultaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Mismo gate que POST /api/servicios/ (Tarea 06, decisión 9, filas 7-8).
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
-    """Agrega un ítem o servicio a la consulta clínica (Vacuna, Cirugía, Insumo, etc.)"""
+    """Agrega un ítem o servicio a la consulta clínica (Vacuna, Cirugía, Insumo, etc.).
+
+    Si el servicio entra directo en un estado consumido (EJECUTADO/FACTURADO,
+    consumo_service.ESTADOS_CONSUMIDOS), descuenta del inventario los materiales
+    que consume (receta del catálogo y/o línea INSUMO manual) a través de
+    consumo_service (Tarea 07, decisión 3).
+    """
     consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
     if not consulta:
         raise HTTPException(status_code=404, detail="Consulta no encontrada")
-    
+
+    # Tarea 09, decisión 7: la recepcionista no puede anexar servicios clínicos.
+    validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
+
+    # La consulta ya vive dentro de una orden (Tarea 06, decisión 3): sus
+    # servicios cuelgan de la MISMA orden, o el candado de cierre (decisión 1,
+    # regla 2) no los vería y la orden se podría cerrar con trabajo pendiente.
+    # La orden se navega por la línea CONSULTA, no por una columna en
+    # `consultas` (que sería una segunda fuente de verdad).
+    orden = orden_service.orden_de_consulta(db, consulta_id)
+    if orden is not None:
+        orden_service.asegurar_recibe_trabajo(orden)
+
     nuevo_servicio = ServicioConsulta(
+        orden_id=orden.id if orden is not None else None,
         consulta_id=consulta_id,
+        # mascota_id se llena siempre (también con consulta) para simplificar
+        # las queries de historia (Tarea 09, decisión 1).
+        mascota_id=consulta.mascota_id,
         tipo_servicio=servicio_data.tipo_servicio,
         referencia_id=servicio_data.referencia_id,
+        catalogo_servicio_id=servicio_data.catalogo_servicio_id,
         nombre_servicio=servicio_data.nombre_servicio,
         cantidad=servicio_data.cantidad,
         precio_unitario=servicio_data.precio_unitario,
@@ -170,94 +264,46 @@ def agregar_servicio_consulta(
         estado=servicio_data.estado,
         is_deleted=False
     )
-    
-    # Check simple deduct for 'Aplicado' straight away, mostly items start 'Pendiente'
-    if nuevo_servicio.estado == "Aplicado" and nuevo_servicio.referencia_id:
-        if nuevo_servicio.tipo_servicio in ["INSUMO", "VACUNACION"]:
-            inv = db.query(Inventario).filter(Inventario.id == nuevo_servicio.referencia_id).first()
-            if inv:
-                if inv.stock_actual < nuevo_servicio.cantidad:
-                    raise HTTPException(status_code=400, detail=f"Stock insuficiente para {inv.nombre}")
-                inv.stock_actual -= nuevo_servicio.cantidad
-                mov = MovimientoInventario(
-                    producto_id=inv.id,
-                    tipo_movimiento="SALIDA",
-                    cantidad=nuevo_servicio.cantidad,
-                    costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Consumo directo - Consulta #{consulta.id}"
-                )
-                db.add(mov)
-
     db.add(nuevo_servicio)
+    db.flush()  # id necesario para anclar movimientos/consumos
+
+    advertencias = []
+    if nuevo_servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
+        advertencias = consumo_service.consumir_para_servicio(
+            db,
+            nuevo_servicio,
+            overrides=consumo_service.overrides_from_payload(servicio_data.consumos),
+            usuario_id=current_user.id if current_user else None,
+        )
+
     db.commit()
     db.refresh(nuevo_servicio)
-    return nuevo_servicio
+    resp = ServicioConsultaResponse.model_validate(nuevo_servicio)
+    if advertencias:
+        resp.advertencias = advertencias
+    return resp
 
 @router.patch("/servicios/{servicio_id}", response_model=ServicioConsultaResponse)
 def actualizar_servicio_consulta(
     servicio_id: int,
     update_data: ServicioConsultaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Mismo gate que PATCH /api/servicios/{id} -- es el mismo _impl, así que
+    # el mismo guard tiene que estar en las dos rutas o esta queda de bypass.
+    # `gestor` se suma en la etapa 5: ver actualizar_servicio_impl para el
+    # gate fino (solo puede ejecutar EN_PROCESO -> EJECUTADO del que tomó).
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario", "gestor")),
 ):
-    """Actualiza el estado, precio o cantidad de un servicio de consulta. Maneja stock si pasa de Pendiente a Aplicado o viceversa."""
-    servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
-    if not servicio:
-        raise HTTPException(status_code=404, detail="Servicio no encontrado")
-
-    old_estado = servicio.estado
-    old_cantidad = servicio.cantidad
-
-    update_dict = update_data.model_dump(exclude_unset=True)
-    for k, v in update_dict.items():
-        setattr(servicio, k, v)
-
-    new_estado = servicio.estado
-    
-    # Manejo de Inventario Progresivo
-    if servicio.tipo_servicio in ["INSUMO", "VACUNACION"] and servicio.referencia_id:
-        inv = None
-        if servicio.tipo_servicio == "VACUNACION":
-            vac = db.query(Vacunacion).filter(Vacunacion.id == servicio.referencia_id).first()
-            if vac:
-                inv = db.query(Inventario).filter(Inventario.id == vac.vacuna_id).first()
-            else:
-                inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-        else:
-            inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-            
-        if inv:
-            # Si cambia de PENDIENTE a APLICADO
-            if old_estado != "Aplicado" and new_estado == "Aplicado":
-                if inv.stock_actual < servicio.cantidad:
-                    raise HTTPException(status_code=400, detail=f"Stock insuficiente para {inv.nombre}")
-                inv.stock_actual -= servicio.cantidad
-                db.add(MovimientoInventario(
-                    producto_id=inv.id,
-                    tipo_movimiento="SALIDA",
-                    cantidad=servicio.cantidad,
-                    costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Consumo directo mod - Consulta #{servicio.consulta_id}"
-                ))
-
-            # Si cambia de APLICADO a PENDIENTE (Devolución)
-            elif old_estado == "Aplicado" and new_estado != "Aplicado":
-                inv.stock_actual += old_cantidad
-                db.add(MovimientoInventario(
-                    producto_id=inv.id,
-                    tipo_movimiento="ENTRADA",
-                    cantidad=old_cantidad,
-                    costo_unitario=inv.precio_unitario,
-                    origen_destino=f"Reversión de consumo - Consulta #{servicio.consulta_id}"
-                ))
-
-    db.commit()
-    db.refresh(servicio)
-    return servicio
+    """Alias de PATCH /api/servicios/{id} (Tarea 09). La lógica vive en
+    routers/servicios.py; este path se mantiene para no romper contratos
+    existentes (e2e/flujo-clinico.spec.js)."""
+    return actualizar_servicio_impl(servicio_id, update_data, db, current_user)
 
 @router.get("/{consulta_id}/pdf")
 def descargar_consulta_pdf(
     consulta_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CONSULTA_LECTURA)),
 ):
     """Genera y descarga el PDF del resumen de una consulta"""
     pdf_content = PDFService.generar_consulta_pdf(db, consulta_id)
@@ -274,35 +320,11 @@ def descargar_consulta_pdf(
 @router.delete("/servicios/{servicio_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_servicio_consulta(
     servicio_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    # Mismo gate que DELETE /api/servicios/{id}, por la misma razón que el PATCH.
+    current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
-    """Elimina lógicamente un servicio (Soft Delete) y devuelve stock si estaba aplicado"""
-    servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
-    if not servicio:
-        raise HTTPException(status_code=404, detail="Servicio no encontrado")
-
-    if servicio.estado == "Aplicado" and servicio.tipo_servicio in ["INSUMO", "VACUNACION"] and servicio.referencia_id:
-        inv = None
-        if servicio.tipo_servicio == "VACUNACION":
-            vac = db.query(Vacunacion).filter(Vacunacion.id == servicio.referencia_id).first()
-            if vac:
-                inv = db.query(Inventario).filter(Inventario.id == vac.vacuna_id).first()
-            else:
-                inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-        else:
-            inv = db.query(Inventario).filter(Inventario.id == servicio.referencia_id).first()
-            
-        if inv:
-            inv.stock_actual += servicio.cantidad
-            db.add(MovimientoInventario(
-                producto_id=inv.id,
-                tipo_movimiento="ENTRADA",
-                cantidad=servicio.cantidad,
-                costo_unitario=inv.precio_unitario,
-                origen_destino=f"Eliminación/Reversión - Consulta #{servicio.consulta_id}"
-            ))
-
-    servicio.is_deleted = True
-    servicio.estado = "Cancelado"
-    db.commit()
-    return None
+    """Alias de DELETE /api/servicios/{id} (Tarea 09). La lógica vive en
+    routers/servicios.py; este path se mantiene para no romper contratos
+    existentes."""
+    return eliminar_servicio_impl(servicio_id, db, current_user)

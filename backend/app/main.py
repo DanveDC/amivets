@@ -10,9 +10,10 @@ import uuid
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.limiter import limiter
+from app.core.price_history_backfill import backfill_initial_price_history
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo, liquidaciones, notas
+from app.routers import mascotas, facturas, propietarios, consultas, citas, pruebas, inventario, reportes, auth, usuarios, hospitalizaciones, cirugias, clinico, supabase_admin, catalogo, liquidaciones, notas, servicios, ordenes, areas, notificaciones, adjuntos
 import time
 import logging
 import subprocess
@@ -25,8 +26,19 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Crear las tablas en la base de datos
+# Crear las tablas en la base de datos. Las migraciones de esquema las aplica
+# scripts/init_db.py con Alembic antes de levantar uvicorn (ver db_migrate.py);
+# este create_all solo cubre el caso de correr uvicorn directo sin init_db.
 Base.metadata.create_all(bind=engine)
+
+# Ancla inicial del historial de precios (Tarea 08, decision 7). El deploy no
+# corre `alembic upgrade`, asi que el backfill de la migracion c9d0e1f2a3b4
+# nunca se ejecuta; se replica aca, justo despues de create_all. Es idempotente
+# (WHERE NOT EXISTS) y nunca debe abortar el arranque de la app.
+try:
+    backfill_initial_price_history(engine)
+except Exception as e:
+    logger.warning(f"Price history backfill skipped: {e}")
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -162,6 +174,11 @@ app.include_router(supabase_admin.router)
 app.include_router(catalogo.router)
 app.include_router(liquidaciones.router)
 app.include_router(notas.router)
+app.include_router(servicios.router)
+app.include_router(ordenes.router)
+app.include_router(areas.router)
+app.include_router(notificaciones.router)
+app.include_router(adjuntos.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -201,7 +218,28 @@ async def login_page(request: Request):
     """Página de inicio de sesión"""
     if templates:
         try:
-            return templates.TemplateResponse("login.html", {"request": request})
+            # Tarea 11 (revisión de bocetos): Login.html dibuja un stat de
+            # "Pacientes" -- se pasa el conteo real de mascotas activas en
+            # vez de un número hardcodeado. Sin auth (login.html se sirve
+            # antes de loguearse): es un agregado, no un dato de un
+            # paciente puntual. best-effort: si la DB no responde, el
+            # template muestra la página igual sin ese stat (ver login.html).
+            pacientes_activos = None
+            try:
+                from app.core.database import SessionLocal
+                from app.models.models import Mascota
+                db = SessionLocal()
+                try:
+                    pacientes_activos = db.query(Mascota).filter(Mascota.activo.is_(True)).count()
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"No se pudo obtener el conteo de pacientes para login.html: {e}")
+
+            return templates.TemplateResponse(
+                "login.html",
+                {"request": request, "pacientes_activos": pacientes_activos},
+            )
         except Exception as e:
             logger.error(f"Error serving login template: {e}")
     

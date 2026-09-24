@@ -3,21 +3,68 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
-from app.models.models import Cirugia, Mascota
+from app.models.models import Cirugia, Mascota, Consulta, ServicioConsulta
 from app.schemas.schemas import CirugiaCreate, CirugiaResponse
+from app.routers.usuarios import require_roles
+from app.services import orden_service
 
 router = APIRouter(prefix="/api/cirugias", tags=["Quirófano"])
 
+# Tarea 10 (fix de auth): admin + veterinario, sin recepcionista -- misma
+# regla que clinico.py._ROLES_CLINICO_LECTURA. La fila 15 de la matriz de
+# permisos le daria a recepcion una vista recortada (sin diagnostico ni
+# tratamiento), pero eso exige un schema propio que hoy no existe; esta
+# tarea es exclusivamente auth, sin tocar esquemas. Queda anotado como deuda.
+_ROLES_CIRUGIAS = ("admin", "veterinario")
+
 @router.post("/", response_model=CirugiaResponse, status_code=status.HTTP_201_CREATED)
-def registrar_cirugia(cirugia: CirugiaCreate, db: Session = Depends(get_db)):
+def registrar_cirugia(
+    cirugia: CirugiaCreate,
+    db: Session = Depends(get_db),
+    _=Depends(require_roles(*_ROLES_CIRUGIAS)),
+):
     """Registra un informe de cirugía"""
     db_cirugia = Cirugia(**cirugia.model_dump())
     db.add(db_cirugia)
+
+    # Espejo ServicioConsulta: toda fila de detalle con consulta_id debe tener
+    # su espejo, siempre (Tarea 09, decisión 2) — así facturación no pierde
+    # datos. Mismo patrón que routers/clinico.py.
+    if db_cirugia.consulta_id:
+        consulta = db.query(Consulta).filter(Consulta.id == db_cirugia.consulta_id).first()
+        if not consulta:
+            raise HTTPException(status_code=404, detail="Consulta no encontrada")
+        # Tarea 06 (decisión 1): la línea de servicio cuelga de la misma orden
+        # que la consulta, navegada por la línea CONSULTA.
+        orden = orden_service.orden_de_consulta(db, db_cirugia.consulta_id)
+        if orden is not None:
+            orden_service.asegurar_recibe_trabajo(orden)
+        db.flush()
+        db.add(ServicioConsulta(
+            orden_id=orden.id if orden is not None else None,
+            consulta_id=db_cirugia.consulta_id,
+            mascota_id=consulta.mascota_id,
+            tipo_servicio="CIRUGIA",
+            referencia_id=db_cirugia.id,
+            nombre_servicio=f"CIRUGÍA: {db_cirugia.tipo_procedimiento}",
+            cantidad=1.0,
+            precio_unitario=db_cirugia.precio_aplicado,
+            detalles_clinicos=f"Riesgo ASA: {db_cirugia.riesgo_asa or 'N/D'} | Cirujano ID: {db_cirugia.cirujano_id or 'N/D'}",
+            estado="EJECUTADO",
+        ))
+
     db.commit()
     db.refresh(db_cirugia)
     return db_cirugia
 
 @router.get("/mascota/{mascota_id}", response_model=List[CirugiaResponse])
-def historial_quirurgico(mascota_id: int, db: Session = Depends(get_db)):
+def historial_quirurgico(
+    mascota_id: int,
+    db: Session = Depends(get_db),
+    # HALLAZGO DE SEGURIDAD (Tarea 10): unico endpoint del router sin guard --
+    # el POST ya usaba require_roles. Mismo admin/veterinario (ver clinico.py
+    # para la nota completa sobre por que no se suma recepcionista todavia).
+    _=Depends(require_roles(*_ROLES_CIRUGIAS)),
+):
     """Obtiene el historial de cirugías de una mascota"""
     return db.query(Cirugia).filter(Cirugia.mascota_id == mascota_id).all()

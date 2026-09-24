@@ -5,8 +5,8 @@
 //
 // Criterio UI vs API (igual que flujo-clinico.spec.js): el alta y la edición
 // se manejan por la UI porque el modal de Catálogo (#modalCatalogoServicio) es
-// un formulario nativo estable, accesible como admin desde
-// `.menu-item[data-target="sec-catalogo"]` (setupNavigation -> cargarCatalogo).
+// un formulario nativo estable, accesible como admin vía
+// gotoSection(page, 'sec-catalogo') (router -> cargarCategoriasSelect + cargarCatalogo).
 // El resto (categorías, GET puntual, DELETE) va por API y se comenta.
 // Toda mutación se contrasta después con un GET a la API.
 //
@@ -20,6 +20,9 @@ const {
   testTag,
   createTestCatalogoServicio,
   deleteTestCatalogoServicio,
+  createTestProduct,
+  deleteTestProduct,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -47,7 +50,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
   });
 
   test('GET /categorias devuelve la lista de categorías activas (solo strings)', async ({ request }) => {
-    const res = await request.get('/api/catalogo/categorias');
+    const res = await request.get('/api/catalogo/categorias', { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const categorias = await res.json();
     expect(Array.isArray(categorias)).toBe(true);
@@ -63,10 +66,10 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     const nombre = testTag('catUI');
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-catalogo"]');
+    await gotoSection(page, 'sec-catalogo');
     await expect(page.locator('#sec-catalogo')).toBeVisible();
 
-    await page.click('button:has-text("+ Nuevo Servicio")');
+    await page.click('button:has-text("+ Nuevo servicio")');
     await expect(page.locator('#modalCatalogoServicio')).toBeVisible();
     await page.fill('#catalogoNombre', nombre);
     await page.selectOption('#catalogoCategoria', 'LABORATORIO');
@@ -88,20 +91,26 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(creado.activo).toBe(true);
     S.servicioUI = creado;
 
-    // guardarServicio() llama cargarCatalogo() al cerrar: la fila ya está en la tabla.
+    // guardarServicio() llama cargarCatalogo() al cerrar: la lista maestra
+    // (Tarea 11, maestro-detalle) ya tiene el ítem.
     await page.fill('#catalogoSearch', nombre);
-    await expect(page.locator('#catalogoBody')).toContainText(nombre);
+    await expect(page.locator('#catalogoLista')).toContainText(nombre);
   });
 
   test('edición por UI: cambiar nombre, categoría y precio, contrastado contra la API', async ({ page, request }) => {
     const nuevoNombre = `${S.servicioUI.nombre}_edit`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-catalogo"]');
+    await gotoSection(page, 'sec-catalogo');
     await page.fill('#catalogoSearch', S.servicioUI.nombre);
-    await expect(page.locator('#catalogoBody')).toContainText(S.servicioUI.nombre);
+    await expect(page.locator('#catalogoLista')).toContainText(S.servicioUI.nombre);
 
-    await page.click(`#catalogoBody tr:has-text("${S.servicioUI.nombre}") button:has-text("Editar")`);
+    // Maestro-detalle (Tarea 11): un solo resultado del filtro se
+    // auto-selecciona; el botón "Editar" vive en el panel de detalle, no en
+    // la fila. Igual se clickea el ítem primero para no asumir el auto-select.
+    await page.click(`.cat-item:has-text("${S.servicioUI.nombre}")`);
+    await expect(page.locator('#catalogoDetalle')).toContainText(S.servicioUI.nombre);
+    await page.click('#btnCatEditar');
     await expect(page.locator('#modalCatalogoServicio')).toBeVisible();
     // abrirModalServicio(id) hace GET /catalogo/{id} y prellena el form.
     await expect(page.locator('#catalogoNombre')).toHaveValue(S.servicioUI.nombre);
@@ -150,7 +159,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
   });
 
   test('filtro por categoría y búsqueda de texto en GET /', async ({ request }) => {
-    const res = await request.get(`/api/catalogo/?categoria=FARMACIA&q=${encodeURIComponent(S.servicioAPI.nombre)}&solo_activos=true`);
+    const res = await request.get(`/api/catalogo/?categoria=FARMACIA&q=${encodeURIComponent(S.servicioAPI.nombre)}&solo_activos=true`, { headers: authHeaders(S.token) });
     expect(res.ok()).toBeTruthy();
     const items = await res.json();
     expect(items.length).toBeGreaterThanOrEqual(1);
@@ -163,17 +172,133 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(delRes.status()).toBe(204);
 
     // Ya no aparece con solo_activos=true (default).
-    const activosRes = await request.get('/api/catalogo/?limit=500');
+    const activosRes = await request.get('/api/catalogo/?limit=500', { headers: authHeaders(S.token) });
     const activos = await activosRes.json();
     expect(activos.some((s) => s.id === S.servicioAPI.id)).toBe(false);
 
     // Sigue existiendo (activo=false) — el GET puntual no filtra por activo.
-    const getRes = await request.get(`/api/catalogo/${S.servicioAPI.id}`);
+    const getRes = await request.get(`/api/catalogo/${S.servicioAPI.id}`, { headers: authHeaders(S.token) });
     expect(getRes.ok()).toBeTruthy();
     expect((await getRes.json()).activo).toBe(false);
 
     // Borrar de nuevo un id inexistente -> 404.
     const missing = await request.delete('/api/catalogo/99999999', { headers: authHeaders(S.token) });
     expect(missing.status()).toBe(404);
+  });
+
+  test('POST / y las rutas de receta (BOM) exigen sesión (revisión final Tarea 09)', async ({ request }) => {
+    const sinToken = await request.post('/api/catalogo/', {
+      data: { nombre: 'sin sesion', categoria: 'FARMACIA' },
+    });
+    expect(sinToken.status()).toBe(401);
+
+    const conToken = await request.post('/api/catalogo/', {
+      data: { nombre: testTag('servicioAuth'), categoria: 'FARMACIA' },
+      headers: authHeaders(S.token),
+    });
+    expect(conToken.status()).toBe(201);
+    const creado = await conToken.json();
+
+    const recetaSinToken = await request.post(`/api/catalogo/${creado.id}/recetas`, {
+      data: { inventario_id: 99999999, cantidad: 1, unidad_medida: 'unidad' },
+    });
+    expect(recetaSinToken.status()).toBe(401);
+
+    await request.delete(`/api/catalogo/${creado.id}`, { headers: authHeaders(S.token) });
+  });
+
+  // Tarea 11 (revisión de bocetos, fidelidad estructural a Catalogo.html):
+  // el panel maestro-detalle deja "Insumos que consume" e "Historial de
+  // precios" siempre visibles para el servicio seleccionado, en vez de dos
+  // pasos dentro de un modal de edición. Cubre el recorrido completo por UI.
+  test('panel de detalle: insumos que consume y su costo, agregar uno nuevo por UI, historial de precios tras una edición', async ({ page, request }) => {
+    const token = await getAdminToken(request);
+    const material = await createTestProduct(request, {
+      nombre: testTag('Gasa'),
+      tipo_item: 'MATERIAL',
+      unidad_medida: 'unidad',
+      precio_unitario: 2.5,
+    }, token);
+    const servicio = await createTestCatalogoServicio(request, { categoria: 'LABORATORIO', precio_ref: 50 });
+    await request.post(`/api/catalogo/${servicio.id}/recetas`, {
+      data: { inventario_id: material.id, cantidad: 3, unidad_medida: 'unidad' },
+      headers: authHeaders(token),
+    });
+
+    try {
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-catalogo');
+      await page.fill('#catalogoSearch', servicio.nombre);
+      await page.click(`.cat-item:has-text("${servicio.nombre}")`);
+
+      // El insumo sembrado aparece con su costo (3 * 2.50 = 7.50).
+      const filaExistente = page.locator('#catRecetaBody tr', { hasText: material.nombre });
+      await expect(filaExistente).toBeVisible();
+      await expect(filaExistente).toContainText('7,50');
+      // costo de insumos del encabezado = el total de la receta.
+      await expect(page.locator('#catalogoDetalle')).toContainText('costo de insumos $ 7,50');
+
+      // Agregar un segundo insumo por UI (no por API): otro material de prueba.
+      const material2 = await createTestProduct(request, {
+        nombre: testTag('Jeringa'),
+        tipo_item: 'MATERIAL',
+        unidad_medida: 'unidad',
+        precio_unitario: 1,
+      }, token);
+      try {
+        await page.click('#btnCatAgregarInsumo');
+        await page.selectOption('#catMaterialSelect', String(material2.id));
+        await page.fill('#catMaterialCantidad', '2');
+        await page.click('#btnCatConfirmarInsumo');
+
+        const filaNueva = page.locator('#catRecetaBody tr', { hasText: material2.nombre });
+        await expect(filaNueva).toBeVisible({ timeout: 5000 });
+
+        const recetasRes = await request.get(`/api/catalogo/${servicio.id}/recetas`, { headers: authHeaders(token) });
+        const recetas = await recetasRes.json();
+        expect(recetas.some((r) => r.inventario_id === material2.id && Number(r.cantidad) === 2)).toBe(true);
+      } finally {
+        await deleteTestProduct(request, material2.id, token);
+      }
+
+      // Historial de precios: todavía sin cambios para este servicio nuevo.
+      await expect(page.locator('.cat-hist-list')).toContainText('Sin cambios de precio registrados');
+
+      // Editar el precio por UI y confirmar que el historial inline lo refleja.
+      await page.click('#btnCatEditar');
+      await page.fill('#catalogoPrecioRef', '65');
+      await page.click('#formCatalogoServicio button[type="submit"]');
+      await expect(page.locator('#modalCatalogoServicio')).toBeHidden();
+
+      await expect(page.locator('.cat-hist-list')).toContainText('$ 65,00', { timeout: 5000 });
+      await expect(page.locator('.cat-hist-list')).not.toContainText('Sin cambios de precio registrados');
+    } finally {
+      await deleteTestCatalogoServicio(request, servicio.id, token);
+      await deleteTestProduct(request, material.id, token);
+    }
+  });
+
+  test('catalogo: TODOS los endpoints rechazan sin token (Tarea 10 — 4 no tenían ninguna auth, 7 tenían login sin rol)', async ({ request }) => {
+    const servicio = await createTestCatalogoServicio(request);
+    const sinToken = { headers: {} };
+    try {
+      const checks = [
+        () => request.get('/api/catalogo/categorias', sinToken),
+        () => request.get('/api/catalogo/', sinToken),
+        () => request.post('/api/catalogo/', { ...sinToken, data: { nombre: 'x', categoria: 'FARMACIA' } }),
+        () => request.get(`/api/catalogo/${servicio.id}`, sinToken),
+        () => request.put(`/api/catalogo/${servicio.id}`, { ...sinToken, data: { nombre: 'x' } }),
+        () => request.get(`/api/catalogo/${servicio.id}/historial-precios`, sinToken),
+        () => request.delete(`/api/catalogo/${servicio.id}`, sinToken),
+        () => request.get(`/api/catalogo/${servicio.id}/recetas`, sinToken),
+        () => request.post(`/api/catalogo/${servicio.id}/recetas`, { ...sinToken, data: { inventario_id: 99999999, cantidad: 1, unidad_medida: 'unidad' } }),
+      ];
+      for (const hacerPedido of checks) {
+        const res = await hacerPedido();
+        expect(res.status(), `${res.url()} tiene que devolver 401 sin token`).toBe(401);
+      }
+    } finally {
+      await deleteTestCatalogoServicio(request, servicio.id, S.token);
+    }
   });
 });

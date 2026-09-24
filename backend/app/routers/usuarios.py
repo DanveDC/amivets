@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -40,6 +41,43 @@ async def get_current_admin(current_user: Usuario = Depends(get_current_user)):
             detail="Operación permitida solo para administradores"
         )
     return current_user
+
+
+# Roles validos del backend. `recepcionista` se introduce con la Tarea 09
+# (decision 7): puede abrir consultas y anexar servicios NO clinicos, pero no
+# vacunar, operar, hospitalizar, pedir laboratorio ni recetar. `gestor` se
+# introduce con la Tarea 06 (decision 9): recibe y ejecuta los servicios de su
+# area. La relacion gestor <-> tipo de servicio (`gestor_area`) es de una
+# etapa posterior; aca el rol solo existe como valor valido.
+ROLES_VALIDOS = {"admin", "veterinario", "recepcionista", "gestor", "user"}
+
+
+def require_roles(*roles: str):
+    """Dependencia de autorizacion por rol para los routers clinicos.
+
+    Requisito cero de la Tarea 06 (decision 9): exige sesion valida SIEMPRE.
+    Antes dependia de `get_optional_current_user`, cuya condicion
+    (`if current_user is not None and ...`) dejaba pasar sin chequear rol a
+    cualquier peticion sin token -- una request anonima nunca entraba al
+    `if` y quedaba 200 en vez de 401. Con `get_current_user` no hay forma de
+    llegar a `_dep` sin un token valido: sin token o con token invalido es
+    401 (lo levanta `get_current_user`); con token pero rol equivocado es 403.
+    """
+
+    async def _dep(
+        current_user: Usuario = Depends(get_current_user),
+    ) -> Usuario:
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Tu rol no tiene permiso para esta acción. "
+                    f"Roles habilitados: {', '.join(sorted(roles))}."
+                ),
+            )
+        return current_user
+
+    return _dep
 
 @router.post("/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 def crear_usuario(
@@ -85,9 +123,12 @@ def listar_veterinarios(
     current_user: Usuario = Depends(get_current_user)
 ):
     """Lista doctores/veterinarios habilitados"""
-    vets = db.query(Usuario).filter(Usuario.role == "veterinario").all()
+    # is_active=True: un veterinario desactivado (ver PUT /{id}) no debe seguir
+    # ofreciéndose para asignar consultas nuevas (revisión final Tarea 09 — el
+    # filtro faltaba y la lista se llenaba de cuentas de baja).
+    vets = db.query(Usuario).filter(Usuario.role == "veterinario", Usuario.is_active == True).all()  # noqa: E712
     if not vets: # Fallback just in case
-        return db.query(Usuario).filter(Usuario.username != "admin").all()
+        return db.query(Usuario).filter(Usuario.username != "admin", Usuario.is_active == True).all()  # noqa: E712
     return vets
 
 @router.get("/me", response_model=UsuarioResponse)
@@ -146,8 +187,17 @@ def eliminar_usuario(
     ).count()
     if usuario.role == "admin" and remaining_admins == 0:
         raise HTTPException(status_code=400, detail="No se puede eliminar el último administrador")
-    db.delete(usuario)
-    db.commit()
+    try:
+        db.delete(usuario)
+        db.commit()
+    except IntegrityError:
+        # FKs a consultas/citas/cirugías/notas son NO ACTION: borrar un usuario
+        # con historial asociado tiraba 500 sin controlar (revisión final T09).
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede eliminar: el usuario tiene consultas, citas u otros registros asociados.",
+        )
     return {"message": "Usuario eliminado"}
 
 

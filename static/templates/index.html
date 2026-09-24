@@ -5,44 +5,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AmiVets - Sistema de Gestión Veterinaria</title>
-    <link rel="stylesheet" href="/static/css/styles.css?v=27">
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    <!-- Etapa 7 (Tarea 06): se retira la piel 1A (nocturne.css / themes.css /
+         amivets.css / bridge.css). styles.css vuelve a ser la hoja base — ya
+         declara el sistema de superficies, texto, bordes, radios y las tres
+         familias tipográficas; shell.css agrega el shell nuevo (barra
+         lateral, cabecera, lanzador, bandeja) sobre esos mismos tokens.
+         Ver docs/diseno/navegacion-v2.md, Decisión 1. -->
+    <link rel="stylesheet" href="/static/css/styles.css?v=30">
+    <link rel="stylesheet" href="/static/css/shell.css?v=1">
 </head>
 
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="logo">
-                <svg width="48" height="48" viewBox="0 0 40 40" fill="none">
-                    <circle cx="20" cy="20" r="18" fill="url(#grad1)" />
-                    <defs>
-                        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:var(--primary);stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:var(--primary-dark);stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                    <path d="M20 10C15 10 12 13 12 18C12 22 15 25 20 30C25 25 28 22 28 18C28 13 25 10 20 10Z"
-                        fill="white" />
-                </svg>
-                <h1>AmiVets</h1>
+    <div class="av-app" id="avApp">
+      <div class="av-shell-body">
+        <!-- Barra lateral 248px — renderizada por core/router.js según el rol
+             (navegacion-v2.md, Decisión 1 y 2). Oculta por completo en el
+             lanzador (sec-inicio) vía .av-app--launcher. -->
+        <aside class="av-sidebar" id="avSidebar"></aside>
+
+        <div class="av-shell-col">
+          <!-- Cabecera 68px -->
+          <header class="av-header" id="avHeader">
+            <div class="av-header-title">
+                <strong id="avHeaderTitleText">AmiVets</strong>
+                <span id="avHeaderSubtitleText"></span>
             </div>
-            <nav class="nav">
-                <a href="#" class="nav-link menu-item active" data-target="sec-agenda">Agenda</a>
-                <a href="#" class="nav-link menu-item" data-target="sec-consultorio">Consultorio</a>
-                <a href="#" class="nav-link menu-item" data-target="sec-reportes">Informes</a>
-            </nav>
-            <div class="user-menu">
-                <span id="userNameDisplay" style="margin-right: 1rem; font-weight: 500; color: var(--primary);"></span>
-                <button class="btn-primary" id="btnRegistrarPropietario">+ Registrar Propietario</button>
-                <button class="btn-secondary" onclick="logout()">Cerrar Sesión</button>
+            <div class="av-header-spacer"></div>
+            <button type="button" class="av-search" id="cmdkTrigger" data-hide-for-role="gestor"
+                    aria-label="Buscar mascota o tutor" aria-keyshortcuts="Control+K">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <span class="av-search-label">Buscar mascota o tutor</span>
+                <span class="av-kbd" aria-hidden="true">⌘K</span>
+            </button>
+            <div class="av-header-actions">
+                <details class="av-newmenu" id="avNewMenu" data-hide-for-role="gestor">
+                    <summary class="av-btn av-btn--primary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                        Nuevo
+                    </summary>
+                    <div class="av-newmenu-panel" role="menu">
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="btnNuevoConsulta">Agregar consulta</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="btnNuevoServicioDirecto">Agregar servicio directo</button>
+                        <div class="av-usermenu-sep" role="separator"></div>
+                        <button type="button" class="av-usermenu-item" role="menuitem" id="btnRegistrarPropietario">Agregar propietario</button>
+                    </div>
+                </details>
+                <div class="av-notif" id="avNotif">
+                    <button type="button" class="av-iconbutton" id="notifTrigger" aria-label="Notificaciones" aria-haspopup="true" aria-expanded="false">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 7 3 7H3s3 0 3-7"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+                        <span class="av-count" id="notifCount" hidden>0</span>
+                    </button>
+                    <div class="av-notif-panel" id="notifPanel" role="menu" hidden>
+                        <div class="av-notif-head">
+                            <strong>Notificaciones</strong>
+                            <button type="button" id="notifVerHistorial">Ver histórico</button>
+                            <button type="button" id="notifMarkAll">Marcar todas leídas</button>
+                        </div>
+                        <div id="notifList"></div>
+                        <div id="notifLoadMoreWrap" class="av-notif-loadmore" hidden>
+                            <button type="button" id="notifCargarMas">Cargar más</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Tarea 06, etapa 8: se revisó si estas tres entradas debían
+                     reubicarse bajo su módulo (Citas web/QR -> ¿Admisión?,
+                     Usuarios -> ¿un séptimo módulo de administración?, Mi
+                     perfil -> ¿en cualquier lado?) y se decidió dejarlas acá.
+                     Las tres son utilidades transversales, alcanzables desde
+                     CUALQUIER pantalla del sistema -- no son "landing" de
+                     ningún módulo de los seis (arquitectura-informacion-v2.md
+                     no las lista como tal). Moverlas adentro de un módulo las
+                     haría alcanzables en un clic menos desde ahí pero en más
+                     clics desde cualquier otro lugar (primero cambiar de
+                     módulo, después buscar la entrada) -- una pérdida neta de
+                     accesibilidad para ganar nada. -->
+                <details class="av-usermenu">
+                    <summary class="av-usermenu-trigger" aria-label="Menú de usuario">
+                        <i class="ph ph-list" aria-hidden="true"></i>
+                    </summary>
+                    <div class="av-usermenu-panel" role="menu">
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-citas-web">Citas web / QR</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-usuarios" data-role="admin">Usuarios</button>
+                        <button type="button" class="av-usermenu-item" role="menuitem" data-target="sec-perfil">Mi perfil</button>
+                        <div class="av-usermenu-sep" role="separator"></div>
+                        <button type="button" class="av-usermenu-item" role="menuitem" onclick="logout()">Cerrar sesión</button>
+                    </div>
+                </details>
             </div>
-        </header>
+          </header>
 
         <!-- Modal Registrar Propietario -->
         <div id="modalPropietario" class="modal">
@@ -325,26 +381,6 @@
                                 <input type="number" id="consultaTemperatura" step="0.1">
                             </div>
                         </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="consultaICC" style="display: flex; align-items: center; gap: 4px;">
-                                    ICC
-                                    <span class="help-icon"
-                                        title="Evaluación visual y táctil de la grasa corporal y masa muscular. Permite determinar si el paciente está en su peso ideal, bajo peso u obeso.">?</span>
-                                </label>
-                                <input type="text" id="consultaICC" placeholder="Ej: 3/5">
-                                <small style="font-size: 0.7rem; color: var(--text-secondary);">Condición Corporal</small>
-                            </div>
-                            <div class="form-group">
-                                <label for="consultaTLLC" style="display: flex; align-items: center; gap: 4px;">
-                                    TLLC
-                                    <span class="help-icon"
-                                        title="Prueba para evaluar el estado de hidratación y perfusión sanguínea.">?</span>
-                                </label>
-                                <input type="text" id="consultaTLLC" placeholder="Ej: < 2s">
-                                <small style="font-size: 0.7rem; color: var(--text-secondary);">Llenado Capilar</small>
-                            </div>
-                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn-secondary" data-close="modalConsulta">Cancelar</button>
@@ -354,142 +390,11 @@
             </div>
         </div>
 
-        <!-- Modal Detalle y Carrito de Consulta -->
-        <div id="modalDetalleConsulta" class="modal">
-            <div class="modal-content modal-xl">
-                <div class="modal-header">
-                    <h2 id="detalleConsultaTitle">Expediente Clínico</h2>
-                    <span class="close" data-modal="modalDetalleConsulta" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
-                </div>
-                <div class="split-layout">
-                    <!-- Lado Izquierdo: Data Clínica -->
-                    <div class="clinical-summary">
-                        <h3>Resumen Médico</h3>
-                        <div id="detalleConsultaMedica" class="clinical-details-text">
-                            Cargando...
-                        </div>
-                    </div>
-
-                    <!-- Lado Derecho: Nodos / Carrito de Servicios -->
-                    <div class="services-container">
-                        <div class="services-header">
-                            <h3>Servicios y Cargos</h3>
-                            <span class="badge" id="detalleConsultaTotal">$0.00</span>
-                        </div>
-
-                        <div id="detalleConsultaServiciosList"
-                            style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
-                            <!-- Listado iterativo -->
-                        </div>
-
-                        <!-- Clinical Shortcuts Toolbar -->
-                        <div
-                            style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.5rem; background: var(--surface-hover); border: 1px dashed var(--border); border-radius: var(--radius-md);">
-                            <span
-                                style="font-size: 0.75rem; color: var(--text-secondary); width: 100%; margin-bottom: 0.25rem; font-weight: bold; text-transform: uppercase;">Ir
-                                al registro especializado:</span>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5"/><path d="m9 11 4 4"/><path d="m5 19-3 3"/><path d="m14 4 6 6"/></svg>
-                                Vacuna</button>
-                            <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"/><path d="m8.5 8.5 7 7"/></svg>
-                                Fármaco</button>
-                            <button type="button" class="btn-secondary btn-sm"
-                                onclick="setQuickAction('LABORATORIO', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
-                                Lab</button>
-                            <button type="button" class="btn-secondary btn-sm"
-                                onclick="setQuickAction('CIRUGIA', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 4 6 6-9 9H5v-6z"/><path d="m9 9 6 6"/></svg>
-                                Cirugía</button>
-                            <button type="button" class="btn-secondary btn-sm"
-                                onclick="setQuickAction('HOSPITALIZACION', null, false)"
-                                style="flex: 1; font-size: 0.75rem; padding: 0.3rem 0.5rem; background: var(--surface); border-color: var(--primary); color: var(--primary);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2h6v7h7v6h-7v7H9v-7H2V9h7z"/></svg>
-                                Hosp.</button>
-                        </div>
-
-                        <div
-                            style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); padding: 1.25rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md);">
-                            <h4
-                                style="font-size: 0.9rem; color: var(--info-dark); margin-bottom: 0.75rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.025em; display: flex; align-items: center; gap: 0.5rem;">
-                                <span class="icon"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span> Registrar Acción Clínica o Nota
-                            </h4>
-                            <form id="formAgregarServicio" style="display: flex; gap: 0.75rem; flex-direction: column;">
-                                <input type="hidden" id="addServicioConsultaId">
-                                <input type="hidden" id="addServicioReferenciaId">
-
-                                <!-- Fila 1: Categoría + Búsqueda -->
-                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 0.75rem;">
-                                    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                                        <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Categoría *</label>
-                                        <select id="addServicioTipo" required
-                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); background: var(--surface); font-size:0.9rem;">
-                                            <option value="">— Seleccione —</option>
-                                            <option value="INSUMO">Insumo / Medicina</option>
-                                            <option value="VACUNACION">Vacunación</option>
-                                            <option value="LABORATORIO">Lab / Estudio</option>
-                                            <option value="CIRUGIA">Cirugía / Proc.</option>
-                                            <option value="HOSPITALIZACION">Hospitalización</option>
-                                            <option value="ESTETICA">Estética / Peluquería</option>
-                                            <option value="CONSULTA">Consulta / Honorarios</option>
-                                            <option value="OTRO">Otros Hallazgos</option>
-                                        </select>
-                                    </div>
-                                    <div style="display: flex; flex-direction: column; gap: 0.25rem; position:relative;">
-                                        <label id="labelSeleccionDinamica" style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Buscar Item / Producto</label>
-                                        <input type="text" id="addServicioItemSearch" list="listadoInventario"
-                                            placeholder="Escriba nombre o código..."
-                                            style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); font-size:0.9rem;">
-                                        <datalist id="listadoInventario"></datalist>
-                                    </div>
-                                </div>
-
-                                <!-- Fila 2: Descripción -->
-                                <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; text-transform:uppercase;">Descripción del Acto Médico *</label>
-                                    <input type="text" id="addServicioNombre" placeholder="Ej: Amoxicilina 500mg, Triple Canina, Hemograma..."
-                                        required
-                                        style="width: 100%; padding: 0.6rem 0.5rem; border: 1.5px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); font-size:0.9rem;">
-                                </div>
-
-                                <!-- Fila 3: Cantidad + Precio (VISIBLE) -->
-                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
-                                    <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                        <label style="font-size:0.7rem; color:var(--info-dark); font-weight:bold; text-transform:uppercase;">Cantidad *</label>
-                                        <input type="number" id="addServicioCantidad" value="1" min="0.1" step="0.1" required
-                                            style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
-                                    </div>
-                                    <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                                        <label style="font-size:0.7rem; color:var(--info-dark); font-weight:bold; text-transform:uppercase;">Precio Unitario ($) *</label>
-                                        <input type="number" id="addServicioPrecio" value="0" min="0" step="0.01" required
-                                            style="padding:0.6rem 0.5rem; border:1.5px solid rgba(59, 130, 246, 0.3); border-radius:var(--radius-md); font-size:0.9rem; font-weight:600; text-align:center;">
-                                    </div>
-                                </div>
-
-                                <!-- Campos dinámicos por tipo -->
-                                <div id="containerCamposDinamicos"
-                                    style="margin-top: 0.25rem; display: none; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; background:var(--primary-subtle); padding:0.75rem; border-radius:var(--radius-md); border:1px solid var(--primary-light);">
-                                </div>
-
-                                <!-- Notas clínicas -->
-                                <div style="padding: 0.75rem; background: var(--info-subtle); border: 1.5px solid var(--primary-subtle); border-radius: var(--radius-md);">
-                                    <label style="font-size: 0.7rem; color: var(--info-dark); font-weight: bold; display: block; margin-bottom: 0.4rem; text-transform:uppercase;"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Notas Clínicas (dosis, lote, observaciones)</label>
-                                    <textarea id="addServicioDetalles"
-                                        placeholder="Ej: Lote: XX123, Vía SC, dosis 0.5ml. Paciente tolera bien..."
-                                        rows="2"
-                                        style="width: 100%; border: none; background: transparent; outline: none; font-size: 0.875rem; font-family: inherit; resize: vertical; color: var(--info-dark);"></textarea>
-                                </div>
-
-                                <button type="submit" class="btn-primary"
-                                    style="background: var(--primary); border-color: var(--primary-dark); padding: 0.75rem; font-weight: bold; font-size: 0.95rem;">
-                                    <svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2v2"/><path d="M5 2v2"/><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"/><path d="M8 15a6 6 0 0 0 12 0v-3"/><circle cx="20" cy="10" r="2"/></svg> Registrar Acción Clínica
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Tarea 09, etapa 3: la pantalla de consulta abierta (antes el modal
+             #modalDetalleConsulta) vive ahora dentro del main.av-main como la
+             seccion #sec-consulta-abierta. El carrito de servicios, su
+             formulario #formAgregarServicio y todos sus IDs se movieron ahi
+             sin cambiar de nombre. -->
 
         <!-- Modal Registrar Cita -->
         <div id="modalCita" class="modal">
@@ -604,12 +509,43 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="prodTipoItem">Tipo de ítem *</label>
+                            <select id="prodTipoItem" required>
+                                <option value="PRODUCTO">Producto (venta directa)</option>
+                                <option value="MATERIAL">Material (se consume por servicio)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="prodMaterialUnidadGroup" hidden>
+                            <label for="prodUnidadMedida">Unidad de medida</label>
+                            <select id="prodUnidadMedida">
+                                <option value="">Sin definir</option>
+                                <option value="ml">Mililitros (ml)</option>
+                                <option value="g">Gramos (g)</option>
+                                <option value="unidad">Unidad</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" id="prodMaterialEnvaseRow" hidden>
+                        <div class="form-group">
+                            <label for="prodContenidoEnvase">Contenido por envase</label>
+                            <input type="number" id="prodContenidoEnvase" step="0.001" min="0" placeholder="Ej: 1000">
+                            <small style="color:var(--text-muted); font-size:0.75rem;">ej.: 1000 si la botella trae 1 L</small>
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex; align-items:center; gap:0.5rem; margin-top:1.75rem;">
+                                <input type="checkbox" id="prodMermaAlAbrir" style="width:auto;">
+                                Se pierde el envase completo al abrirlo
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="prodStock">Stock Inicial *</label>
-                            <input type="number" id="prodStock" required min="0" value="0">
+                            <input type="number" id="prodStock" required min="0" step="0.001" value="0">
                         </div>
                         <div class="form-group">
                             <label for="prodMinimo">Stock Mínimo *</label>
-                            <input type="number" id="prodMinimo" value="5" min="0">
+                            <input type="number" id="prodMinimo" value="5" min="0" step="0.001">
                         </div>
                     </div>
                     <div class="form-row">
@@ -674,8 +610,39 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="editProdTipoItem">Tipo de ítem *</label>
+                            <select id="editProdTipoItem" required>
+                                <option value="PRODUCTO">Producto (venta directa)</option>
+                                <option value="MATERIAL">Material (se consume por servicio)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="editProdMaterialUnidadGroup" hidden>
+                            <label for="editProdUnidadMedida">Unidad de medida</label>
+                            <select id="editProdUnidadMedida">
+                                <option value="">Sin definir</option>
+                                <option value="ml">Mililitros (ml)</option>
+                                <option value="g">Gramos (g)</option>
+                                <option value="unidad">Unidad</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row" id="editProdMaterialEnvaseRow" hidden>
+                        <div class="form-group">
+                            <label for="editProdContenidoEnvase">Contenido por envase</label>
+                            <input type="number" id="editProdContenidoEnvase" step="0.001" min="0" placeholder="Ej: 1000">
+                            <small style="color:var(--text-muted); font-size:0.75rem;">ej.: 1000 si la botella trae 1 L</small>
+                        </div>
+                        <div class="form-group">
+                            <label style="display:flex; align-items:center; gap:0.5rem; margin-top:1.75rem;">
+                                <input type="checkbox" id="editProdMermaAlAbrir" style="width:auto;">
+                                Se pierde el envase completo al abrirlo
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
                             <label>Stock Mínimo *</label>
-                            <input type="number" id="editProdMinimo" min="0" required>
+                            <input type="number" id="editProdMinimo" min="0" step="0.001" required>
                         </div>
                         <div class="form-group">
                             <label>Stock Actual <small style="color:var(--text-muted);">(solo lectura)</small></label>
@@ -686,11 +653,16 @@
                         <div class="form-group">
                             <label>Precio Unitario ($) *</label>
                             <input type="number" id="editProdPrecio" step="0.01" min="0" required>
+                            <small id="editProdPrecioHint" class="hist-precios-hint" hidden>Solo un administrador puede cambiar precios.</small>
                         </div>
                         <div class="form-group">
                             <label>Fecha Vencimiento</label>
                             <input type="date" id="editProdVencimiento">
                         </div>
+                    </div>
+                    <div class="form-group" id="editProdMotivoGroup" hidden>
+                        <label for="editProdMotivo">Motivo (opcional)</label>
+                        <input type="text" id="editProdMotivo" maxlength="200" placeholder="Ej: ajuste por inflación, cambio de proveedor…">
                     </div>
                     <div class="form-group">
                         <label>Proveedor</label>
@@ -729,7 +701,7 @@
                         </div>
                         <div class="form-group">
                             <label>Cantidad *</label>
-                            <input type="number" id="movStockCantidad" required min="1" placeholder="Ej: 20">
+                            <input type="number" id="movStockCantidad" required min="0.001" step="0.001" placeholder="Ej: 20 o 2,5">
                         </div>
                     </div>
                     <div class="modal-footer">
@@ -739,6 +711,44 @@
                 </form>
             </div>
         </div>
+
+        <!-- Modal Historial de Precios (Tarea 08) -->
+        <div id="modalHistorialPrecios" class="modal" role="dialog" aria-modal="true" aria-labelledby="histPreciosTitulo">
+            <div class="modal-content" style="max-width:720px;">
+                <div class="modal-header">
+                    <h2 id="histPreciosTitulo">Historial de precios</h2>
+                    <span class="close" id="histPreciosClose" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <div style="padding:1.5rem 2rem;">
+                    <div class="hist-precios-toolbar">
+                        <p id="histPreciosSubtitulo" style="margin:0; font-weight:600; color:var(--text-primary);"></p>
+                        <label class="hist-precios-toggle">
+                            <input type="checkbox" id="histPreciosOcultarCorrecciones">
+                            Ocultar correcciones
+                        </label>
+                    </div>
+                    <p id="histPreciosNota" class="hist-precios-nota" hidden></p>
+                    <div class="hist-precios-chart-wrap" id="histPreciosChartWrap">
+                        <canvas id="histPreciosChart"></canvas>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table class="hist-precios-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Precio</th>
+                                    <th>Variación</th>
+                                    <th>Motivo</th>
+                                    <th>Quién</th>
+                                </tr>
+                            </thead>
+                            <tbody id="histPreciosBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal Nuevo Usuario (Admin) -->
         <div id="modalNuevoUsuario" class="modal">
             <div class="modal-content">
@@ -851,97 +861,473 @@
             </div>
         </div>
 
+        <!-- Modal: seleccionar mascota (Tarea 09, etapa 4) -->
+        <div id="modalSelectorMascota" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="selectorMascotaTitulo">Seleccionar paciente</h2>
+                    <span class="close" data-modal="modalSelectorMascota" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <div class="form-group">
+                    <label for="selectorMascotaSearch">Buscar por nombre o código</label>
+                    <input type="text" id="selectorMascotaSearch" placeholder="Escriba el nombre del paciente..." autocomplete="off">
+                </div>
+                <div id="selectorMascotaResultados" role="listbox" aria-label="Resultados de pacientes"
+                     style="max-height: 40vh; overflow-y: auto;"></div>
+            </div>
+        </div>
+
+        <!-- Modal: servicio directo (Tarea 09, etapa 4) -->
+        <div id="modalServicioDirecto" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Servicio directo</h2>
+                    <span class="close" data-modal="modalServicioDirecto" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <p class="text-muted" id="servicioDirectoPaciente" style="margin: 0 0 1rem;"></p>
+                <form id="formServicioDirecto">
+                    <input type="hidden" id="servicioDirectoMascotaId">
+                    <input type="hidden" id="servicioDirectoCatalogoId">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="servicioDirectoTipo">Tipo *</label>
+                            <select id="servicioDirectoTipo" required>
+                                <option value="ESTETICA">Estética / Peluquería</option>
+                                <option value="INSUMO">Insumo / Producto</option>
+                                <option value="CONSULTA">Consulta / Honorarios</option>
+                                <option value="OTRO">Otro</option>
+                                <option value="VACUNACION">Vacunación</option>
+                                <option value="LABORATORIO">Laboratorio</option>
+                                <option value="CIRUGIA">Cirugía</option>
+                                <option value="HOSPITALIZACION">Hospitalización</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="servicioDirectoEstado">Estado *</label>
+                            <select id="servicioDirectoEstado" required>
+                                <option value="SOLICITADO">SOLICITADO</option>
+                                <option value="EJECUTADO">EJECUTADO</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="servicioDirectoNombre">Descripción *</label>
+                        <input type="text" id="servicioDirectoNombre" required placeholder="Ej: Corte de uñas, Baño, Antipulgas...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="servicioDirectoCantidad">Cantidad *</label>
+                            <input type="number" id="servicioDirectoCantidad" value="1" min="0.1" step="0.1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="servicioDirectoPrecio">Precio unitario ($) *</label>
+                            <input type="number" id="servicioDirectoPrecio" value="0" min="0" step="0.01" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" data-close="modalServicioDirecto">Cancelar</button>
+                        <button type="submit" class="btn-secondary" id="btnServicioDirectoGuardar">Guardar</button>
+                        <button type="button" class="btn-primary" id="btnServicioDirectoCobrar">Guardar y cobrar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Main Content -->
-        <main class="main-content">
-            <!-- Sidebar -->
-            <aside class="sidebar">
-                <div class="search-box">
-                    <input type="text" placeholder="Buscar paciente..." class="search-input" id="sidebarSearch">
-                    <div id="search-results" class="search-results-dropdown"></div>
+        <main class="av-main">
+
+            <!-- sec-inicio — el lanzador de los seis módulos (Tarea 06, etapa 7).
+                 Entrada de SESIÓN: se ve una vez, DEFAULT_SECTION. Sin barra
+                 lateral (core/router.js agrega .av-app--launcher al montarla).
+                 Ver docs/diseno/navegacion-v2.md, Decisión 2. -->
+            <section id="sec-inicio" class="spa-section" hidden>
+                <div class="av-launcher-canvas">
+                    <div class="av-launcher-head">
+                        <div>
+                            <h1 id="inicioSaludo">Bienvenida</h1>
+                            <p id="inicioFecha"></p>
+                        </div>
+                        <span class="av-eyebrow" id="inicioContador"></span>
+                    </div>
+                    <div class="av-launcher-grid" id="inicioGrid"></div>
+                </div>
+            </section>
+
+            <!-- sec-hoy — Panel del día, portada del módulo 1 (Admisión). Antes
+                 mostraba consultas; ahora es la bandeja de ÓRDENES DE SERVICIO
+                 del día (Tarea 06, etapa 7). tab:false lo reemplaza el sidebar
+                 (módulo Admisión). -->
+            <section id="sec-hoy" class="spa-section" hidden>
+                <div class="pd-canvas">
+                    <div class="pd-body">
+                        <div class="pd-kpis" id="pdKpis">
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">Órdenes abiertas</span>
+                                <span class="pd-kpi-value" id="pdKpiOrdenes">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiOrdenesSub"></span>
+                            </div>
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">En sala de espera</span>
+                                <span class="pd-kpi-value" id="pdKpiSala">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiSalaSub"></span>
+                            </div>
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">Por cobrar hoy</span>
+                                <span class="pd-kpi-value pd-kpi-value--warn" id="pdKpiCobrar">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiCobrarSub"></span>
+                            </div>
+                            <div class="pd-kpi">
+                                <span class="pd-kpi-label">Facturado hoy</span>
+                                <span class="pd-kpi-value pd-kpi-value--ok" id="pdKpiFacturado">—</span>
+                                <span class="pd-kpi-sub" id="pdKpiFacturadoSub"></span>
+                            </div>
+                        </div>
+
+                        <div class="pd-columns">
+                            <section class="pd-panel pd-waiting">
+                                <div class="pd-waiting-head">
+                                    <strong>Sala de espera</strong>
+                                    <span id="pdWaitingCount"></span>
+                                </div>
+                                <div id="pdWaitingList" aria-live="polite">
+                                    <p class="av-muted" style="padding: 12px 16px;">Cargando…</p>
+                                </div>
+                            </section>
+
+                            <section class="pd-panel pd-orders">
+                                <div class="pd-orders-head">
+                                    <strong>Órdenes de servicio</strong>
+                                    <div class="av-spacer"></div>
+                                    <div class="pd-orders-filters" id="pdOrdersFilters">
+                                        <button type="button" class="pd-filter" data-filtro="todas" aria-pressed="true">Todas</button>
+                                        <button type="button" class="pd-filter" data-filtro="abiertas" aria-pressed="false">Abiertas</button>
+                                        <button type="button" class="pd-filter" data-filtro="cobrar" aria-pressed="false">Por cobrar</button>
+                                        <button type="button" class="pd-filter" data-filtro="cerradas" aria-pressed="false">Cerradas</button>
+                                    </div>
+                                    <div class="av-row-actions">
+                                        <button type="button" class="av-btn" id="btnHoyServicioDirecto">+ Servicio directo</button>
+                                        <button type="button" class="av-btn av-btn--primary" id="btnHoyNuevaOrden">+ Nueva orden</button>
+                                    </div>
+                                </div>
+                                <table class="pd-table">
+                                    <thead>
+                                        <tr><th>Orden</th><th>Paciente</th><th>Tutor</th><th>Servicios</th><th>Total</th><th>Estado</th></tr>
+                                    </thead>
+                                    <tbody id="pdOrdersBody">
+                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- sec-orden-abierta — Orden de servicio abierta (Tarea 06, etapa 7).
+                 tab:false: se abre desde el panel del día, la ficha del
+                 paciente, la búsqueda global y la bandeja del gestor. La barra
+                 lateral queda con Admisión activo (navegacion-v2.md, Decisión 3). -->
+            <section id="sec-orden-abierta" class="spa-section" hidden>
+                <div class="oa-body">
+                    <main class="oa-canvas" id="oaCanvas">
+                        <div class="oa-stack">
+                            <section class="oa-patient" id="oaPatient">
+                                <p class="av-muted">Cargando datos de la orden…</p>
+                            </section>
+
+                            <section class="oa-services">
+                                <div class="oa-services-head">
+                                    <strong>Servicios anexados</strong>
+                                    <span id="oaServiciosCount"></span>
+                                    <div class="av-spacer"></div>
+                                    <span id="oaServiciosResumen" style="font-size:12.5px;color:var(--text-secondary);"></span>
+                                </div>
+                                <table class="oa-table">
+                                    <thead>
+                                        <tr><th>Servicio / insumos que consume</th><th>Categoría</th><th>Cant.</th><th>Precio</th><th>Estado</th><th></th></tr>
+                                    </thead>
+                                    <tbody id="oaServiciosBody">
+                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                                <button type="button" class="oa-anexar-row" id="btnOaAnexar">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                    <span>Anexar servicio a esta orden</span>
+                                </button>
+                            </section>
+                        </div>
+
+                        <div class="oa-side">
+                            <section class="oa-summary">
+                                <strong class="oa-summary-title">Resumen</strong>
+                                <div class="oa-summary-line"><span>Servicios</span><span id="oaResumenServicios">$0.00</span></div>
+                                <div class="oa-summary-line"><span>Insumos consumidos</span><span>incluidos</span></div>
+                                <div class="oa-hr"></div>
+                                <div class="oa-total"><strong>Total</strong><strong id="oaTotal">$0.00</strong></div>
+                                <div class="oa-actions">
+                                    <button type="button" class="av-btn av-btn--primary" id="btnOaConfirmar">Confirmar servicios</button>
+                                    <button type="button" class="av-btn" id="btnOaFacturar">Facturar orden</button>
+                                    <button type="button" class="av-btn" id="btnOaCerrar">Cerrar orden</button>
+                                    <button type="button" class="av-btn" id="btnOaAnular" style="color:var(--accent);border-color:var(--accent-subtle);">Anular orden</button>
+                                </div>
+                            </section>
+
+                            <section class="oa-meta">
+                                <strong class="oa-meta-title">Datos de la orden</strong>
+                                <div class="oa-meta-line"><span>Número</span><span id="oaMetaNumero">—</span></div>
+                                <div class="oa-meta-line"><span>Apertura</span><span id="oaMetaApertura">—</span></div>
+                                <div class="oa-meta-line"><span>Veterinario</span><span id="oaMetaVeterinario">—</span></div>
+                                <div class="oa-meta-line"><span>Estado</span><span id="oaMetaEstado">—</span></div>
+                            </section>
+                        </div>
+                    </main>
+
+                    <!-- Panel "Anexar servicio" — hermano flex del contenido de la
+                         orden, 452px, comprime en vez de tapar (Decisión 3). -->
+                    <aside class="oa-anexar-panel" id="oaAnexarPanel" hidden aria-label="Anexar servicio">
+                        <div class="oa-anexar-head">
+                            <strong>Anexar servicio</strong>
+                            <button type="button" class="oa-anexar-close" id="btnOaAnexarClose" aria-label="Cerrar">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div class="oa-anexar-body">
+                            <input type="text" id="oaAnexarSearch" class="oa-anexar-search" placeholder="Buscar en el catálogo de servicios" autocomplete="off">
+                            <div class="oa-anexar-grid">
+                                <div class="oa-cat-list" id="oaCatList"></div>
+                                <div class="oa-svc-list" id="oaSvcList"></div>
+                            </div>
+                            <div id="oaConsumosWrap" hidden>
+                                <div class="oa-consumos-head">
+                                    <strong>Insumos que consume</strong>
+                                    <span>editable</span>
+                                </div>
+                                <div id="oaConsumosList"></div>
+                            </div>
+                            <div class="oa-anexar-footer">
+                                <div id="oaAnexarWarning" hidden class="oa-anexar-warning"></div>
+                                <div class="oa-anexar-footer-row">
+                                    <button type="button" class="av-btn av-btn--primary" id="btnOaAnexarConfirmar">Anexar a la orden</button>
+                                    <button type="button" class="av-btn" id="btnOaAnexarCancelar">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- sec-bandeja-gestor — Módulo 2 · Mi bandeja (Tarea 06, etapa 7). -->
+            <section id="sec-bandeja-gestor" class="spa-section" hidden>
+                <div class="bg-canvas">
+                    <div class="bg-filters">
+                        <div class="av-row-actions" id="bgFilters"></div>
+                        <input type="text" id="bgFiltroLocal" class="av-search av-search--local" placeholder="Filtrar en mi bandeja" autocomplete="off" style="cursor:text;">
+                        <div class="av-spacer"></div>
+                        <span style="font-size:12.5px;color:var(--text-secondary);">Ordenadas por tiempo de espera</span>
+                    </div>
+                    <div class="bg-columns">
+                        <section class="bg-queue">
+                            <div class="bg-queue-head">
+                                <strong class="ser">Servicios asignados a mí</strong>
+                                <span id="bgEsperaAviso"></span>
+                            </div>
+                            <table class="bg-table">
+                                <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
+                                <tbody id="bgQueueBody">
+                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                </tbody>
+                            </table>
+                            <div class="bg-queue-note">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                                <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
+                            </div>
+                        </section>
+
+                        <section class="bg-detail" id="bgDetail">
+                            <div class="bg-empty">
+                                <svg class="bg-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                <strong>Nada en proceso</strong>
+                                <span>Tomá un servicio de tu bandeja para verlo acá y cargar su resultado.</span>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Area: Consulta abierta (Tarea 09, etapa 3). Se conserva
+                 tal cual en esta etapa — ver desviación documentada en el
+                 reporte de aplicación de la etapa 7 (navegacion-v2.md la
+                 marca para reemplazo, pero consultorio.js todavía depende de
+                 ella de punta a punta). -->
+            <section id="sec-consulta-abierta" class="spa-section av-ca" hidden>
+                <div class="av-ca-topbar">
+                    <div class="av-ca-titlewrap">
+                        <h2 id="caHeading"><span id="detalleConsultaTitle">Consulta</span></h2>
+                        <span class="status-pill" id="consultaAbiertaEstado">ABIERTA</span>
+                    </div>
+                    <div class="av-row-actions">
+                        <button type="button" class="btn-secondary" id="btnConsultaGuardarSalir">Guardar y salir</button>
+                        <button type="button" class="btn-primary" id="btnConsultaCerrarFacturar">Cerrar y facturar</button>
+                    </div>
                 </div>
 
-                <div class="tabs">
-                    <div class="tab-header">Módulos</div>
+                <!-- Cabecera del paciente (la completa consulta-abierta.js) -->
+                <div class="av-ca-patient" id="consultaAbiertaPaciente" aria-live="polite">
+                    <p class="av-muted">Cargando datos del paciente…</p>
                 </div>
 
-                <div class="menu-list">
-                    <a href="#" class="menu-item active" data-target="sec-consultorio">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 12.5-5 5"/><path d="m16 11-5 5"/><path d="M7 16.5c-1.35 0-2-1.35-2-2 0-2.5 4-2.5 4-2.5s0-4 2.5-4c.65 0 2 .65 2 2 0 2.5-6.5 6.5-6.5 6.5Z"/><path d="m8.5 8 2.5 2.5"/><path d="m10.5 10 5 5"/><path d="m12 11.5 5 5"/></svg>
-                        </span>
-                        <span>Consultorio</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-agenda">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        </span>
-                        <span>Agenda</span>
-                        <span class="badge" id="badgeCitas">0</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-propietarios">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                        </span>
-                        <span>Propietarios</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-inventario">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
-                        </span>
-                        <span>Inventario</span>
-                        <span class="badge" id="badgeStock">!</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-facturacion">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                        </span>
-                        <span>Facturación</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-reportes">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                        </span>
-                        <span>Reportes y KPIs</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-ordenes-medico">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M12 5 9.04 7.96a2.17 2.17 0 0 0 0 3.08c.82.82 2.13.82 2.96 0"/><path d="m14 10 2 2"/><path d="m18 10-2 2"/></svg>
-                        </span>
-                        <span>Órdenes (Médico)</span>
-                        <span class="badge" id="badgeOrdenesMedico">0</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-citas-web">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v-1"/></svg>
-                        </span>
-                        <span>Citas Web / QR</span>
-                        <span class="badge" id="badgeCitasQR">0</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-catalogo">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-                        </span>
-                        <span>Catálogo de Servicios</span>
-                    </a>
-                    <a href="#" class="menu-item admin-only" data-target="sec-usuarios" style="display: none;">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-                        </span>
-                        <span>Usuarios (Admin)</span>
-                    </a>
-                    <a href="#" class="menu-item" data-target="sec-perfil">
-                        <span class="icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                        </span>
-                        <span>Mi Perfil</span>
-                    </a>
+                <!-- Franja de vitales de la consulta -->
+                <form class="av-ca-vitals" id="formVitalesConsulta">
+                    <div class="av-ca-vital">
+                        <label for="vitalPeso">Peso (kg)</label>
+                        <input type="number" id="vitalPeso" step="0.01" min="0" inputmode="decimal">
+                    </div>
+                    <div class="av-ca-vital">
+                        <label for="vitalTemp">Temp (°C)</label>
+                        <input type="number" id="vitalTemp" step="0.1" min="0" inputmode="decimal">
+                    </div>
+                    <div class="av-ca-vital">
+                        <label for="vitalFC">FC (bpm)</label>
+                        <input type="number" id="vitalFC" step="1" min="0" inputmode="numeric">
+                    </div>
+                    <div class="av-ca-vital av-ca-vital--wide">
+                        <label for="caMotivo">Motivo</label>
+                        <input type="text" id="caMotivo" placeholder="Motivo de la consulta">
+                    </div>
+                    <button type="submit" class="btn-secondary btn-sm" id="btnGuardarVitales">Guardar vitales</button>
+                </form>
+
+                <!-- Servicios anexados -->
+                <div class="av-ca-services">
+                    <div class="av-ca-services-head">
+                        <h3>Servicios anexados</h3>
+                        <span class="av-ca-total">Total: <strong id="detalleConsultaTotal">$0.00</strong></span>
+                    </div>
+
+                    <div id="detalleConsultaServiciosList" class="av-ca-services-list">
+                        <!-- filas de servicio (consulta-abierta.js) -->
+                    </div>
+
+                    <!-- Anexar servicio = fila que se expande in situ -->
+                    <details class="av-ca-anexar" id="anexarServicioPanel">
+                        <summary class="av-ca-anexar-summary">
+                            <i class="ph ph-plus" aria-hidden="true"></i> Anexar servicio
+                        </summary>
+                        <div class="av-ca-anexar-body">
+                            <div class="av-ca-quickbar">
+                                <span class="av-eyebrow">Detalle clínico ampliado:</span>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('VACUNACION')">Vacuna</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('INSUMO')">Fármaco</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('LABORATORIO', null, false)">Lab</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('CIRUGIA', null, true)">Cirugía</button>
+                                <button type="button" class="btn-secondary btn-sm" onclick="setQuickAction('HOSPITALIZACION', null, true)">Hosp.</button>
+                            </div>
+
+                            <form id="formAgregarServicio" class="av-ca-form">
+                                <input type="hidden" id="addServicioConsultaId">
+                                <input type="hidden" id="addServicioReferenciaId">
+                                <input type="hidden" id="addServicioCatalogoId">
+
+                                <div class="av-ca-form-row av-ca-form-row--2">
+                                    <div class="av-ca-field">
+                                        <label for="addServicioTipo">Tipo *</label>
+                                        <select id="addServicioTipo" required>
+                                            <option value="">— Seleccione —</option>
+                                            <option value="INSUMO">Insumo / Medicina</option>
+                                            <option value="VACUNACION">Vacunación</option>
+                                            <option value="LABORATORIO">Lab / Estudio</option>
+                                            <option value="CIRUGIA">Cirugía / Proc.</option>
+                                            <option value="HOSPITALIZACION">Hospitalización</option>
+                                            <option value="ESTETICA">Estética / Peluquería</option>
+                                            <option value="CONSULTA">Consulta / Honorarios</option>
+                                            <option value="OTRO">Otros Hallazgos</option>
+                                        </select>
+                                    </div>
+                                    <div class="av-ca-field" style="position:relative;">
+                                        <label id="labelSeleccionDinamica" for="addServicioItemSearch">Buscar en catálogo</label>
+                                        <input type="text" id="addServicioItemSearch" list="listadoInventario"
+                                               placeholder="Escriba nombre o código..." autocomplete="off">
+                                        <datalist id="listadoInventario"></datalist>
+                                    </div>
+                                </div>
+
+                                <div class="av-ca-field">
+                                    <label for="addServicioNombre">Descripción del acto médico *</label>
+                                    <input type="text" id="addServicioNombre" required
+                                           placeholder="Ej: Amoxicilina 500mg, Triple Canina, Hemograma...">
+                                </div>
+
+                                <div class="av-ca-form-row av-ca-form-row--2">
+                                    <div class="av-ca-field">
+                                        <label for="addServicioCantidad">Cantidad *</label>
+                                        <input type="number" id="addServicioCantidad" value="1" min="0.1" step="0.1" required>
+                                    </div>
+                                    <div class="av-ca-field">
+                                        <label for="addServicioPrecio">Precio unitario ($) *</label>
+                                        <input type="number" id="addServicioPrecio" value="0" min="0" step="0.01" required>
+                                    </div>
+                                </div>
+
+                                <div id="addServicioRecetaBlock" class="av-ca-receta" hidden>
+                                    <div class="av-eyebrow">Materiales que consume (ajustá si usaste otra cantidad)</div>
+                                    <div id="addServicioRecetaLista"></div>
+                                </div>
+
+                                <div id="containerCamposDinamicos" class="av-ca-dyn" style="display:none;"></div>
+
+                                <div class="av-ca-field">
+                                    <label for="addServicioDetalles">Notas clínicas (dosis, lote, observaciones)</label>
+                                    <textarea id="addServicioDetalles" rows="2"
+                                              placeholder="Ej: Lote: XX123, Vía SC, dosis 0.5ml. Paciente tolera bien..."></textarea>
+                                </div>
+
+                                <button type="submit" class="btn-primary">Anexar servicio</button>
+                            </form>
+                        </div>
+                    </details>
                 </div>
-            </aside>
+
+                <!-- Bloques colapsables -->
+                <details class="av-ca-block">
+                    <summary>Diagnóstico y tratamiento</summary>
+                    <form id="formDiagnosticoConsulta" class="av-ca-block-body">
+                        <div class="av-ca-field">
+                            <label for="caDiagnostico">Diagnóstico</label>
+                            <textarea id="caDiagnostico" rows="2"></textarea>
+                        </div>
+                        <div class="av-ca-field">
+                            <label for="caTratamiento">Tratamiento pautado</label>
+                            <textarea id="caTratamiento" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn-secondary btn-sm" id="btnGuardarDiagnostico">Guardar</button>
+                    </form>
+                </details>
+
+                <details class="av-ca-block">
+                    <summary>Recetas <span id="caRecetasCount" class="av-page-count"></span></summary>
+                    <div class="av-ca-block-body">
+                        <button type="button" class="btn-secondary btn-sm" id="btnNuevaRecetaCA">+ Nueva receta</button>
+                        <div id="caRecetasList" class="av-ca-mini-list"></div>
+                    </div>
+                </details>
+
+                <details class="av-ca-block">
+                    <summary>Notas clínicas</summary>
+                    <form id="formNotaConsultaAbierta" class="av-ca-block-body">
+                        <div class="av-ca-field">
+                            <label for="caNotaTexto">Nueva nota</label>
+                            <textarea id="caNotaTexto" rows="2" placeholder="Ej: la tutora llamó, el animal sigue sin comer..."></textarea>
+                        </div>
+                        <button type="submit" class="btn-secondary btn-sm" id="btnGuardarNotaCA">Guardar nota</button>
+                        <div id="caNotasList" class="av-ca-mini-list"></div>
+                    </form>
+                </details>
+            </section>
 
             <!-- Content Area: Consultorio -->
             <section id="sec-consultorio" class="content-area spa-section">
                 <div class="content-header">
-                    <h2>Consultorio Clínico</h2>
+                    <h2>Historia clínica</h2>
                 </div>
 
                 <div class="consultorio-layout">
@@ -977,7 +1363,7 @@
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                                             </button>
                                             <button class="btn-secondary btn-sm" id="btnTransferirMascota"
-                                                title="Transferir a otro dueño">
+                                                title="Transferir a otro tutor">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H9a4 4 0 0 0-4 4v10"/><path d="m8 21-4-4 4-4"/><path d="M4 17h11a4 4 0 0 0 4-4V3"/></svg>
                                             </button>
                                             <button class="btn-secondary btn-sm" id="btnEliminarMascota"
@@ -999,11 +1385,11 @@
                                     style="display: flex; gap: 1rem; margin-top: 0.5rem; min-height: 500px;">
                                     <aside class="pet-sidebar"
                                         style="width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px;">
-                                        <div class="pet-nav-item active" data-tab="historia">
+                                        <div class="pet-nav-item active" data-tab="resumen">
                                             <span class="icon">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
                                             </span>
-                                            <span>Historia Clínica</span>
+                                            <span>Resumen</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="consultas">
                                             <span class="icon">
@@ -1012,19 +1398,12 @@
                                             <span>Consultas</span>
                                             <span class="count" id="count-consultas">0</span>
                                         </div>
-                                        <div class="pet-nav-item" data-tab="notas">
+                                        <div class="pet-nav-item" data-tab="servicios">
                                             <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h12"/><path d="M12 22V6"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><path d="M10 6a2 2 0 1 1 4 0"/></svg>
                                             </span>
-                                            <span>Notas</span>
-                                            <span class="count" id="count-notas">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="vacunas">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 2 4 4"/><path d="m17 7 3-3"/><path d="M19 11 11 3"/><path d="m21 15-4-4"/><path d="m21 10-2-2"/><path d="m15 13-3-3"/><path d="M13 18l-3-3"/><polyline points="10 17 4 23 3 22 9 16"/><path d="M8 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2Z"/></svg>
-                                            </span>
-                                            <span>Vacunas</span>
-                                            <span class="count" id="count-vacunas">0</span>
+                                            <span>Servicios</span>
+                                            <span class="count" id="count-servicios">0</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="recetas">
                                             <span class="icon">
@@ -1033,52 +1412,18 @@
                                             <span>Fórmulas</span>
                                             <span class="count" id="count-recetas">0</span>
                                         </div>
-                                        <div class="pet-nav-item" data-tab="desparasitaciones">
+                                        <div class="pet-nav-item" data-tab="notas">
                                             <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13a6 6 0 1 0 12 0 4 4 0 1 0-8 0 2 2 0 0 0 4 0"/><circle cx="10" cy="13" r="8"/><path d="M10 5v1"/><path d="M10 20v1"/><path d="M18 13h-1"/><path d="M3 13H2"/><path d="m17 21-1-1"/><path d="m4 5 1 1"/><path d="m16 6 1-1"/><path d="m3 21 1-1"/></svg>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                                             </span>
-                                            <span>Desparas.</span>
-                                            <span class="count" id="count-desparasitaciones">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="hospitalizaciones">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l.5-2.5A2 2 0 0 1 5.5 3h13a2 2 0 0 1 2 1.5L21 7"/><path d="M4 21V10"/><path d="M20 21V10"/><rect width="4" height="6" x="10" y="11"/></svg>
-                                            </span>
-                                            <span>Hosp.</span>
-                                            <span class="count" id="count-hosp">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="procedimientos">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h12"/><path d="M12 22V6"/><path d="M7 11 V7 a5 5 0 0 1 10 0 v4"/><path d="M10 6 a2 2 0 1 1 4 0"/></svg>
-                                            </span>
-                                            <span>Cirugías</span>
-                                            <span class="count" id="count-proc">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="laboratorio">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v18"/><path d="M10 3v18"/><path d="M14 3v18"/><path d="M18 3v18"/><path d="M2 12h20"/><path d="M2 7h20"/><path d="M2 17h20"/></svg>
-                                            </span>
-                                            <span>Lab.</span>
-                                            <span class="count" id="count-lab">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="imagenes">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                                            </span>
-                                            <span>Imágenes</span>
-                                            <span class="count" id="count-img">0</span>
-                                        </div>
-                                        <div class="pet-nav-item" data-tab="peso">
-                                            <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
-                                            </span>
-                                            <span>Evol. Peso</span>
+                                            <span>Notas</span>
+                                            <span class="count" id="count-notas">0</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="facturacion" style="border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px;">
                                             <span class="icon">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                                             </span>
-                                            <span>Facturación</span>
+                                            <span>Cobros</span>
                                             <span class="count" id="count-facturas">0</span>
                                         </div>
                                     </aside>
@@ -1117,12 +1462,12 @@
             </section>
 
             <!-- Content Area: Agenda -->
-            <section id="sec-agenda" class="content-area spa-section" style="display: none;">
+            <section id="sec-agenda" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Agenda y Calendario Médico</h2>
                     <div style="display: flex; gap: 0.75rem;">
-                        <button class="btn-secondary" id="btnGenerarOrden">+ Generar Orden</button>
-                        <button class="btn-primary" id="btnNuevaCita">+ Agendar Cita</button>
+                        <button class="av-btn" id="btnGenerarOrden">+ Generar Orden</button>
+                        <button class="av-btn av-btn--primary" id="btnNuevaCita">+ Agendar Cita</button>
                     </div>
                 </div>
                 <div class="agenda-layout">
@@ -1140,8 +1485,47 @@
                 </div>
             </section>
 
+            <!-- sec-mascotas — landing del módulo 3 (Tarea 06, etapa 8). Ver
+                 docs/diseno/pantallas/Mascotas.html y navegacion-v2.md,
+                 "Puntos abiertos". Reemplaza a sec-propietarios como entrada
+                 por defecto; sec-propietarios sigue viva más abajo (ya no
+                 tiene entrada de sidebar propia) y se llega por el botón
+                 "Tutores" de acá abajo (#btnVerTutores) -- hallazgo de
+                 revisión: antes de este botón, la única forma de llegar era
+                 un resultado de propietario en la búsqueda global, que exige
+                 ya saber a quién se busca; no había forma de "ver el listado
+                 completo". -->
+            <section id="sec-mascotas" class="spa-section" hidden>
+                <div class="pd-canvas">
+                    <div class="pd-panel pd-orders">
+                        <div class="pd-orders-head">
+                            <strong>Mascotas</strong>
+                            <div class="pd-orders-filters" id="mascotasFiltros">
+                                <button type="button" class="pd-filter" data-especie="" aria-pressed="true">Todas</button>
+                                <button type="button" class="pd-filter" data-especie="Perro" aria-pressed="false">Perros</button>
+                                <button type="button" class="pd-filter" data-especie="Gato" aria-pressed="false">Gatos</button>
+                                <button type="button" class="pd-filter" data-especie="otro" aria-pressed="false">Otros</button>
+                            </div>
+                            <div class="av-spacer"></div>
+                            <input type="text" id="mascotasSearch" class="search-input"
+                                placeholder="Buscar por nombre, tutor o código…" style="width:260px; margin:0;">
+                            <button type="button" class="av-btn" id="btnVerTutores" data-target="sec-propietarios">Tutores</button>
+                            <button type="button" class="av-btn av-btn--primary" id="btnNuevaMascotaListado">+ Nueva mascota</button>
+                        </div>
+                        <table class="pd-table">
+                            <thead>
+                                <tr><th>Mascota</th><th>Especie / raza</th><th>Tutor</th><th style="width:80px;">Sexo</th><th></th></tr>
+                            </thead>
+                            <tbody id="mascotasTableBody">
+                                <tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando…</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- Content Area: Propietarios -->
-            <section id="sec-propietarios" class="content-area spa-section" style="display: none;">
+            <section id="sec-propietarios" class="content-area spa-section">
                 <div class="content-header"
                     style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 1.5rem;">
                     <h2>Listado de Propietarios</h2>
@@ -1149,7 +1533,7 @@
                         <input type="text" id="searchPropietario"
                             placeholder="Buscar por nombre, apellido o cédula..." class="search-input"
                             style="width: 300px; margin: 0;">
-                        <button class="btn-primary" id="btnRegistrarPropietarioAlt">+ Nuevo Propietario</button>
+                        <button class="av-btn av-btn--primary" id="btnRegistrarPropietarioAlt">+ Nuevo Propietario</button>
                     </div>
                 </div>
                 <table class="consultas-table">
@@ -1170,10 +1554,10 @@
             </section>
 
             <!-- Content Area: Usuarios (Admin) -->
-            <section id="sec-usuarios" class="content-area spa-section" style="display: none;">
+            <section id="sec-usuarios" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Gestión de Usuarios</h2>
-                    <button class="btn-primary" id="btnShowModalUser">+ Nuevo Usuario</button>
+                    <button class="av-btn av-btn--primary" id="btnShowModalUser">+ Nuevo Usuario</button>
                 </div>
                 <div style="background: var(--info-subtle); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.875rem; color: var(--info-dark);">
                     <strong>Tip QR:</strong> Los usuarios con rol <strong>Veterinario</strong> aparecen en el formulario de reserva de turnos (QR/link público). Asigná el rol al crearlos.
@@ -1195,51 +1579,73 @@
             </section>
 
             <!-- Content Area: Inventario -->
-            <section id="sec-inventario" class="content-area spa-section" style="display: none;">
+            <!-- sec-inventario — Tarea 11 (revisión de bocetos): reescrita
+                 fiel a docs/diseno/pantallas/Insumos.html (KPI + pills de
+                 categoría + nivel de stock). Las categorías del boceto
+                 (Medicamentos/Consumibles/...) son ilustrativas -- las
+                 pills acá salen de las categorías reales del inventario
+                 (igual criterio que /catalogo/categorias en Catálogo), no
+                 se hardcodean. La barra "Nivel" muestra % sobre el stock
+                 MÍNIMO, no un "% del máximo" -- InventarioResponse no tiene
+                 un campo de stock máximo/objetivo (ver
+                 docs/revision-integral-11.md, pendientes). -->
+            <section id="sec-inventario" class="content-area spa-section">
                 <div class="content-header" style="flex-wrap:wrap; gap:0.75rem;">
                     <div>
                         <h2 style="margin:0;">Inventario y Farmacia</h2>
                         <p style="color:var(--text-secondary); font-size:0.875rem; margin:0;">Gestión de productos, medicamentos y materiales.</p>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                        <button class="btn-secondary btn-sm" id="btnAlertasStock" style="color:var(--warning-dark); border-color:var(--warning); background:var(--warning-subtle);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> Bajo Stock</button>
-                        <button class="btn-primary" id="btnNuevoProducto">+ Nuevo Producto</button>
+                        <button class="av-btn av-btn--primary" id="btnNuevoProducto">+ Nuevo producto</button>
                     </div>
                 </div>
 
-                <!-- Barra de búsqueda y filtro -->
-                <div style="display:flex; gap:0.75rem; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap;">
-                    <input type="text" id="searchInventario" placeholder="Buscar por nombre, código o categoría..."
-                        class="search-input" style="flex:1; min-width:200px; margin:0;">
-                    <select id="filtroInventarioCategoria"
-                        style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); background:white; font-size:0.875rem; min-width:160px;">
-                        <option value="">Todas las categorías</option>
-                        <option value="Antibiótico">Antibiótico</option>
-                        <option value="Antiinflamatorio">Antiinflamatorio</option>
-                        <option value="Vacuna">Vacuna</option>
-                        <option value="Desparasitante">Desparasitante</option>
-                        <option value="Insumo">Insumo</option>
-                        <option value="Alimento">Alimento</option>
-                        <option value="Laboratorio">Laboratorio</option>
-                        <option value="Imagen">Imagen</option>
-                    </select>
+                <div class="rp-kpi-grid" id="invKpis" style="margin-bottom:14px;">
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Materiales activos</span>
+                        <span class="rp-kpi-value" id="invKpiActivos">—</span>
+                        <span class="rp-kpi-delta" id="invKpiActivosSub"></span>
+                    </div>
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Bajo mínimo</span>
+                        <span class="rp-kpi-value" id="invKpiBajoMinimo">—</span>
+                        <span class="rp-kpi-delta" id="invKpiBajoMinimoSub"></span>
+                    </div>
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Por reponer</span>
+                        <span class="rp-kpi-value" id="invKpiPorReponer">—</span>
+                        <span class="rp-kpi-delta" id="invKpiPorReponerSub"></span>
+                    </div>
+                    <div class="rp-kpi-card">
+                        <span class="rp-kpi-label">Valor del inventario</span>
+                        <span class="rp-kpi-value" id="invKpiValor">—</span>
+                        <span class="rp-kpi-delta">a costo de última compra</span>
+                    </div>
                 </div>
 
-                <div style="overflow-x:auto; border-radius:var(--radius-lg); border:1px solid var(--border);">
-                    <table class="consultas-table" style="margin:0;">
+                <div class="cat-toolbar">
+                    <div class="rp-pill-group" id="invCategoriaPills">
+                        <button type="button" class="rp-pill rp-pill--active" data-cat="">Todos</button>
+                    </div>
+                    <input type="text" id="searchInventario" placeholder="Buscar material..." class="search-input" style="flex:1; min-width:180px; margin:0;">
+                </div>
+
+                <div style="overflow-x:auto; border-radius:8px; border:1px solid var(--border); box-shadow:0 1px 2px rgba(0,0,0,0.03);">
+                    <table class="rp-table" style="margin:0; background:var(--surface);">
                         <thead>
                             <tr>
-                                <th>Producto / Código</th>
+                                <th>Código</th>
+                                <th>Material / Presentación</th>
                                 <th>Categoría</th>
-                                <th>Stock Actual</th>
-                                <th>Precio Unit.</th>
-                                <th>Vencimiento</th>
+                                <th>Stock actual</th>
+                                <th>Nivel</th>
+                                <th>Costo por unidad</th>
                                 <th>Estado</th>
                                 <th style="text-align:right;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="inventarioTableBody">
-                            <tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando inventario...</td></tr>
+                            <tr><td colspan="8" style="text-align:center; padding:2rem; color:var(--text-muted);">Cargando inventario...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1319,7 +1725,7 @@
 
 
             <!-- Content Area: Facturación -->
-            <section id="sec-facturacion" class="content-area spa-section" style="display: none;">
+            <section id="sec-facturacion" class="content-area spa-section">
                 <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 2rem;">
                     <div>
                         <h2 style="margin:0;">Historial de Facturación</h2>
@@ -1337,8 +1743,8 @@
                     </div>
                 </div>
 
-                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); overflow: hidden;">
-                    <table class="consultas-table" style="width: 100%; border-collapse: collapse;">
+                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                    <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
                         <thead>
                             <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
                                 <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
@@ -1359,22 +1765,100 @@
             </section>
 
             <!-- Content Area: Reportes -->
-            <section id="sec-reportes" class="content-area spa-section" style="display: none;">
+            <section id="sec-reportes" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Reportes y KPIs</h2>
+                    <p style="color:var(--text-secondary); font-size:0.85rem; margin:0.25rem 0 0;">Este mes, comparado con el mes anterior.</p>
                 </div>
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <h3>Citas Hoy</h3>
-                        <div class="value" id="kpiCitas">0</div>
+
+                <!-- Tarea 11 (revisión de bocetos): panel superior fiel a
+                     docs/diseno/pantallas/Reportes.html — valores literales
+                     (grid de 4, radios 8px, sombra 0 1px 2px rgba(0,0,0,.03)).
+                     "Patologías más frecuentes" del boceto no se implementa:
+                     Consulta.diagnostico es texto libre, no hay catálogo de
+                     diagnósticos para agrupar (el boceto mismo lo anota como
+                     "Requiere catálogo de diagnósticos") — se deja un estado
+                     vacío explicando por qué, no datos falsos. -->
+                <div class="rp-dash" id="rpDash">
+                    <div class="rp-kpi-grid">
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Ingresos del mes</span>
+                            <span class="rp-kpi-value" id="rpKpiIngresos">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiIngresosDelta"></span>
+                        </div>
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Atenciones</span>
+                            <span class="rp-kpi-value" id="rpKpiAtenciones">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiAtencionesDelta"></span>
+                        </div>
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Ticket promedio</span>
+                            <span class="rp-kpi-value" id="rpKpiTicket">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiTicketDelta"></span>
+                        </div>
+                        <div class="rp-kpi-card">
+                            <span class="rp-kpi-label">Pacientes nuevos</span>
+                            <span class="rp-kpi-value" id="rpKpiNuevos">—</span>
+                            <span class="rp-kpi-delta" id="rpKpiNuevosDelta"></span>
+                        </div>
                     </div>
-                    <div class="kpi-card">
-                        <h3>Pacientes Atendidos</h3>
-                        <div class="value" id="kpiPacientes">0</div>
-                    </div>
-                    <div class="kpi-card">
-                        <h3>Bajo Stock</h3>
-                        <div class="value warning" id="kpiStock">0</div>
+
+                    <div class="rp-main-grid">
+                        <div class="rp-main-col">
+                            <section class="rp-panel">
+                                <div class="rp-panel-head">
+                                    <div class="rp-panel-title-wrap">
+                                        <span class="rp-panel-title">Ingresos por servicio</span>
+                                        <span class="rp-panel-sub" id="rpServiciosSub">Este mes</span>
+                                    </div>
+                                    <div class="rp-pill-group" id="rpServiciosRango">
+                                        <button type="button" class="rp-pill rp-pill--active" data-rp-rango="este_mes">Mes</button>
+                                        <button type="button" class="rp-pill" data-rp-rango="trimestre">Trimestre</button>
+                                        <button type="button" class="rp-pill" data-rp-rango="este_anio">Año</button>
+                                    </div>
+                                </div>
+                                <div id="rpServiciosBars" class="rp-bars">
+                                    <p class="rp-empty-text">Cargando…</p>
+                                </div>
+                            </section>
+
+                            <section class="rp-panel" style="padding:16px 4px 8px;">
+                                <div class="rp-panel-head" style="padding:0 14px;">
+                                    <span class="rp-panel-title">Producción por médico</span>
+                                    <span class="rp-panel-sub" id="rpProduccionSub"></span>
+                                </div>
+                                <table class="rp-table" id="rpProduccionTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Médico</th>
+                                            <th>Atenciones</th>
+                                            <th>Ingresos</th>
+                                            <th>Participación</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rpProduccionBody">
+                                        <tr><td colspan="5" class="rp-empty-text">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                            </section>
+                        </div>
+
+                        <div class="rp-side-col">
+                            <section class="rp-panel">
+                                <span class="rp-panel-title" style="margin-bottom:5px; display:block;">Por tipo de mascota</span>
+                                <div id="rpEspecies" class="rp-especies">
+                                    <p class="rp-empty-text">Cargando…</p>
+                                </div>
+                            </section>
+
+                            <section class="rp-panel">
+                                <span class="rp-panel-title" style="margin-bottom:5px; display:block;">Patologías más frecuentes</span>
+                                <div class="av-empty" style="padding:1.25rem 0.5rem;">
+                                    <p class="av-empty-text" style="margin:0; font-size:0.82rem;">Requiere un catálogo de diagnósticos: <code>Consulta.diagnostico</code> es texto libre hoy y no se puede agrupar por patología. Pendiente de modelo — ver <code>docs/revision-integral-11.md</code>.</p>
+                                </div>
+                            </section>
+                        </div>
                     </div>
                 </div>
 
@@ -1382,15 +1866,15 @@
                     <h3 style="margin-bottom: 0.75rem; color: var(--text-primary);">Indicadores por Período</h3>
 
                     <div id="kpiRangoFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
-                        <button type="button" class="btn-secondary btn-sm kpi-rango-btn" data-kpi-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
+                        <button type="button" class="av-btn kpi-rango-btn" data-kpi-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
                         <span style="width:1px; align-self:stretch; background:var(--border);"></span>
                         <input type="date" id="kpiFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                         <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
                         <input type="date" id="kpiFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                        <button type="button" id="btnAplicarRangoKpi" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Aplicar rango</button>
+                        <button type="button" id="btnAplicarRangoKpi" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Aplicar rango</button>
                     </div>
                     <p id="kpiRangoActual" style="font-size:0.85rem; color: var(--text-secondary); margin: 0 0 1rem 0; font-weight: 600;"></p>
 
@@ -1437,15 +1921,15 @@
                                 <option value="">Seleccioná un veterinario...</option>
                             </select>
                             <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
-                            <button type="button" class="btn-secondary btn-sm cons-vet-rango-btn" data-cons-vet-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
+                            <button type="button" class="av-btn cons-vet-rango-btn" data-cons-vet-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
                             <span style="width:1px; align-self:stretch; background:var(--border);"></span>
                             <input type="date" id="consVetFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                             <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
                             <input type="date" id="consVetFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                            <button type="button" id="btnAplicarConsVet" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Aplicar</button>
+                            <button type="button" id="btnAplicarConsVet" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Aplicar</button>
                         </div>
                         <p id="consVetRangoActual" style="font-size:0.85rem; color: var(--text-secondary); margin: 0 0 1rem 0; font-weight: 600;"></p>
 
@@ -1484,15 +1968,15 @@
                                     <option value="">Seleccioná un veterinario...</option>
                                 </select>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="hoy" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Hoy</button>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="este_mes" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este mes</button>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="mes_anterior" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Mes anterior</button>
-                                <button type="button" class="btn-secondary btn-sm liq-rango-btn" data-liq-rango="este_anio" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Este año</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
+                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
                                 <input type="date" id="liqFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                                 <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
                                 <input type="date" id="liqFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                                <button type="button" id="btnLiqPreview" class="btn-primary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Ver desglose</button>
+                                <button type="button" id="btnLiqPreview" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver desglose</button>
                             </div>
 
                             <div id="liqPreviewWrap" style="overflow-x:auto;">
@@ -1508,7 +1992,7 @@
                                 <select id="liqHistVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                                     <option value="">Todos los veterinarios</option>
                                 </select>
-                                <button type="button" id="btnLiqHistRefrescar" class="btn-secondary btn-sm" style="padding:0.4rem 0.75rem; font-size:0.82rem;">Actualizar</button>
+                                <button type="button" id="btnLiqHistRefrescar" class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;">Actualizar</button>
                             </div>
 
                             <div id="liqHistLista">
@@ -1519,25 +2003,12 @@
                 </div>
             </section>
 
-            <!-- Content Area: Órdenes Médico -->
-            <section id="sec-ordenes-medico" class="content-area spa-section" style="display: none;">
-                <div class="content-header">
-                    <h2>Órdenes de Consulta Asignadas</h2>
-                </div>
-                <div class="kpi-grid" style="margin-bottom: 2rem;">
-                    <div class="kpi-card">
-                        <h3>Pendientes</h3>
-                        <div class="value" id="kpiOrdenesPendientes">0</div>
-                    </div>
-                </div>
-                <div id="ordenesMedicoList">
-                    <!-- Loaded via JS -->
-                    <p style="text-align: center; color: var(--text-secondary);">No tiene órdenes asignadas.</p>
-                </div>
-            </section>
+            <!-- sec-ordenes-medico se eliminó en la Tarea 09, etapa 5: su función
+                 (bandeja de trabajo del veterinario) vive ahora en "Hoy"
+                 (sec-hoy), que lista consultas ABIERTA y turnos en sala. -->
 
             <!-- Content Area: Mi Perfil -->
-            <section id="sec-perfil" class="content-area spa-section" style="display: none;">
+            <section id="sec-perfil" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Mi Perfil</h2>
                 </div>
@@ -1608,7 +2079,7 @@
                                     style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
                             </div>
 
-                            <button type="submit" class="btn-primary"
+                            <button type="submit" class="av-btn av-btn--primary"
                                 style="width: 100%; justify-content: center;">Actualizar Contraseña</button>
                         </form>
                     </div>
@@ -1616,7 +2087,7 @@
             </section>
 
             <!-- Content Area: Citas Web / QR -->
-            <section id="sec-citas-web" class="content-area spa-section" style="display: none;">
+            <section id="sec-citas-web" class="content-area spa-section">
                 <div class="content-header" style="margin-bottom: 1.5rem;">
                     <h2>Citas Web / QR</h2>
                 </div>
@@ -1648,14 +2119,14 @@
                             <option value="rechazada">Rechazadas</option>
                             <option value="cancelada">Canceladas</option>
                         </select>
-                        <button onclick="cargarCitasQR()" class="btn-secondary" style="padding: 0.4rem 0.9rem; font-size: 0.875rem;">Actualizar</button>
+                        <button onclick="cargarCitasQR()" class="av-btn" style="padding: 0.4rem 0.9rem; font-size: 0.875rem;">Actualizar</button>
                     </div>
                     <div style="overflow-x: auto;">
                         <table class="consultas-table" id="tablaCitasQR">
                             <thead>
                                 <tr>
                                     <th>Fecha / Hora</th>
-                                    <th>Cliente</th>
+                                    <th>Tutor</th>
                                     <th>Mascota</th>
                                     <th>Veterinario</th>
                                     <th>Estado</th>
@@ -1679,8 +2150,8 @@
                                 <option value="">Cargando…</option>
                             </select>
                         </div>
-                        <button onclick="cargarHorariosVet()" class="btn-secondary">Ver Horarios</button>
-                        <button onclick="abrirModalNuevoHorario()" class="btn-primary">+ Agregar Bloque</button>
+                        <button onclick="cargarHorariosVet()" class="av-btn">Ver Horarios</button>
+                        <button onclick="abrirModalNuevoHorario()" class="av-btn av-btn--primary">+ Agregar Bloque</button>
                     </div>
                     <div id="horariosGrid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.75rem;">
                         <p style="grid-column: 1/-1; text-align:center; color: var(--text-secondary);">Seleccioná un veterinario para ver sus horarios.</p>
@@ -1690,7 +2161,7 @@
                 <!-- Tab: Veterinarios -->
                 <div id="tab-vets-qr" class="qr-tab-content" style="display:none;">
                     <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
-                        <button onclick="abrirModalNuevoVetQR()" class="btn-primary">+ Nuevo Veterinario</button>
+                        <button onclick="abrirModalNuevoVetQR()" class="av-btn av-btn--primary">+ Nuevo Veterinario</button>
                     </div>
                     <table class="consultas-table">
                         <thead>
@@ -1706,43 +2177,130 @@
             </section>
 
             <!-- Catalogo de Servicios -->
-            <section id="sec-catalogo" class="content-area spa-section" style="display:none;">
+            <!-- sec-catalogo — Tarea 11 (revisión de bocetos): reescrita
+                 maestro-detalle fiel a docs/diseno/pantallas/Catalogo.html
+                 (grid 352px + 1fr). El backend ya soportaba recetas e
+                 historial de precios por servicio (Tarea 07/08) -- vivían
+                 dentro del modal de edición, acá quedan siempre visibles
+                 para el servicio seleccionado, igual que dibuja el boceto. -->
+            <section id="sec-catalogo" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Catálogo de Servicios</h2>
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:1rem; flex-wrap:wrap;">
-                    <div style="display:flex; gap:0.75rem; flex:1; flex-wrap:wrap;">
-                        <input type="text" id="catalogoSearch" placeholder="Buscar servicio..." class="search-input" style="flex:1; min-width:180px;" oninput="cargarCatalogo()">
-                        <select id="catalogoCategoriaFilter" style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.9rem; background:var(--surface);" onchange="cargarCatalogo()">
-                            <option value="">Todas las categorías</option>
-                        </select>
-                    </div>
-                    <button class="btn-primary" onclick="abrirModalServicio()">+ Nuevo Servicio</button>
+                <div class="cat-toolbar">
+                    <input type="text" id="catalogoSearch" placeholder="Buscar servicio..." class="search-input" style="flex:1; min-width:180px; margin:0;" oninput="cargarCatalogo()">
+                    <select id="catalogoCategoriaFilter" style="padding:0.5rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius-md); font-size:0.9rem; background:var(--surface);" onchange="cargarCatalogo()">
+                        <option value="">Todas las categorías</option>
+                    </select>
+                    <button class="av-btn av-btn--primary" onclick="abrirModalServicio()">+ Nuevo servicio</button>
                 </div>
 
-                <div style="overflow-x:auto;">
-                    <table class="consultas-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Nombre</th>
-                                <th>Categoría</th>
-                                <th>Precio Ref ($)</th>
-                                <th>Precio Variable</th>
-                                <th>Unidad</th>
-                                <th>Activo</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="catalogoBody">
-                            <tr><td colspan="8" style="text-align:center; color:var(--text-secondary);">Cargando…</td></tr>
-                        </tbody>
-                    </table>
+                <div class="cat-grid">
+                    <section class="cat-master">
+                        <div class="cat-master-head">
+                            <span class="rp-panel-title">Servicios</span>
+                            <span class="rp-panel-sub" id="catalogoContador"></span>
+                        </div>
+                        <div class="cat-list" id="catalogoLista">
+                            <p class="rp-empty-text">Cargando…</p>
+                        </div>
+                    </section>
+
+                    <section class="cat-detail" id="catalogoDetalle">
+                        <div class="av-empty">
+                            <span class="av-empty-icon" aria-hidden="true"><i class="ph ph-list-magnifying-glass" aria-hidden="true"></i></span>
+                            <strong class="av-empty-title">Elegí un servicio</strong>
+                            <p class="av-empty-text">Seleccioná un servicio de la lista para ver su detalle, los insumos que consume y su historial de precios.</p>
+                        </div>
+                    </section>
                 </div>
             </section>
 
         </main>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Anular orden (Tarea 06, etapa 7) -->
+    <div id="modalAnularOrden" class="modal">
+        <div class="modal-content" style="max-width:420px;">
+            <div class="modal-header">
+                <h2>Anular orden</h2>
+                <span class="close" data-modal="modalAnularOrden" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <form id="formAnularOrden" style="padding:1.5rem;">
+                <p style="margin:0 0 1rem; color:var(--text-secondary); font-size:0.9rem;">
+                    Esta acción revierte el consumo de insumos ya aplicado y no se puede deshacer.
+                </p>
+                <div class="form-group">
+                    <label for="anularOrdenMotivo">Motivo *</label>
+                    <textarea id="anularOrdenMotivo" rows="3" required maxlength="255" placeholder="Ej: solicitado por el tutor, error de carga…"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalAnularOrden">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="background:var(--accent); border-color:var(--accent-dark);">Anular orden</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Facturar orden — Tarea 11 (revisión de bocetos, fidelidad
+         estructural a Facturacion.html). Antes "Facturar orden" creaba la
+         factura directo por API con total_pagado:0.0 y metodo_pago vacío,
+         sin ningún paso de revisión ni selección de forma de pago -- el
+         checkout del boceto no existía en ningún lado de la app. Reusa
+         POST /api/facturas/, que ya acepta metodo_pago y total_pagado
+         (FacturaBase); orden-abierta.js nunca los mandaba. -->
+    <div id="modalFacturarOrden" class="modal">
+        <div class="modal-content" style="max-width:460px;">
+            <div class="modal-header">
+                <h2>Facturar orden</h2>
+                <span class="close" data-modal="modalFacturarOrden" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <div style="padding:1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.25rem;">
+                    <span style="font-size:14px; font-weight:600; color:var(--text-primary);">Conceptos a cobrar</span>
+                    <span id="facOrdenNumero" style="font-size:12px; color:var(--text-muted);"></span>
+                </div>
+                <div id="facOrdenConceptos" style="display:flex; flex-direction:column; gap:2px; margin-bottom:0.75rem; max-height:180px; overflow-y:auto;"></div>
+
+                <div class="cat-hr" style="margin:0.75rem 0;"></div>
+
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1rem;">
+                    <strong style="font-size:14px;">Total</strong>
+                    <span id="facOrdenTotal" class="rp-num" style="font-size:24px; font-weight:500; letter-spacing:-0.02em;">$ 0,00</span>
+                </div>
+
+                <div class="form-group">
+                    <label>Forma de pago</label>
+                    <div id="facOrdenMetodos" style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                            <input type="radio" name="facOrdenMetodo" value="EFECTIVO" checked style="width:auto;"> Efectivo
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                            <input type="radio" name="facOrdenMetodo" value="TARJETA" style="width:auto;"> Punto de venta / Tarjeta
+                        </label>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                            <input type="radio" name="facOrdenMetodo" value="TRANSFERENCIA" style="width:auto;"> Transferencia / Zelle
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="checkbox" id="facOrdenPagaAhora" checked style="width:auto;">
+                    <label for="facOrdenPagaAhora" style="margin:0;">Cobrar el total ahora</label>
+                </div>
+                <p id="facOrdenPendienteNota" hidden style="font-size:12.5px; color:var(--text-muted); margin:0 0 1rem;">
+                    La factura queda pendiente de cobro; se abona después desde Facturación.
+                </p>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalFacturarOrden">Cancelar</button>
+                    <button type="button" class="av-btn av-btn--primary" id="btnConfirmarFacturarOrden">Emitir factura</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal: Catalogo Servicio -->
@@ -1776,6 +2334,11 @@
                 <div class="form-group">
                     <label>Precio de Referencia ($)</label>
                     <input type="number" id="catalogoPrecioRef" min="0" step="0.01" value="0" style="width:100%;">
+                    <small id="catalogoPrecioRefHint" class="hist-precios-hint" hidden>Solo un administrador puede cambiar precios.</small>
+                </div>
+                <div class="form-group" id="catalogoMotivoGroup" hidden>
+                    <label for="catalogoMotivo">Motivo (opcional)</label>
+                    <input type="text" id="catalogoMotivo" maxlength="200" style="width:100%;" placeholder="Ej: ajuste por inflación, actualización de tarifa…">
                 </div>
                 <div class="form-group">
                     <label>Unidad</label>
@@ -1785,6 +2348,13 @@
                     <input type="checkbox" id="catalogoPrecioVariable" style="width:auto;">
                     <label for="catalogoPrecioVariable" style="margin:0;">Precio Variable</label>
                 </div>
+
+                <!-- Tarea 11: "Materiales que consume" e "Historial de precios" se
+                     retiraron de este modal -- viven siempre visibles en el panel de
+                     detalle de sec-catalogo (boceto Catalogo.html), no hace falta
+                     abrir "Editar" para verlos o tocarlos. -->
+                <div id="catalogoRecetaSection" hidden></div>
+
                 <div class="modal-footer" style="margin-top:1.5rem;">
                     <button type="button" class="btn-secondary" data-close="modalCatalogoServicio">Cancelar</button>
                     <button type="submit" class="btn-primary">Guardar</button>
@@ -1805,7 +2375,7 @@
             <div style="padding: 0 2.5rem;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                     <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">CLIENTE</label>
+                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">TUTOR</label>
                         <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
                     </div>
                     <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
@@ -1961,7 +2531,7 @@
                 </div>
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label for="abonoMetodoPago">Método de Pago *</label>
-                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.95rem; background: white;">
+                    <select id="abonoMetodoPago" required style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.95rem;">
                         <option value="EFECTIVO">Efectivo</option>
                         <option value="TARJETA">Tarjeta</option>
                         <option value="TRANSFERENCIA">Transferencia</option>
@@ -1980,8 +2550,20 @@
         </div>
     </div>
 
+    <div class="av-toast-stack" id="avToastStack" hidden></div>
+
+    <!-- Badge counters that lived on the old sidebar links. The tab bar has no
+         badges yet (etapa 3); these hidden stubs keep the existing JS writers
+         (loadInventario, cargarBadgeOrdenes, actualizarBadgeCitasQR) working
+         without a DOM null-check regression. -->
+    <div class="av-badge-stubs" hidden>
+        <span id="badgeStock"></span>
+        <span id="badgeOrdenesMedico"></span>
+        <span id="badgeCitasQR"></span>
+    </div>
+
     <script src="/static/js/auth.js?v=3"></script>
-    <script src="/static/js/app.js?v=31"></script>
+    <script type="module" src="/static/js/app.js?v=40"></script>
 </body>
 
 </html>

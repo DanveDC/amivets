@@ -20,6 +20,7 @@ const {
   testTag,
   createTestUser,
   deleteTestUser,
+  gotoSection,
 } = require('./helpers');
 
 async function loginAsAdmin(page) {
@@ -52,7 +53,7 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
     const email = `${username}@example.com`;
 
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     await page.click('#btnShowModalUser');
     await expect(page.locator('#modalNuevoUsuario')).toBeVisible();
 
@@ -77,7 +78,7 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
 
   test('activar/desactivar por UI: el botón alterna is_active, contrastado por API', async ({ page, request }) => {
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     const row = page.locator('#usuariosTableBody tr', { hasText: S.uiUser.username });
     await expect(row).toContainText('Activo');
 
@@ -99,7 +100,7 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
   test('eliminar por UI: deleteUsuario borra el usuario y desaparece de la API', async ({ page, request }) => {
     page.on('dialog', (d) => d.accept()); // deleteUsuario pide confirm()
     await loginAsAdmin(page);
-    await page.click('.menu-item[data-target="sec-usuarios"]');
+    await gotoSection(page, 'sec-usuarios');
     const row = page.locator('#usuariosTableBody tr', { hasText: S.uiUser.username });
     await expect(row).toBeVisible();
     await row.getByRole('button', { name: 'Eliminar' }).click();
@@ -143,6 +144,46 @@ test.describe.serial('Gestión de usuarios — huecos no cubiertos por "editar u
       expect(newTry.ok()).toBeTruthy();
     } finally {
       await deleteTestUser(request, S.token, throwaway.id);
+    }
+  });
+
+  test('username malicioso no rompe la tabla ni el onclick de otras filas (XSS almacenado, usuarios.js::loadUsuarios)', async ({ page, request }) => {
+    // Payload con los tres caracteres que importan acá:
+    //   ' -> cierra el string de JS dentro del onclick (el vector real)
+    //   " -> si sólo se JS-escapa sin HTML-escapar, corta el atributo onclick
+    //   <script> -> si sólo se HTML-escapa sin JS-escapar, igual se ejecuta
+    //               como JS (el HTML parser decodifica entidades ANTES de
+    //               compilar el atributo como JS -- ver escapeJsAttr en ui.js).
+    const malicioso = testTag('xss') + `'"<script>window.__xssFired=true</script>`;
+    const user = await createTestUser(request, S.token, { username: malicioso.slice(0, 50) });
+    const otro = await createTestUser(request, S.token);
+    try {
+      let dialogFired = false;
+      page.on('dialog', async (d) => { dialogFired = true; await d.dismiss(); });
+
+      await loginAsAdmin(page);
+      await gotoSection(page, 'sec-usuarios');
+
+      // Si el breakout funcionara, esta bandera global quedaría seteada con
+      // sólo renderizar la tabla -- sin clickear nada.
+      const fired = await page.evaluate(() => window.__xssFired === true);
+      expect(fired).toBeFalsy();
+      expect(dialogFired).toBeFalsy();
+
+      // La fila del usuario malicioso muestra el texto crudo, no HTML roto.
+      const row = page.locator('#usuariosTableBody tr', { hasText: user.username.slice(0, 20) });
+      await expect(row).toHaveCount(1);
+
+      // Y el onclick de una fila DISTINTA sigue siendo JS válido: abre el
+      // modal con los datos correctos. Si el username malicioso hubiera
+      // corrompido el markup de la tabla, este botón (en el DOM después de
+      // la fila rota) ni siquiera existiría con el onclick intacto.
+      const otroRow = page.locator('#usuariosTableBody tr', { hasText: otro.username });
+      await otroRow.getByRole('button', { name: 'Editar' }).click();
+      await expect(page.locator('#editUsername')).toHaveValue(otro.username);
+    } finally {
+      await deleteTestUser(request, S.token, user.id);
+      await deleteTestUser(request, S.token, otro.id);
     }
   });
 });

@@ -3,16 +3,32 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.models.models import Usuario
 from app.schemas.schemas import MascotaCreate, MascotaUpdate, MascotaResponse, MascotaTransfer
 from app.services.mascota_service import MascotaService
+from app.routers.usuarios import require_roles
 
 router = APIRouter(prefix="/api/mascotas", tags=["Mascotas"])
+
+# HALLAZGO DE SEGURIDAD (Tarea 10): este router nunca tuvo Depends(require_roles)
+# en NINGUN endpoint. Confirmado en vivo contra el stack real: GET /api/mascotas/
+# sin token devolvia 200 con el padron completo de pacientes (incluye datos de
+# tutores via propietario_id) y DELETE /api/mascotas/{id} sin token devolvia 204
+# y borraba (desactivaba) una mascota real.
+#
+# admin + recepcionista + veterinario en todo el router: coincide con
+# MASCOTAS_ROLES del front (static/js/core/router.js:49, la seccion "Mascotas"
+# ya estaba restringida a esos tres roles) y con la fila 22 de la matriz de
+# permisos (docs/diseno/ordenes-de-servicio.md, decision 9, seccion 9.3: "Alta
+# / baja de tutores y pacientes" -- admin/recepcion/veterinario si, gestor no).
+_ROLES_MASCOTAS = ("admin", "recepcionista", "veterinario")
 
 
 @router.post("/", response_model=MascotaResponse, status_code=status.HTTP_201_CREATED)
 def crear_mascota(
     mascota: MascotaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Crea una nueva mascota"""
     return MascotaService.crear_mascota(db, mascota)
@@ -21,7 +37,8 @@ def crear_mascota(
 @router.get("/{mascota_id}", response_model=MascotaResponse)
 def obtener_mascota(
     mascota_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Obtiene una mascota por ID"""
     mascota = MascotaService.obtener_mascota(db, mascota_id)
@@ -44,7 +61,8 @@ def listar_mascotas(
     raza: Optional[str] = None,
     sexo: Optional[str] = None,
     estado_reproductivo: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Lista todas las mascotas con filtros opcionales y búsqueda"""
     return MascotaService.listar_mascotas(
@@ -56,7 +74,8 @@ def listar_mascotas(
 def transferir_mascota(
     mascota_id: int,
     transfer_data: MascotaTransfer,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Transfiere una mascota a otro propietario"""
     return MascotaService.cambiar_propietario(
@@ -67,7 +86,8 @@ def transferir_mascota(
 @router.get("/{mascota_id}/peso-history")
 def obtener_historial_peso(
     mascota_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Obtiene el historial de peso de una mascota"""
     return MascotaService.obtener_historial_peso(db, mascota_id)
@@ -77,7 +97,8 @@ def obtener_historial_peso(
 def actualizar_mascota(
     mascota_id: int,
     mascota: MascotaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Actualiza una mascota existente"""
     mascota_actualizada = MascotaService.actualizar_mascota(db, mascota_id, mascota)
@@ -92,7 +113,8 @@ def actualizar_mascota(
 @router.delete("/{mascota_id}", status_code=status.HTTP_204_NO_CONTENT)
 def eliminar_mascota(
     mascota_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_MASCOTAS)),
 ):
     """Elimina (desactiva) una mascota"""
     if not MascotaService.eliminar_mascota(db, mascota_id):

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, field_serializer, computed_field, ConfigDict
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -116,6 +116,9 @@ class ConsultaBase(BaseModel):
     proxima_cita: Optional[datetime] = None
     estado_pago: Optional[str] = "POR_COBRAR"
     precio_consulta: Optional[float] = 0.0
+    # Ciclo de vida clinico (Tarea 09, decision 6): ABIERTA / CERRADA / ANULADA.
+    # La respuesta siempre lo trae; crear_consulta lo fuerza a 'ABIERTA'.
+    estado: Optional[str] = Field(None, max_length=20)
 
     @field_validator('temperatura')
     @classmethod
@@ -135,6 +138,10 @@ class ConsultaCreate(ConsultaBase):
     # Requerido desde ahora: una consulta sin veterinario asignado queda
     # impagable en Liquidaciones (Unidad E), ver decision de Daniel.
     veterinario_id: int = Field(..., gt=0)
+    # Obligatorio desde Tarea 06 (decision 3): toda consulta nace DENTRO de una
+    # orden. El backend le anexa a esa orden la linea tipo_servicio='CONSULTA'
+    # que representa el honorario, y pasa la orden a EN_ATENCION.
+    orden_id: int = Field(..., gt=0)
 
 
 class ConsultaUpdate(BaseModel):
@@ -151,21 +158,47 @@ class ConsultaUpdate(BaseModel):
     proxima_cita: Optional[datetime] = None
     estado_pago: Optional[str] = None
     precio_consulta: Optional[float] = None
+    # Tarea 09, decision 6: el veterinario puede cerrar/reabrir la consulta.
+    estado: Optional[str] = Field(None, max_length=20)
+
+
+class ConsumoMaterialOverride(BaseModel):
+    """Ajuste real de consumo por linea al aplicar un servicio (Tarea 07, decision 6).
+
+    Sobreescribe la cantidad de la receta para ese material. Las lineas de
+    receta sin override usan la cantidad estandar de la receta.
+    """
+    inventario_id: int = Field(..., gt=0)
+    cantidad: Decimal = Field(..., gt=0)
 
 
 class ServicioConsultaBase(BaseModel):
-    consulta_id: int
-    tipo_servicio: Optional[str] = Field(None, max_length=50) 
+    # Tarea 09, decision 1: opcional. Un servicio directo llega con mascota_id y
+    # consulta_id = None; un servicio anexado a una consulta, al reves. El CHECK
+    # de la DB exige que haya al menos uno.
+    consulta_id: Optional[int] = None
+    mascota_id: Optional[int] = None
+    # Tarea 06 (decisión 1 y 3): la orden a la que cuelga el servicio. Opcional
+    # en el schema porque este mismo modelo lo usa POST /api/consultas/{id}/
+    # servicios, donde el backend lo DERIVA de la consulta (nunca lo acepta del
+    # cliente); crear_servicio_directo (POST /api/servicios/, sin consulta) en
+    # cambio lo exige a nivel de endpoint -- mismo criterio que ya usa acá
+    # mascota_id, que tampoco es NOT NULL en el schema.
+    orden_id: Optional[int] = Field(None, gt=0)
+    tipo_servicio: Optional[str] = Field(None, max_length=50)
     referencia_id: Optional[int] = None
+    catalogo_servicio_id: Optional[int] = Field(None, gt=0)
     nombre_servicio: Optional[str] = Field(None, max_length=255)
     cantidad: Optional[float] = Field(default=1.0)
     precio_unitario: Optional[float] = Field(default=0.0)
-    estado: Optional[str] = Field(default="Pendiente", max_length=50)
+    estado: Optional[str] = Field(default="SOLICITADO", max_length=50)
     detalles_clinicos: Optional[str] = None
     is_deleted: Optional[bool] = False
 
 class ServicioConsultaCreate(ServicioConsultaBase):
-    pass
+    # Overrides opcionales de consumo real por material (Decision 6). Solo se
+    # aplican si el servicio entra en un estado consumido (EJECUTADO/FACTURADO).
+    consumos: Optional[List[ConsumoMaterialOverride]] = None
 
 class ServicioConsultaUpdate(BaseModel):
     cantidad: Optional[float] = Field(None, gt=0)
@@ -173,9 +206,25 @@ class ServicioConsultaUpdate(BaseModel):
     estado: Optional[str] = Field(None, max_length=50)
     detalles_clinicos: Optional[str] = None
     is_deleted: Optional[bool] = None
+    catalogo_servicio_id: Optional[int] = Field(None, gt=0)
+    consumos: Optional[List[ConsumoMaterialOverride]] = None
 
 class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
+    # orden_id ya está en ServicioConsultaBase (Tarea 06, decisión 3): acá solo
+    # se documenta que en la RESPUESTA es de solo lectura -- el cliente no
+    # elige la orden de un servicio anexado a una consulta, la fija el backend
+    # desde la línea CONSULTA (orden_de_consulta). crear_servicio_directo es la
+    # única excepción: ahí sí lo exige del cliente (ver ServicioConsultaBase).
+    # Fecha del servicio para la historia unificada del paciente (Tarea 09).
+    created_at: Optional[datetime] = None
+    # Ya facturado sí/no — para el timeline de la ficha (el endpoint ya filtra
+    # por ?facturado=, faltaba exponerlo por fila).
+    facturado: Optional[bool] = None
+    # Advertencias de stock al aplicar (Decision 4): faltantes que se
+    # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
+    # que dispara el consumo.
+    advertencias: Optional[List[dict]] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -292,25 +341,60 @@ class PruebaComplementariaResponse(PruebaComplementariaBase):
 
 
 # ========== INVENTARIO SCHEMAS ==========
+# Conjuntos cerrados del inventario fraccionado (Tarea 07). Se validan aca en
+# vez de dejar texto libre como el `categoria` heredado.
+TIPOS_ITEM_VALIDOS = {"MATERIAL", "PRODUCTO"}
+UNIDADES_MEDIDA_VALIDAS = {"ml", "g", "unidad"}
+
+
 class InventarioBase(BaseModel):
     codigo: str = Field(..., min_length=1, max_length=50)
     nombre: str = Field(..., min_length=1, max_length=200)
     descripcion: Optional[str] = None
     categoria: Optional[str] = Field(None, max_length=50)
     precio_unitario: float = Field(..., ge=0)
-    stock_actual: int = Field(default=0, ge=0, description="El stock jamás puede ser negativo")
-    stock_minimo: int = Field(default=5, ge=0)
+    # Decimal (no int): el stock ya vive en unidad base y admite fracciones
+    # (Tarea 07, decision 2). ge=0 se mantiene como en el esquema heredado.
+    stock_actual: Decimal = Field(default=Decimal("0"), ge=0, description="El stock jamás puede ser negativo")
+    stock_minimo: Decimal = Field(default=Decimal("5"), ge=0)
     fecha_vencimiento: Optional[date] = None
     proveedor: Optional[str] = Field(None, max_length=200)
     ubicacion: Optional[str] = Field(None, max_length=100)
+    # --- Inventario fraccionado (Tarea 07, slice A) ---
+    tipo_item: Optional[str] = Field(default="PRODUCTO", max_length=12, description="MATERIAL | PRODUCTO")
+    unidad_medida: Optional[str] = Field(None, max_length=12, description="ml | g | unidad; NULL = unidad sin definir")
+    contenido_por_envase: Optional[Decimal] = Field(None, ge=0)
+    merma_al_abrir: Optional[bool] = False
     activo: bool = True
-    
+
     @field_validator('precio_unitario')
     @classmethod
     def validar_precio_positivo(cls, v):
         if v < 0:
             raise ValueError('El precio no puede ser negativo')
         return v
+
+    @field_validator('tipo_item')
+    @classmethod
+    def validar_tipo_item(cls, v):
+        if v is not None and v not in TIPOS_ITEM_VALIDOS:
+            raise ValueError(f"tipo_item invalido. Usar uno de: {', '.join(sorted(TIPOS_ITEM_VALIDOS))}")
+        return v
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v is not None and v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
+
+    # El stock se guarda y opera como Decimal, pero en el JSON de respuesta se
+    # emite como numero (no string) para no romper a los consumidores que
+    # esperan `stock_actual` numerico (e2e inventario / gestion-inventario).
+    # Solo afecta la serializacion JSON; model_dump() sigue devolviendo Decimal.
+    @field_serializer('stock_actual', 'stock_minimo', 'contenido_por_envase', when_used='json')
+    def _serializar_decimales(self, v):
+        return float(v) if v is not None else None
 
 
 class InventarioCreate(InventarioBase):
@@ -322,19 +406,103 @@ class InventarioUpdate(BaseModel):
     descripcion: Optional[str] = None
     categoria: Optional[str] = Field(None, max_length=50)
     precio_unitario: Optional[float] = Field(None, ge=0)
-    stock_actual: Optional[int] = Field(None, ge=0)
-    stock_minimo: Optional[int] = Field(None, ge=0)
+    stock_actual: Optional[Decimal] = Field(None, ge=0)
+    stock_minimo: Optional[Decimal] = Field(None, ge=0)
     fecha_vencimiento: Optional[date] = None
     proveedor: Optional[str] = Field(None, max_length=200)
     ubicacion: Optional[str] = Field(None, max_length=100)
+    tipo_item: Optional[str] = Field(None, max_length=12)
+    unidad_medida: Optional[str] = Field(None, max_length=12)
+    contenido_por_envase: Optional[Decimal] = Field(None, ge=0)
+    merma_al_abrir: Optional[bool] = None
     activo: Optional[bool] = None
+    # Motivo opcional del cambio de precio (Tarea 08). No es una columna de
+    # inventario: el router lo saca del loop generico y lo pasa a
+    # registrar_cambio_precio(). exclude=True lo mantiene fuera de model_dump().
+    motivo: Optional[str] = Field(None, max_length=200, exclude=True)
+
+    @field_validator('tipo_item')
+    @classmethod
+    def validar_tipo_item(cls, v):
+        if v is not None and v not in TIPOS_ITEM_VALIDOS:
+            raise ValueError(f"tipo_item invalido. Usar uno de: {', '.join(sorted(TIPOS_ITEM_VALIDOS))}")
+        return v
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v is not None and v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
 
 
 class InventarioResponse(InventarioBase):
     id: int
     fecha_registro: datetime
-    
+    # Consumir un material al aplicar un servicio puede dejar el stock en
+    # negativo (Tarea 07, decision 4: se permite, se avisa y se registra). El
+    # ge=0 de InventarioBase sigue validando el INPUT de alta/edicion, pero la
+    # LECTURA no debe fallar cuando el stock quedo negativo.
+    stock_actual: Decimal
+
     model_config = ConfigDict(from_attributes=True)
+
+
+class MovimientoInventarioResponse(BaseModel):
+    """Lectura del ledger de inventario. Hoy nada lo consume; slice B lo usa
+    para el guard anti-doble-descuento y la trazabilidad movimiento -> consulta."""
+    id: int
+    producto_id: int
+    tipo_movimiento: str
+    cantidad: Decimal
+    costo_unitario: float
+    lote: Optional[str] = None
+    origen_destino: Optional[str] = None
+    fecha_registro: datetime
+    usuario_responsable_id: Optional[int] = None
+    servicio_consulta_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HistorialPrecioRead(BaseModel):
+    """Una fila del historial de precios de lista (Tarea 08), para materiales y
+    servicios (misma forma para los dos, decision 2).
+
+    variacion_abs / variacion_pct se derivan de precio_anterior y quedan en None
+    cuando no hay con que compararlas: registro inicial de migracion
+    (precio_anterior IS NULL) o precio_anterior = 0 para el porcentaje.
+    """
+    id: int
+    precio_nuevo: Decimal
+    precio_anterior: Optional[Decimal] = None
+    motivo: Optional[str] = None
+    usuario_id: Optional[int] = None
+    corrige_id: Optional[int] = None
+    fecha_cambio: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def variacion_abs(self) -> Optional[float]:
+        if self.precio_anterior is None:
+            return None
+        return float((self.precio_nuevo - self.precio_anterior).quantize(Decimal("0.01")))
+
+    @computed_field
+    @property
+    def variacion_pct(self) -> Optional[float]:
+        if self.precio_anterior is None or self.precio_anterior == 0:
+            return None
+        pct = (self.precio_nuevo - self.precio_anterior) / self.precio_anterior * Decimal("100")
+        return float(pct.quantize(Decimal("0.01")))
+
+    # Coherente con InventarioBase: los Decimal se emiten como numero (no string)
+    # en el JSON de respuesta. model_dump() sigue devolviendo Decimal.
+    @field_serializer('precio_nuevo', 'precio_anterior', when_used='json')
+    def _serializar_decimales(self, v):
+        return float(v) if v is not None else None
 
 
 # ========== FACTURA SCHEMAS ==========
@@ -386,6 +554,19 @@ class FacturaBase(BaseModel):
 
 class FacturaCreate(FacturaBase):
     detalles: List[DetalleFacturaCreate] = Field(..., min_length=1)
+
+
+class FacturaDesdeConsulta(BaseModel):
+    """Body opcional de POST /api/facturas/from-consulta/{id} (Tarea 09, decision 8).
+
+    El servidor arma los detalles desde consulta.servicios + el honorario; el
+    cliente solo pasa datos de cobro. Todo opcional: sin body se emite una
+    factura PENDIENTE por el total.
+    """
+    metodo_pago: Optional[str] = Field(None, max_length=50)
+    total_pagado: Optional[float] = Field(default=0.0)
+    descuento: Optional[float] = Field(default=0.0)
+    impuesto: Optional[float] = Field(default=0.0)
 
 
 class FacturaUpdate(BaseModel):
@@ -542,6 +723,62 @@ class PlanSaludResponse(PlanSaludBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ========== RECETA DE SERVICIO SCHEMAS (Tarea 07, slice A) ==========
+class RecetaServicioBase(BaseModel):
+    inventario_id: int = Field(..., gt=0)
+    cantidad: Decimal = Field(..., gt=0)
+    unidad_medida: str = Field(..., min_length=1, max_length=12, description="ml | g | unidad")
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
+
+
+class RecetaServicioCreate(RecetaServicioBase):
+    pass
+
+
+class RecetaServicioUpdate(BaseModel):
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    unidad_medida: Optional[str] = Field(None, min_length=1, max_length=12)
+
+    @field_validator('unidad_medida')
+    @classmethod
+    def validar_unidad_medida(cls, v):
+        if v is not None and v not in UNIDADES_MEDIDA_VALIDAS:
+            raise ValueError(f"unidad_medida invalida. Usar una de: {', '.join(sorted(UNIDADES_MEDIDA_VALIDAS))}")
+        return v
+
+
+class RecetaServicioResponse(RecetaServicioBase):
+    id: int
+    catalogo_servicio_id: int
+    inventario_nombre: Optional[str] = None
+    created_at: datetime
+
+    @model_validator(mode='before')
+    def _adjuntar_nombre_inventario(cls, data):
+        # Mismo criterio que NotaClinicaResponse._adjuntar_nombres: si es un
+        # objeto ORM con la relacion cargada, resolvemos el nombre del material
+        # aca para que el frontend no pida /inventario aparte solo para eso.
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                if getattr(data, 'inventario', None):
+                    data.inventario_nombre = data.inventario.nombre
+            except Exception:
+                pass
+        return data
+
+    @field_serializer('cantidad', when_used='json')
+    def _serializar_cantidad(self, v):
+        return float(v) if v is not None else None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ========== CATALOGO SERVICIO SCHEMAS ==========
 class CatalogoServicioBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=255)
@@ -553,7 +790,12 @@ class CatalogoServicioBase(BaseModel):
 
 
 class CatalogoServicioCreate(CatalogoServicioBase):
-    pass
+    # Despacho y adjuntos (Tarea 06, decisiones 5 y 7, etapa 5). area_id=None
+    # es el atajo sin despacho (decisión 4); requiere_adjunto=None hereda del
+    # área. Ambos campos son admin-only (fila 23 de la matriz) -- el router
+    # valida el rol igual que ya hace con precio_ref.
+    area_id: Optional[int] = Field(None, gt=0)
+    requiere_adjunto: Optional[bool] = None
 
 
 class CatalogoServicioUpdate(BaseModel):
@@ -563,11 +805,21 @@ class CatalogoServicioUpdate(BaseModel):
     precio_variable: Optional[bool] = None
     unidad: Optional[str] = Field(None, max_length=100)
     activo: Optional[bool] = None
+    # Motivo opcional del cambio de precio (Tarea 08). No es una columna: el
+    # router lo saca del loop generico y lo pasa a registrar_cambio_precio().
+    motivo: Optional[str] = Field(None, max_length=200, exclude=True)
+    # Despacho y adjuntos (etapa 5, ver CatalogoServicioCreate). gt=0 en vez de
+    # nullable directo porque "sin área" se expresa mandando area_id=None
+    # explícito o simplemente no mandando el campo (exclude_unset lo respeta).
+    area_id: Optional[int] = Field(None, gt=0)
+    requiere_adjunto: Optional[bool] = None
 
 
 class CatalogoServicioResponse(CatalogoServicioBase):
     id: int
     created_at: datetime
+    area_id: Optional[int] = None
+    requiere_adjunto: Optional[bool] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -646,6 +898,181 @@ class LiquidacionResponse(BaseModel):
     detalles: List[LiquidacionDetalleResponse] = []
 
 
+# ========== ORDEN DE SERVICIO SCHEMAS (Tarea 06, decisiones 1 y 9) ==========
+class OrdenServicioCreate(BaseModel):
+    """Abrir una orden (fila 1 de la matriz: admin / recepción / veterinario).
+
+    propietario_id es obligatorio y mascota_id opcional, no al revés: una venta
+    de mostrador tiene pagador y puede no tener paciente (decisión 1).
+    """
+    propietario_id: int = Field(..., gt=0)
+    mascota_id: Optional[int] = Field(None, gt=0)
+    veterinario_id: Optional[int] = Field(None, gt=0)
+    motivo_visita: Optional[str] = Field(None, max_length=255)
+    observaciones: Optional[str] = None
+
+
+class OrdenServicioAsignarVeterinario(BaseModel):
+    veterinario_id: int = Field(..., gt=0)
+
+
+class OrdenServicioAnexarServicio(BaseModel):
+    """Anexa un servicio directo a la orden, sin pasar por una consulta
+    (Tarea 06, decisión 1: venta de mostrador, orden solo de estética).
+
+    Es la hermana de ServicioConsultaCreate para POST /api/ordenes/{id}/
+    servicios: mismos campos de contenido, menos consulta_id/mascota_id/
+    orden_id, que el backend fija desde la orden del path, y menos `estado`,
+    que decide el propio endpoint por el área del ítem (decisión 4, atajo sin
+    despacho) en vez de aceptarlo del cliente.
+
+    `tipo_servicio='CONSULTA'` está reservado a POST /api/consultas/ (decisión
+    3, índice único uq_orden_una_consulta): el endpoint lo rechaza con 400.
+    """
+    tipo_servicio: str = Field(..., max_length=50)
+    referencia_id: Optional[int] = None
+    catalogo_servicio_id: Optional[int] = Field(None, gt=0)
+    nombre_servicio: Optional[str] = Field(None, max_length=255)
+    cantidad: float = Field(default=1.0, gt=0)
+    precio_unitario: float = Field(default=0.0, ge=0)
+    detalles_clinicos: Optional[str] = None
+    # Overrides opcionales de consumo real por material (decisión 6, Tarea 07).
+    # Solo se usan si el atajo sin despacho deja el servicio en EJECUTADO.
+    consumos: Optional[List[ConsumoMaterialOverride]] = None
+
+
+class OrdenServicioAnular(BaseModel):
+    # Obligatorio: anular una orden sin decir por qué deja un agujero en la
+    # auditoría justo donde más importa (decisión 1, regla 5). Falta el campo
+    # o viene vacío -> 422 de Pydantic.
+    motivo_anulacion: str = Field(..., min_length=1, max_length=255)
+
+
+class OrdenServicioResponse(BaseModel):
+    """Cabecera de la orden. La usa el listado del panel del día."""
+    id: int
+    numero: str
+    propietario_id: int
+    mascota_id: Optional[int] = None
+    veterinario_id: Optional[int] = None
+    estado: str
+    abierta_por_id: int
+    fecha_apertura: datetime
+    fecha_cierre: Optional[datetime] = None
+    cerrada_por_id: Optional[int] = None
+    motivo_visita: Optional[str] = None
+    observaciones: Optional[str] = None
+    anulada_por_id: Optional[int] = None
+    motivo_anulacion: Optional[str] = None
+    origen: Optional[str] = None
+    # Denormalizados para que el tablero no tenga que pedir tutor/paciente/
+    # veterinario aparte por cada fila (mismo criterio que NotaClinicaResponse).
+    propietario_nombre: Optional[str] = None
+    mascota_nombre: Optional[str] = None
+    veterinario_nombre: Optional[str] = None
+
+    @model_validator(mode='before')
+    def _adjuntar_nombres(cls, data):
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                prop = getattr(data, 'propietario', None)
+                if prop:
+                    data.propietario_nombre = f"{prop.nombre} {prop.apellido}"
+                mascota = getattr(data, 'mascota', None)
+                if mascota:
+                    data.mascota_nombre = mascota.nombre
+                vet = getattr(data, 'veterinario', None)
+                if vet:
+                    data.veterinario_nombre = vet.username
+            except Exception:
+                pass
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrdenServicioDetalleResponse(OrdenServicioResponse):
+    """La orden completa: cabecera + sus servicios (fila 4 de la matriz).
+
+    Incluye las líneas borradas lógicamente con su `is_deleted`, igual que
+    ConsultaResponse.servicios — el filtro fino es del consumidor.
+    """
+    servicios: List[ServicioConsultaResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== ÁREAS DE SERVICIO Y GESTORES (Tarea 06, decisiones 5 y 9, etapa 5) ==========
+class AreaServicioCreate(BaseModel):
+    """Alta de un área de despacho (fila 23 de la matriz: solo admin).
+
+    `codigo` es el identificador estable que referencia CatalogoServicio.area_id
+    (ej. 'LABORATORIO'); se normaliza a mayúsculas para no depender de que el
+    cliente lo mande consistente.
+    """
+    codigo: str = Field(..., min_length=1, max_length=50)
+    nombre: str = Field(..., min_length=1, max_length=100)
+    requiere_adjunto: bool = False
+    activo: bool = True
+
+    @field_validator("codigo")
+    @classmethod
+    def _normalizar_codigo(cls, v: str) -> str:
+        return v.strip().upper()
+
+
+class AreaServicioUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+    requiere_adjunto: Optional[bool] = None
+    activo: Optional[bool] = None
+
+
+class AreaServicioResponse(BaseModel):
+    id: int
+    codigo: str
+    nombre: str
+    requiere_adjunto: bool
+    activo: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GestorAreaCreate(BaseModel):
+    """Suma un usuario a `gestor_area` (fila 24 de la matriz: solo admin).
+
+    No exige `role='gestor'`: la decisión 5 resuelve el multi-rol con datos
+    (`gestor_area`), no con el string de rol -- un veterinario puede tener
+    también una fila acá (ej. el veterinario que hace la ecografía).
+    """
+    usuario_id: int = Field(..., gt=0)
+
+
+class GestorAreaResponse(BaseModel):
+    id: int
+    usuario_id: int
+    area_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== NOTIFICACIONES (Tarea 06, decisión 6, etapa 5) ==========
+class NotificacionResponse(BaseModel):
+    id: int
+    destinatario_id: int
+    tipo: str
+    titulo: str
+    cuerpo: Optional[str] = None
+    orden_id: Optional[int] = None
+    servicio_id: Optional[int] = None
+    created_at: datetime
+    leida_at: Optional[datetime] = None
+    canal: str
+    enviado_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ========== NOTA CLINICA SCHEMAS (Unidad B, tarea 05) ==========
 CATEGORIAS_NOTA_VALIDAS = {"general", "seguimiento", "llamada", "incidencia"}
 
@@ -715,6 +1142,21 @@ class NotaClinicaResponse(NotaClinicaBase):
             except Exception:
                 pass
         return data
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== ADJUNTOS (Tarea 06, decisiones 7 y 8, etapa 6) ==========
+class AdjuntoResponse(BaseModel):
+    id: int
+    servicio_id: int
+    nombre_original: str
+    # El DETECTADO por los bytes al subir, no lo que declaró el cliente.
+    content_type: str
+    tamano_bytes: int
+    sha256: str
+    subido_por_id: int
+    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

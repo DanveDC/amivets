@@ -5,10 +5,49 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.models.models import (
-    Factura, DetalleFactura, Inventario, MovimientoInventario, 
-    Consulta, PruebaComplementaria, Vacunacion, Desparasitacion, 
-    Cirugia, Hospitalizacion, ServicioConsulta
+    Factura, DetalleFactura, Inventario, MovimientoInventario,
+    Consulta, PruebaComplementaria, Vacunacion, Desparasitacion,
+    Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento
 )
+from app.services import consumo_service
+
+
+def _consumo_en_ledger(db: Session, servicio_id) -> bool:
+    """True si el ServicioConsulta ya descontó materiales al aplicarse y esos
+    movimientos no fueron revertidos. Fuente de verdad: el ledger, no el
+    estado (Tarea 07, decisión 3).
+
+    Cuenta SOLO SALIDA contra REVERSA (la MERMA queda fuera: siempre acompaña a
+    una SALIDA del mismo material y la reversa combina ambas en una REVERSA
+    única; sumarla envenena el guard tras un ciclo aplicar/revertir).
+    """
+    if not servicio_id:
+        return False
+    salidas = db.query(MovimientoInventario.id).filter(
+        MovimientoInventario.servicio_consulta_id == servicio_id,
+        MovimientoInventario.tipo_movimiento == TipoMovimiento.SALIDA,
+    ).count()
+    reversas = db.query(MovimientoInventario.id).filter(
+        MovimientoInventario.servicio_consulta_id == servicio_id,
+        MovimientoInventario.tipo_movimiento == TipoMovimiento.REVERSA,
+    ).count()
+    if salidas > reversas:
+        return True
+    # Fallback para filas pre-migración (Tarea 07): los servicios aplicados antes
+    # de que existiera movimientos_inventario.servicio_consulta_id no tienen
+    # SALIDA anclada, así que el conteo de arriba da 0. Si el servicio está en un
+    # estado consumido asumimos que ya descontó y NO volvemos a descontar al
+    # facturar (dirección segura: evita el doble decremento de vacunas/
+    # desparasitaciones históricas). Las líneas de servicio que consumen material
+    # ya no llevan producto_id, así que este fallback no afecta al flujo nuevo.
+    #
+    # FACTURADO tiene que estar en el conjunto igual que EJECUTADO (Tarea 06,
+    # decisión 4): con `== "EJECUTADO"` a secas, re-facturar un servicio ya
+    # facturado volvería a descontarle el stock.
+    serv = db.query(ServicioConsulta.estado).filter(
+        ServicioConsulta.id == servicio_id
+    ).first()
+    return bool(serv and serv[0] in consumo_service.ESTADOS_CONSUMIDOS)
 from app.schemas.schemas import FacturaCreate, FacturaUpdate
 
 
@@ -56,49 +95,96 @@ class FacturacionService:
                         detail=f"La consulta {factura_data.consulta_id} ya tiene una factura activa (#{factura_activa.numero_factura}). Anúlela antes de crear una nueva.",
                     )
 
+            # Guard contra doble submit (revisión 11): un ServicioConsulta ya
+            # facturado no puede entrar en una factura nueva. Sin esto, un
+            # doble clic en "Emitir factura" (orden-abierta.js) manda dos POST
+            # casi simultáneos con los mismos servicio_id y ambos pasan, porque
+            # el `.update({facturado: True})` de más abajo es incondicional.
+            # Se bloquean las filas con SELECT FOR UPDATE antes de tocar
+            # inventario: la segunda request de la carrera espera al commit de
+            # la primera y recién ahí lee facturado=True, así que rechaza con
+            # 409 en vez de generar una segunda factura para los mismos
+            # servicios.
+            servicio_ids_detalle = {
+                getattr(d, 'servicio_id', None) for d in factura_data.detalles
+                if getattr(d, 'servicio_id', None)
+            }
+            if servicio_ids_detalle:
+                servicios_bloqueados = (
+                    db.query(ServicioConsulta)
+                    .filter(ServicioConsulta.id.in_(servicio_ids_detalle))
+                    .order_by(ServicioConsulta.id)
+                    .with_for_update()
+                    .all()
+                )
+                ya_facturados = [s for s in servicios_bloqueados if s.facturado]
+                if ya_facturados:
+                    nombres = ", ".join(s.nombre_servicio or f"#{s.id}" for s in ya_facturados)
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Los siguientes servicios ya fueron facturados: {nombres}.",
+                    )
+
             # Generar número de factura
             numero_factura = FacturacionService.generar_numero_factura(db)
 
             subtotal = 0.0
             detalles_factura = []
             movimientos = []
-            
+
+            # BLOQUEO DE FILAS PARA CONCURRENCIA: se bloquean TODOS los
+            # productos referenciados por la factura en una sola consulta
+            # ordenada por id (después de ServicioConsulta, que ya se bloqueó
+            # arriba). Si en cambio se bloqueara una fila por línea en el
+            # orden en que el cliente las mandó, dos facturas concurrentes con
+            # los mismos productos en orden inverso podrían deadlockearse.
+            producto_ids = {
+                d.producto_id for d in factura_data.detalles if d.producto_id
+            }
+            productos_bloqueados = {}
+            if producto_ids:
+                productos_bloqueados = {
+                    p.id: p
+                    for p in db.query(Inventario)
+                    .filter(Inventario.id.in_(producto_ids))
+                    .order_by(Inventario.id)
+                    .with_for_update()
+                    .all()
+                }
+
             for detalle_data in factura_data.detalles:
                 precio = detalle_data.precio_unitario
-                
+
                 # Si hay producto_id, aplicar lógica de inventario estricta
                 if detalle_data.producto_id:
-                    # BLOQUEO DE FILA PARA CONCURRENCIA
-                    producto = db.query(Inventario).filter(
-                        Inventario.id == detalle_data.producto_id
-                    ).with_for_update().first()
-                    
+                    producto = productos_bloqueados.get(detalle_data.producto_id)
+
                     if not producto:
                         raise HTTPException(status_code=404, detail=f"Producto {detalle_data.producto_id} no encontrado")
                     
-                    # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
-                    ya_descontado = False
-                    servicio_id = getattr(detalle_data, 'servicio_id', None)
-                    if servicio_id:
-                        serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
-                        if serv and serv.estado == "Aplicado":
-                            ya_descontado = True
-                    
+                    # Evitar doble descuento: si esta línea proviene de un
+                    # servicio que ya consumió sus materiales al aplicarse
+                    # (evidencia en el ledger), no se vuelve a descontar.
+                    ya_descontado = _consumo_en_ledger(db, getattr(detalle_data, 'servicio_id', None))
+
                     if not ya_descontado:
                         if producto.stock_actual < detalle_data.cantidad:
                             raise HTTPException(
-                                status_code=400, 
+                                status_code=400,
                                 detail=f"Stock insuficiente para {producto.nombre}. Disponible: {producto.stock_actual}"
                             )
-                        
+
                         # 1. Descontar del inventario
                         producto.stock_actual -= detalle_data.cantidad
-                        
-                        # 2. Preparar Movimiento de Trazabilidad
+
+                        # 2. Preparar Movimiento de Trazabilidad. Magnitud
+                        #    positiva; la dirección la lleva tipo_movimiento
+                        #    (Tarea 07, decisión 8). Las filas negativas
+                        #    históricas no se reescriben (deuda anotada).
                         movimiento = MovimientoInventario(
                             producto_id=producto.id,
-                            tipo_movimiento="SALIDA",
-                            cantidad=-detalle_data.cantidad,
+                            tipo_movimiento=TipoMovimiento.SALIDA,
+                            cantidad=detalle_data.cantidad,
                             costo_unitario=producto.precio_unitario, # Kardex usa costo
                             origen_destino=f"VENTA_{numero_factura}",
                             usuario_responsable_id=usuario_id
@@ -125,9 +211,23 @@ class FacturacionService:
             subtotal = subtotal or 0.0
             descuento = (factura_data.descuento or 0.0)
             impuesto = (factura_data.impuesto or 0.0)
-            pago = (factura_data.total_pagado or 0.0)
-            
+
             total = subtotal - descuento + impuesto
+            # Hallazgo de revisión (Tarea 11): total_pagado llegaba del
+            # cliente sin tope contra `total` -- antes de esta tarea siempre
+            # se mandaba 0.0 desde el único caller real (orden-abierta.js),
+            # así que no se notaba, pero el nuevo checkout ("Facturar orden",
+            # #modalFacturarOrden) ya arma total_pagado en el cliente. Se
+            # acota server-side para que un pago manipulado no pueda quedar
+            # registrado por encima del total real de la factura.
+            pago = max(0.0, min(factura_data.total_pagado or 0.0, total))
+            # Si el pago clampeado queda en 0, no hay cobro real: persistir un
+            # metodo_pago igual dejaba una factura PENDIENTE marcada como
+            # "Efectivo" (o lo que sea que mande el cliente) sin que se haya
+            # cobrado un peso (hallazgo de revisión 11, orden-abierta.js
+            # mandaba metodo_pago aunque "Cobrar el total ahora" estuviera
+            # destildado). metodo_pago es nullable en el modelo.
+            metodo_pago = factura_data.metodo_pago if pago > 0 else None
             saldo_pendiente = total - pago
             if saldo_pendiente <= 0:
                 estado = "PAGADA"
@@ -148,7 +248,7 @@ class FacturacionService:
                 total_pagado=pago,
                 saldo_pendiente=max(0, saldo_pendiente),
                 estado=estado,
-                metodo_pago=factura_data.metodo_pago,
+                metodo_pago=metodo_pago,
                 observaciones=factura_data.observaciones,
                 detalles=detalles_factura
             )
@@ -156,24 +256,45 @@ class FacturacionService:
             db.add(nueva_factura)
             for mov in movimientos:
                 db.add(mov)
-            
+
+            # Marcar como facturado CUALQUIER ServicioConsulta referenciado por
+            # una línea de esta factura, tenga o no consulta. Esto cubre la
+            # facturación de servicios directos sueltos (Tarea 09, decisión 8),
+            # además del caso consulta.
+            servicio_ids = {
+                getattr(d, 'servicio_id', None)
+                for d in factura_data.detalles
+                if getattr(d, 'servicio_id', None)
+            }
+            if servicio_ids:
+                db.query(ServicioConsulta).filter(
+                    ServicioConsulta.id.in_(servicio_ids)
+                ).update({ServicioConsulta.facturado: True}, synchronize_session=False)
+
             # Si viene de una consulta, marcar todo como facturado
             if factura_data.consulta_id:
                 consulta = db.query(Consulta).filter(Consulta.id == factura_data.consulta_id).first()
                 if consulta:
                     consulta.estado_pago = "COBRADO"
-                    
+                    # Facturar cierra la consulta por cualquier camino (Tarea 09,
+                    # decisión 6): el flujo legacy POST /api/facturas/ y el nuevo
+                    # from-consulta dejan la misma huella. Reabrir es manual.
+                    consulta.estado = "CERRADA"
+
                     # Marcar servicios como facturados (sin borrar el estado médico)
                     for s in consulta.servicios:
                         s.facturado = True
-                    
-                    # Marcar otros items
+
+                    # Marcar las filas de detalle clínico. Ya no son fuente de
+                    # facturación (Tarea 09, decisión 2: la única línea es el
+                    # espejo ServicioConsulta), pero se siguen marcando para que
+                    # cualquier lectura directa de esos booleanos quede coherente.
                     for p in consulta.pruebas: p.facturado = True
                     for v in consulta.vacunaciones: v.facturado = True
                     for d in consulta.desparasitaciones: d.facturado = True
                     for c in consulta.cirugias: c.facturado = True
                     for h in consulta.hospitalizaciones: h.facturado = True
-            
+
             db.commit()
             db.refresh(nueva_factura)
             return nueva_factura
@@ -271,62 +392,83 @@ class FacturacionService:
                 detail="La factura ya está anulada"
             )
         
-        # Devolver stock al inventario
-        for detalle in factura.detalles:
-            if detalle.producto_id:
-                producto = db.query(Inventario).filter(
-                    Inventario.id == detalle.producto_id
-                ).first()
-                if producto:
-                    producto.stock_actual += detalle.cantidad
-        
+        # Orden de bloqueo global consistente con crear_factura: ServicioConsulta
+        # (por id) ANTES que Inventario (por id). Si esta función bloqueara
+        # Inventario primero y recién más abajo tocara ServicioConsulta, una
+        # anulación y una creación de factura concurrentes que comparten
+        # productos y servicios podrían bloquearse en orden inverso
+        # (deadlock). Se calcula acá arriba para poder bloquear ambos
+        # conjuntos de filas en ese orden antes de mutar nada.
+        servicio_ids = [d.servicio_id for d in factura.detalles if d.servicio_id]
+        if servicio_ids:
+            db.query(ServicioConsulta).filter(
+                ServicioConsulta.id.in_(servicio_ids)
+            ).order_by(ServicioConsulta.id).with_for_update().all()
+
+        # Devolver stock SOLO por las líneas que efectivamente se descontaron al
+        # facturar: producto_id presente Y no cubiertas por un consumo al
+        # aplicar el servicio. Evita la devolución de más (audit §2 fila 5).
+        #
+        # BLOQUEO DE FILAS PARA CONCURRENCIA: se bloquean TODOS los productos
+        # a devolver en una sola consulta ordenada por id (en vez de una fila
+        # por línea en el orden en que vienen los detalles) para no
+        # deadlockear con otra transacción que bloquee los mismos productos
+        # en orden inverso.
+        detalles_a_devolver = [
+            d for d in factura.detalles
+            if d.producto_id and not _consumo_en_ledger(db, d.servicio_id)
+        ]
+        producto_ids = {d.producto_id for d in detalles_a_devolver}
+        productos_bloqueados = {}
+        if producto_ids:
+            productos_bloqueados = {
+                p.id: p
+                for p in db.query(Inventario)
+                .filter(Inventario.id.in_(producto_ids))
+                .order_by(Inventario.id)
+                .with_for_update()
+                .all()
+            }
+
+        for detalle in detalles_a_devolver:
+            producto = productos_bloqueados.get(detalle.producto_id)
+            if producto:
+                producto.stock_actual += detalle.cantidad
+                db.add(MovimientoInventario(
+                    producto_id=producto.id,
+                    tipo_movimiento=TipoMovimiento.ENTRADA,
+                    cantidad=detalle.cantidad,
+                    costo_unitario=producto.precio_unitario,
+                    origen_destino=f"Anulación factura {factura.numero_factura}",
+                    usuario_responsable_id=None,
+                ))
+
         factura.estado = "ANULADA"
+
+        # Anular deshace el cobro: la consulta y sus líneas vuelven a estar
+        # pendientes, si no obtener_items_pendientes_consulta no devuelve nada y
+        # la consulta no se puede volver a facturar nunca (Tarea 09). Se reabre
+        # también el ciclo clínico para que vuelva a la bandeja de trabajo.
+        if servicio_ids:
+            db.query(ServicioConsulta).filter(
+                ServicioConsulta.id.in_(servicio_ids)
+            ).update({ServicioConsulta.facturado: False}, synchronize_session=False)
+        if factura.consulta_id:
+            consulta = db.query(Consulta).filter(Consulta.id == factura.consulta_id).first()
+            if consulta:
+                consulta.estado_pago = "POR_COBRAR"
+                consulta.estado = "ABIERTA"
+                for s in consulta.servicios:
+                    s.facturado = False
+                for p in consulta.pruebas: p.facturado = False
+                for v in consulta.vacunaciones: v.facturado = False
+                for d in consulta.desparasitaciones: d.facturado = False
+                for c in consulta.cirugias: c.facturado = False
+                for h in consulta.hospitalizaciones: h.facturado = False
+
         db.commit()
         db.refresh(factura)
-        
-        return factura
 
-    @staticmethod
-    def facturar_y_descargar_stock(db: Session, factura_id: int, usuario_id: int):
-        factura = db.query(Factura).filter(Factura.id == factura_id).first()
-        
-        if not factura or factura.estado == "PAGADA":
-            raise HTTPException(status_code=400, detail="Factura inválida o ya pagada")
-
-        factura.estado = "PAGADA"
-        factura.es_presupuesto = False
-        
-        for detalle in factura.detalles:
-            if detalle.producto_id:
-                producto = db.query(Inventario).filter(Inventario.id == detalle.producto_id).with_for_update().first() # ROW-LOCKING PARA CONCURRENCIA
-                
-                # Evitar doble descuento si el stock ya fue descontado al aplicar el servicio en consulta
-                ya_descontado = False
-                if detalle.servicio_id:
-                    serv = db.query(ServicioConsulta).filter(ServicioConsulta.id == detalle.servicio_id).first()
-                    if serv and serv.estado == "Aplicado":
-                        ya_descontado = True
-                
-                if not ya_descontado:
-                    if producto.stock_actual < detalle.cantidad:
-                        db.rollback()
-                        raise HTTPException(status_code=400, detail=f"Stock insuficiente para el producto {producto.nombre}")
-                    
-                    # 1. Reducir stock base
-                    producto.stock_actual -= detalle.cantidad
-                    
-                    # 2. Rastrear Movimiento
-                    nuevo_movimiento = MovimientoInventario(
-                        producto_id=producto.id,
-                        tipo_movimiento="SALIDA",
-                        cantidad=-detalle.cantidad,
-                        costo_unitario=producto.precio_unitario,
-                        origen_destino=f"VENTA_FACTURA_{factura.numero_factura}",
-                        usuario_responsable_id=usuario_id
-                    )
-                db.add(nuevo_movimiento)
-                
-        db.commit()
         return factura
 
     @staticmethod
@@ -353,10 +495,25 @@ class FacturacionService:
             
         # 2. Servicios
         for s in consulta.servicios:
+            # Puente de la etapa 4 (Tarea 06, decisión 3): desde ahora cada
+            # consulta lleva además una línea tipo_servicio='CONSULTA' con su
+            # honorario dentro de la orden. Este preview sigue emitiendo el
+            # honorario como ítem sintético (bloque 1 de arriba), así que contar
+            # también la línea lo duplicaría. Cuando la facturación pase a
+            # trabajar por orden (obtener_items_pendientes_orden) se invierte:
+            # desaparece el ítem sintético y la línea CONSULTA se factura como
+            # cualquier otra. Hasta entonces, la línea se salta acá y el
+            # `facturado = True` se lo pone igual crear_factura al recorrer
+            # consulta.servicios.
+            if s.tipo_servicio == "CONSULTA":
+                continue
             if not s.facturado and not s.is_deleted:
                 prod_id = None
                 if s.tipo_servicio == 'INSUMO':
-                    prod_id = s.referencia_id
+                    # Los materiales se descuentan al aplicar el servicio y son
+                    # parte del precio del servicio (Tarea 07, decisión 3): la
+                    # línea se factura por su precio pero NO toca inventario.
+                    prod_id = None
                 elif s.tipo_servicio == 'VACUNACION':
                     vac = db.query(Vacunacion).filter(Vacunacion.id == s.referencia_id).first()
                     if vac:
@@ -379,67 +536,14 @@ class FacturacionService:
                     "id_interno": s.id,
                     "producto_id": prod_id
                 })
-        
-        # 3. Pruebas
-        for p in consulta.pruebas:
-            if not p.facturado:
-                items.append({
-                "descripcion": f"Prueba: {p.tipo or 'N/D'}",
-                "cantidad": 1,
-                "precio_unitario": p.precio_aplicado or 0.0,
-                "subtotal": p.precio_aplicado or 0.0,
-                "tipo": "PRUEBA",
-                "id_interno": p.id
-                })
-        
-        # 4. Vacunas
-        for v in consulta.vacunaciones:
-            if not v.facturado:
-                items.append({
-                "descripcion": f"Vacunación: {v.vacuna.nombre if v.vacuna else 'Vacuna'}",
-                "cantidad": 1,
-                "precio_unitario": v.precio_aplicado or 0.0,
-                "subtotal": v.precio_aplicado or 0.0,
-                "tipo": "VACUNA",
-                "id_interno": v.id
-                })
-                
-        # 5. Desparasitaciones
-        for d in consulta.desparasitaciones:
-            if not d.facturado:
-                items.append({
-                    "descripcion": f"Desparasitación: {d.tipo}",
-                    "cantidad": 1,
-                    "precio_unitario": d.precio_aplicado,
-                    "subtotal": d.precio_aplicado,
-                    "tipo": "DESPARASITACION",
-                    "id_interno": d.id
-                })
-        
-        # 6. Cirugías
-        for c in consulta.cirugias:
-            if not c.facturado:
-                items.append({
-                    "descripcion": f"Cirugía: {c.tipo_procedimiento}",
-                    "cantidad": 1,
-                    "precio_unitario": c.precio_aplicado,
-                    "subtotal": c.precio_aplicado,
-                    "tipo": "CIRUGIA",
-                    "id_interno": c.id
-                })
-                
-        # 7. Hospitalizaciones
-        for h in consulta.hospitalizaciones:
-            if not h.facturado:
-                items.append({
-                    "descripcion": f"Hospitalización: {h.motivo}",
-                    "cantidad": h.dias_cama,
-                    "precio_unitario": h.precio_aplicado,
-                    "subtotal": h.precio_aplicado * h.dias_cama,
-                    "tipo": "HOSPITALIZACION",
-                    "id_interno": h.id
-                })
-        
+
+        # NOTA (Tarea 09, decisión 2 y §1.3 del diseño): antes había 5 loops más
+        # (consulta.pruebas / vacunaciones / desparasitaciones / cirugias /
+        # hospitalizaciones). Se eliminaron: cada fila de detalle clínico con
+        # consulta_id ya tiene su espejo ServicioConsulta (loop 2), así que
+        # recorrerlas de nuevo hacía DOBLE CONTEO. Ahora la única fuente del
+        # preview es consulta.servicios + el honorario de consulta.
+
         return {
             "propietario_id": consulta.mascota.propietario_id,
             "propietario_nombre": f"{consulta.mascota.propietario.nombre} {consulta.mascota.propietario.apellido}",

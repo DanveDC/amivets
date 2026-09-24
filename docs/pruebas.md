@@ -20,16 +20,17 @@ Usuarios de seed:
 | Usuario | Password | Rol |
 |---|---|---|
 | `admin` | `admin123` | admin |
-| `dr_pérez`, `dr_garcía`, ... | `doctor123` | user *(no `veterinario` — ver nota de producción abajo)* |
+| `dr_pérez`, `dr_garcía`, ... | `doctor123` | veterinario |
 
-**Nota de producción, no solo de test**: `backend/scripts/seed_data.py` —
-el mismo script que corre en un deploy nuevo de Render vía
-`start.sh` → `init_db.py` — nunca crea un usuario con `role='veterinario'`.
-Un despliegue fresco arranca con la lista de veterinarios de
-`agendar.html` vacía hasta que un admin cree o edite manualmente un
-usuario con ese rol desde el panel. La suite ahora siembra su propio
-veterinario de prueba (`e2e/qr-booking.spec.js`) para cubrir el camino
-con datos reales — no depende de que este gap de seed exista.
+**Nota de producción, no solo de test** (actualizado en la revisión de la
+tarea 11 — la nota anterior decía lo contrario): `backend/scripts/seed_data.py`
+**sí** crea a los médicos con `role='veterinario'` (línea ~44). Es una
+herramienta de desarrollo explícita (no se llama sola en el arranque, ver el
+comentario al inicio del script) y no la ejecuta `init_db.py`/`start.sh` en un
+deploy — un despliegue fresco de Render sigue arrancando sin veterinarios
+hasta que un admin cree usuarios con ese rol desde el panel. La suite además
+siembra su propio veterinario de prueba (`e2e/qr-booking.spec.js`) para cubrir
+ese camino con datos reales, sin depender de `seed_data.py`.
 
 ## 2. Instalar y correr la suite
 
@@ -61,9 +62,18 @@ e2e/
   qr-booking.spec.js   # agendar.html — formulario público de citas
   admin-panel.spec.js  # panel admin: usuarios, citas QR, horarios
   inventario.spec.js   # registrar movimiento de stock (backend/app/routers/inventario.py)
+  ...                  # + 14 specs más — ver la lista completa abajo
 playwright.config.js
 package.json
 ```
+
+**Corrección (revisión de la tarea 11):** esta sección listaba 4 specs como
+si fuera la suite completa. Ya no lo es — hoy hay **19 specs**:
+`adjuntos`, `admin-panel`, `auth`, `catalogo`, `clinico`, `despacho`,
+`flujo-clinico`, `gestion-inventario`, `gestion-usuarios`,
+`historial-precios`, `inventario`, `inventario-fraccionado`,
+`liquidaciones`, `notas`, `ordenes`, `qr-booking`, `reportes`,
+`servicios-desde-consulta`, `shell`. Lista autoritativa: `ls e2e/*.spec.js`.
 
 ## 4. Por qué la mitad de `qr-booking.spec.js` y `admin-panel.spec.js` usa
    red mockeada (`page.route`)
