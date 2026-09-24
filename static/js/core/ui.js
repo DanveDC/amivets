@@ -56,7 +56,7 @@ export const showNotification = (message, type = 'info') => {
     notification.className = `notification notification-${type} notification-toast notification-toast--${resolvedType}`;
     notification.innerHTML = `
         <span>${icon}</span>
-        <span>${message}</span>
+        <span>${escapeHtml(message)}</span>
     `;
     container.appendChild(notification);
     setTimeout(() => notification.classList.add('notification-toast--show'), 10);
