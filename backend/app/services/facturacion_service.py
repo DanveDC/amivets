@@ -113,6 +113,7 @@ class FacturacionService:
                 servicios_bloqueados = (
                     db.query(ServicioConsulta)
                     .filter(ServicioConsulta.id.in_(servicio_ids_detalle))
+                    .order_by(ServicioConsulta.id)
                     .with_for_update()
                     .all()
                 )
