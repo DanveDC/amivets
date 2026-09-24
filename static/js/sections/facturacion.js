@@ -71,8 +71,12 @@ export const facturarConsulta = async (consultaId) => {
         document.getElementById('facturaSaldoPendienteCalculado').textContent = '0.00';
 
         // Save items data globally so the submit handler can use it
+        // servicio_id sólo aplica a items tipo SERVICIO: para tipo CONSULTA,
+        // id_interno es un Consulta.id (no un ServicioConsulta.id) -- mismo
+        // criterio que facturas.py::from-consulta (es_servicio). La línea
+        // CONSULTA queda igualmente anclada vía consulta_id en el payload.
         window.currentFacturaItems = dataContext.items.map(p => ({
-            servicio_id: p.id_interno,
+            servicio_id: p.tipo === 'SERVICIO' ? p.id_interno : null,
             producto_id: p.producto_id || (p.tipo === 'SERVICIO' ? p.referencia_id : null),
             descripcion: p.descripcion,
             cantidad: p.cantidad,
