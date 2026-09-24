@@ -228,16 +228,15 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
                 <button type="button" class="av-btn" id="btnCatAgregarInsumo">+ Agregar insumo</button>
             </div>
             <div id="catAgregarInsumoRow" class="cat-agregar-row" hidden>
-                <select id="catMaterialSelect"><option value="">Seleccionar…</option></select>
-                <input type="number" id="catMaterialCantidad" step="0.001" min="0.001" placeholder="Cantidad" style="width:100px;">
-                <select id="catMaterialUnidad">
+                <select id="catMaterialSelect" aria-label="Material"><option value="">Seleccionar…</option></select>
+                <input type="number" id="catMaterialCantidad" step="0.001" min="0.001" placeholder="Cantidad" aria-label="Cantidad" style="width:100px;">
+                <select id="catMaterialUnidad" aria-label="Unidad de medida">
                     <option value="ml">ml</option>
                     <option value="g">g</option>
                     <option value="unidad">unidad</option>
-                    <option value="par">par</option>
                 </select>
                 <button type="button" class="av-btn av-btn--primary" id="btnCatConfirmarInsumo">Agregar</button>
-                <span id="catInsumoError" class="rp-empty-text" style="padding:0; display:none;"></span>
+                <span id="catInsumoError" class="rp-empty-text" role="alert" style="padding:0; display:none;"></span>
             </div>
             <table class="rp-table cat-receta-table">
                 <thead><tr><th>Material</th><th>Cantidad</th><th>Costo</th><th></th></tr></thead>
@@ -284,7 +283,11 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
         selectMaterial.addEventListener('change', (e) => {
             const unidad = (e.target.selectedOptions[0]?.dataset.unidad || '').trim();
             const unidadSelect = document.getElementById('catMaterialUnidad');
-            if (unidadSelect && unidad) unidadSelect.value = unidad;
+            // Siempre setea el select (restaura el comportamiento viejo): si
+            // el material no declara unidad_medida, cae en 'unidad' en vez
+            // de dejar la selección anterior puesta (podía quedar
+            // desincronizada con el material recién elegido).
+            if (unidadSelect) unidadSelect.value = unidad || 'unidad';
         });
     }
 
