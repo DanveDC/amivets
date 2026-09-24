@@ -91,7 +91,7 @@ async function cargarOrden() {
         pintarMeta(orden);
         pintarAcciones(orden);
     } catch (e) {
-        if (patient) patient.innerHTML = `<p class="av-text-danger">Error cargando la orden: ${e.message}</p>`;
+        if (patient) patient.innerHTML = `<p class="av-text-danger">Error cargando la orden: ${escapeHtml(e.message)}</p>`;
     }
 }
 

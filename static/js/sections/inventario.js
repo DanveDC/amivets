@@ -187,7 +187,7 @@ export const loadInventario = async (filtro = '') => {
         }
 
     } catch (error) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color:var(--accent);">Error: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color:var(--accent);">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
 };
 
