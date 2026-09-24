@@ -215,6 +215,7 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
                 <span style="font-size:12px; color:var(--text-secondary);">costo de insumos ${formatMoney(costoTotal)}</span>
             </div>
             <button type="button" class="av-btn" id="btnCatEditar">Editar</button>
+            ${servicio.activo ? '<button type="button" class="av-btn" style="color:var(--accent); border-color:var(--accent);" id="btnCatDesactivar">Desactivar</button>' : ''}
         </div>
 
         <div class="cat-hr"></div>
@@ -256,6 +257,10 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
     `;
 
     document.getElementById('btnCatEditar')?.addEventListener('click', () => abrirModalServicio(servicio.id));
+    // Tarea 11 (revisión de bocetos): desactivarServicio() quedó exportado y
+    // bindeado en window (app.js) pero ningún elemento de la UI la llamaba
+    // desde la reescritura maestro-detalle -- hallazgo de revisión.
+    document.getElementById('btnCatDesactivar')?.addEventListener('click', () => desactivarServicio(servicio.id));
 
     const filaVacia = document.getElementById('catRecetaBody');
     filaVacia?.addEventListener('click', (e) => {
