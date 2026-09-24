@@ -203,6 +203,13 @@ class FacturacionService:
             # acota server-side para que un pago manipulado no pueda quedar
             # registrado por encima del total real de la factura.
             pago = max(0.0, min(factura_data.total_pagado or 0.0, total))
+            # Si el pago clampeado queda en 0, no hay cobro real: persistir un
+            # metodo_pago igual dejaba una factura PENDIENTE marcada como
+            # "Efectivo" (o lo que sea que mande el cliente) sin que se haya
+            # cobrado un peso (hallazgo de revisión 11, orden-abierta.js
+            # mandaba metodo_pago aunque "Cobrar el total ahora" estuviera
+            # destildado). metodo_pago es nullable en el modelo.
+            metodo_pago = factura_data.metodo_pago if pago > 0 else None
             saldo_pendiente = total - pago
             if saldo_pendiente <= 0:
                 estado = "PAGADA"
@@ -223,7 +230,7 @@ class FacturacionService:
                 total_pagado=pago,
                 saldo_pendiente=max(0, saldo_pendiente),
                 estado=estado,
-                metodo_pago=factura_data.metodo_pago,
+                metodo_pago=metodo_pago,
                 observaciones=factura_data.observaciones,
                 detalles=detalles_factura
             )

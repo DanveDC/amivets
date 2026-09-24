@@ -261,7 +261,11 @@ async function confirmarFacturarOrden() {
             body: JSON.stringify({
                 propietario_id: _ordenData.propietario_id,
                 ...(lineaConsulta ? { consulta_id: lineaConsulta.referencia_id } : {}),
-                metodo_pago: metodoPago,
+                // No se manda metodo_pago si no se cobra ahora (total_pagado
+                // 0): mandarlo igual dejaba una factura PENDIENTE marcada
+                // como cobrada por el método por defecto (hallazgo de
+                // revisión 11).
+                ...(pagaAhora ? { metodo_pago: metodoPago } : {}),
                 total_pagado: pagaAhora ? total : 0.0,
                 descuento: 0.0,
                 impuesto: 0.0,
