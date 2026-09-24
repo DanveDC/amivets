@@ -95,6 +95,35 @@ class FacturacionService:
                         detail=f"La consulta {factura_data.consulta_id} ya tiene una factura activa (#{factura_activa.numero_factura}). Anúlela antes de crear una nueva.",
                     )
 
+            # Guard contra doble submit (revisión 11): un ServicioConsulta ya
+            # facturado no puede entrar en una factura nueva. Sin esto, un
+            # doble clic en "Emitir factura" (orden-abierta.js) manda dos POST
+            # casi simultáneos con los mismos servicio_id y ambos pasan, porque
+            # el `.update({facturado: True})` de más abajo es incondicional.
+            # Se bloquean las filas con SELECT FOR UPDATE antes de tocar
+            # inventario: la segunda request de la carrera espera al commit de
+            # la primera y recién ahí lee facturado=True, así que rechaza con
+            # 409 en vez de generar una segunda factura para los mismos
+            # servicios.
+            servicio_ids_detalle = {
+                getattr(d, 'servicio_id', None) for d in factura_data.detalles
+                if getattr(d, 'servicio_id', None)
+            }
+            if servicio_ids_detalle:
+                servicios_bloqueados = (
+                    db.query(ServicioConsulta)
+                    .filter(ServicioConsulta.id.in_(servicio_ids_detalle))
+                    .with_for_update()
+                    .all()
+                )
+                ya_facturados = [s for s in servicios_bloqueados if s.facturado]
+                if ya_facturados:
+                    nombres = ", ".join(s.nombre_servicio or f"#{s.id}" for s in ya_facturados)
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Los siguientes servicios ya fueron facturados: {nombres}.",
+                    )
+
             # Generar número de factura
             numero_factura = FacturacionService.generar_numero_factura(db)
 

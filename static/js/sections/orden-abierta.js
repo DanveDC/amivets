@@ -33,7 +33,7 @@
 //   diferido) -- esto es el mínimo que evita perder plata real.
 
 import { fetchAPI } from '../core/api.js';
-import { showNotification, openModal, closeModal, debounce, escapeHtml } from '../core/ui.js';
+import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
 import { money, totalServicios } from '../core/format.js';
 import { showSection } from '../core/router.js';
 
@@ -460,7 +460,14 @@ export const initOrdenAbierta = () => {
 
     document.getElementById('btnOaConfirmar')?.addEventListener('click', confirmarServicios);
     document.getElementById('btnOaFacturar')?.addEventListener('click', facturarOrden);
-    document.getElementById('btnConfirmarFacturarOrden')?.addEventListener('click', confirmarFacturarOrden);
+    // Guard contra doble clic (revisión 11): sin esto, dos clics rápidos en
+    // "Emitir factura" mandaban dos POST /facturas/ casi simultáneos y
+    // creaban dos facturas para los mismos servicios. submitWithLoading
+    // deshabilita el botón mientras la request está en vuelo y lo reactiva
+    // siempre (éxito o error) vía finally.
+    document.getElementById('btnConfirmarFacturarOrden')?.addEventListener('click', (e) => {
+        submitWithLoading(e.currentTarget, confirmarFacturarOrden);
+    });
     document.getElementById('facOrdenPagaAhora')?.addEventListener('change', (e) => {
         document.getElementById('facOrdenPendienteNota').hidden = e.target.checked;
     });

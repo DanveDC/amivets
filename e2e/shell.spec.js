@@ -492,4 +492,70 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       await deleteTestUser(request, adminToken, vet.id);
     }
   });
+
+  test('doble clic en "Emitir factura" no crea dos facturas (revisión 11 — guard cliente + servidor contra doble submit)', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const propietario = await createTestPropietario(request);
+    const mascota = await createTestMascota(request, propietario.id);
+    const vet = await createTestVeterinario(request, adminToken);
+
+    const orden = await createTestOrden(
+      request,
+      { propietarioId: propietario.id, mascotaId: mascota.id, veterinarioId: vet.id },
+      adminToken,
+    );
+    const consulta = await createTestConsulta(
+      request,
+      { mascotaId: mascota.id, veterinarioId: vet.id, orden_id: orden.id },
+      adminToken,
+    );
+
+    try {
+      await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+      await page.locator('.av-launcher-card[data-target="sec-hoy"]').click();
+      const fila = page.locator(`tr[data-orden-id="${orden.id}"]`);
+      await expect(fila).toBeVisible({ timeout: 15000 });
+      await fila.click();
+      await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+
+      await page.locator('#btnOaFacturar').click();
+      await expect(page.locator('#modalFacturarOrden')).toBeVisible();
+      await expect(page.locator('#facOrdenTotal')).not.toHaveText('$0.00');
+
+      // Doble clic real: antes de la guarda (submitWithLoading deshabilitando
+      // el botón + el chequeo server-side de servicios ya facturados), dos
+      // clics rápidos mandaban dos POST /facturas/ casi simultáneos con las
+      // mismas líneas y creaban dos facturas para la misma orden.
+      await page.locator('#btnConfirmarFacturarOrden').dblclick();
+      await expect(page.locator('.notification-toast')).toContainText(/[Ff]actura/, { timeout: 10000 });
+
+      const facturasRes = await request.get(`/api/facturas/?propietario_id=${propietario.id}&limit=100`, { headers: authHeaders(adminToken) });
+      expect(facturasRes.ok()).toBeTruthy();
+      const facturas = await facturasRes.json();
+      const facturasDeConsulta = (Array.isArray(facturas) ? facturas : [])
+        .filter(f => f.consulta_id === consulta.id && f.estado !== 'ANULADA');
+      expect(facturasDeConsulta.length, 'el doble clic tiene que dejar UNA sola factura activa para la consulta').toBe(1);
+
+      // Backstop de servidor (transacción, revisión 11): un POST directo con
+      // un servicio_id que ya está facturado se rechaza con 409 en vez de
+      // generar una segunda factura, aunque el guard del cliente fallase.
+      const consultaCargada = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(adminToken) })).json();
+      const lineaConsulta = (consultaCargada.servicios || []).find(s => s.tipo_servicio === 'CONSULTA');
+      expect(lineaConsulta, 'la consulta tiene que tener su línea CONSULTA').toBeTruthy();
+      expect(lineaConsulta.facturado).toBe(true);
+
+      const reintento = await request.post('/api/facturas/', {
+        headers: authHeaders(adminToken),
+        data: {
+          propietario_id: propietario.id,
+          detalles: [{ descripcion: 'reintento PWTEST', cantidad: 1, precio_unitario: 1, servicio_id: lineaConsulta.id }],
+        },
+      });
+      expect(reintento.status(), 'un servicio ya facturado tiene que rechazar un segundo POST con 409').toBe(409);
+    } finally {
+      await deleteTestMascota(request, mascota.id);
+      await deleteTestPropietario(request, propietario.id);
+      await deleteTestUser(request, adminToken, vet.id);
+    }
+  });
 });
