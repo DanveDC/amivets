@@ -37,6 +37,8 @@ const {
   createTestVeterinario,
   createTestConsulta,
   createTestFactura,
+  deleteTestConsulta,
+  anularTestFactura,
 } = require('./helpers');
 
 async function loginUI(page, username, password) {
@@ -510,6 +512,7 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       adminToken,
     );
 
+    let facturaIdParaAnular = null;
     try {
       await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
       await page.locator('.av-launcher-card[data-target="sec-hoy"]').click();
@@ -535,6 +538,10 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       const facturasDeConsulta = (Array.isArray(facturas) ? facturas : [])
         .filter(f => f.consulta_id === consulta.id && f.estado !== 'ANULADA');
       expect(facturasDeConsulta.length, 'el doble clic tiene que dejar UNA sola factura activa para la consulta').toBe(1);
+      // Se guarda para el cleanup: la FK facturas.consulta_id bloquea el
+      // DELETE de la consulta mientras la factura siga activa (mismo criterio
+      // que servicios-desde-consulta.spec.js / reportes.spec.js).
+      facturaIdParaAnular = facturasDeConsulta[0].id;
 
       // Backstop de servidor (transacción, revisión 11): un POST directo con
       // un servicio_id que ya está facturado se rechaza con 409 en vez de
@@ -553,6 +560,11 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       });
       expect(reintento.status(), 'un servicio ya facturado tiene que rechazar un segundo POST con 409').toBe(409);
     } finally {
+      // Orden inverso a las dependencias (mismo criterio que
+      // servicios-desde-consulta.spec.js::afterAll): la factura activa
+      // bloquea el DELETE de la consulta por FK, así que se anula primero.
+      if (facturaIdParaAnular) await anularTestFactura(request, facturaIdParaAnular, adminToken);
+      await deleteTestConsulta(request, consulta.id);
       await deleteTestMascota(request, mascota.id);
       await deleteTestPropietario(request, propietario.id);
       await deleteTestUser(request, adminToken, vet.id);
