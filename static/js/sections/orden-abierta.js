@@ -110,15 +110,15 @@ function pintarPaciente(orden) {
         <div class="oa-patient-avatar">${iniciales}</div>
         <div class="oa-patient-main">
             <div class="oa-patient-namerow">
-                <span class="ser">${orden.mascota_nombre || 'Sin paciente (venta de mostrador)'}</span>
+                <span class="ser">${escapeHtml(orden.mascota_nombre || 'Sin paciente (venta de mostrador)')}</span>
                 <span class="av-pill av-pill--neutral">${ESTADO_LABEL_ORDEN[orden.estado] || orden.estado}</span>
             </div>
-            <span class="oa-patient-meta">Orden <span class="num">${orden.numero}</span> · Motivo: ${orden.motivo_visita || 'Sin especificar'}</span>
+            <span class="oa-patient-meta">Orden <span class="num">${orden.numero}</span> · Motivo: ${escapeHtml(orden.motivo_visita || 'Sin especificar')}</span>
         </div>
         <div class="oa-divider"></div>
         <div class="oa-owner">
             <span class="av-eyebrow">Tutor</span>
-            <strong>${orden.propietario_nombre || '—'}</strong>
+            <strong>${escapeHtml(orden.propietario_nombre || '—')}</strong>
         </div>
         <div class="av-spacer"></div>
         <button type="button" class="av-btn av-btn--primary" id="btnOaAnexarInline">
@@ -146,8 +146,8 @@ function pintarServicios(orden) {
     }
     body.innerHTML = servicios.map(s => `
         <tr>
-            <td><span class="oa-service-name">${s.nombre_servicio || '—'}</span></td>
-            <td><span class="av-pill av-pill--info">${s.tipo_servicio || '—'}</span></td>
+            <td><span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span></td>
+            <td><span class="av-pill av-pill--info">${escapeHtml(s.tipo_servicio || '—')}</span></td>
             <td class="num">${s.cantidad}</td>
             <td class="num" style="font-weight:500;">${money(s.precio_unitario)}</td>
             <td><span class="av-pill ${ESTADO_PILL_SRV[s.estado] || 'av-pill--neutral'}">${ESTADO_LABEL_SRV[s.estado] || s.estado}</span></td>
@@ -356,7 +356,7 @@ function pintarCategorias() {
     const cats = Array.from(porCategoria.entries());
     cont.innerHTML = [
         `<button type="button" class="oa-cat-item" data-cat="" aria-current="${_catActual === null ? 'true' : 'false'}"><span>Todas</span><span class="av-nav-num">${_catalogo.length}</span></button>`,
-        ...cats.map(([cat, n]) => `<button type="button" class="oa-cat-item" data-cat="${cat}" aria-current="${_catActual === cat ? 'true' : 'false'}"><span>${cat}</span><span class="av-nav-num">${n}</span></button>`),
+        ...cats.map(([cat, n]) => `<button type="button" class="oa-cat-item" data-cat="${escapeHtml(cat)}" aria-current="${_catActual === cat ? 'true' : 'false'}"><span>${escapeHtml(cat)}</span><span class="av-nav-num">${n}</span></button>`),
     ].join('');
     cont.querySelectorAll('.oa-cat-item').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -382,7 +382,7 @@ function pintarServiciosPicker() {
     cont.innerHTML = items.map(s => `
         <button type="button" class="oa-svc-item" data-id="${s.id}" aria-checked="${_svcSeleccionado?.id === s.id ? 'true' : 'false'}">
             <span class="oa-svc-radio"><span class="oa-svc-radio-dot"></span></span>
-            <span class="oa-svc-info"><strong>${s.nombre}</strong><span>${s.categoria}</span></span>
+            <span class="oa-svc-info"><strong>${escapeHtml(s.nombre)}</strong><span>${escapeHtml(s.categoria)}</span></span>
             <span class="oa-svc-price num">${money(s.precio_ref)}</span>
         </button>`).join('');
     cont.querySelectorAll('.oa-svc-item').forEach(btn => {
@@ -407,8 +407,8 @@ async function seleccionarServicio(id) {
         }
         list.innerHTML = _consumos.map((c, i) => `
             <div class="oa-consumo-row">
-                <div class="oa-consumo-info"><strong>${c.nombre || ('#' + c.inventario_id)}</strong><span>Cantidad estándar</span></div>
-                <div class="oa-consumo-qty"><input type="number" step="0.001" min="0" value="${c.cantidad}" data-idx="${i}" style="width:100%; border:0; background:transparent; text-align:center; font:inherit;" class="num"> ${c.unidad || ''}</div>
+                <div class="oa-consumo-info"><strong>${escapeHtml(c.nombre || ('#' + c.inventario_id))}</strong><span>Cantidad estándar</span></div>
+                <div class="oa-consumo-qty"><input type="number" step="0.001" min="0" value="${c.cantidad}" data-idx="${i}" style="width:100%; border:0; background:transparent; text-align:center; font:inherit;" class="num"> ${escapeHtml(c.unidad || '')}</div>
             </div>`).join('');
         list.querySelectorAll('input[data-idx]').forEach(inp => {
             inp.addEventListener('change', () => {
