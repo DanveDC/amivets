@@ -154,13 +154,13 @@ export const loadInventario = async (filtro = '') => {
             const tipoPill = p.tipo_item === 'MATERIAL' ? 'Material' : 'Producto';
             return `
             <tr>
-                <td class="rp-num" style="color:var(--text-secondary);">${p.codigo}</td>
+                <td class="rp-num" style="color:var(--text-secondary);">${escapeHtml(p.codigo)}</td>
                 <td>
                     <div style="font-weight:500; color:var(--text-primary);">${escapeHtml(p.nombre)}</div>
                     <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(formatStockDisplay(p))} · ${tipoPill}${vencimiento ? ` · vence ${escapeHtml(vencimiento)}` : ''}</div>
                 </td>
                 <td><span class="av-pill">${escapeHtml(p.categoria || '—')}</span></td>
-                <td class="rp-num" style="font-weight:500;">${fmtNum(stockActual)} <span style="font-size:11.5px; color:var(--text-muted); font-weight:400;">${p.unidad_medida || ''}</span></td>
+                <td class="rp-num" style="font-weight:500;">${fmtNum(stockActual)} <span style="font-size:11.5px; color:var(--text-muted); font-weight:400;">${escapeHtml(p.unidad_medida || '')}</span></td>
                 <td>
                     <div class="rp-progress" style="width:88px;"><div class="rp-progress-fill" style="width:${pctMinimo.toFixed(0)}%; background:${barColor};"></div></div>
                     <span style="font-size:11px; color:var(--text-muted);">${pctMinimo.toFixed(0)}% del mínimo</span>

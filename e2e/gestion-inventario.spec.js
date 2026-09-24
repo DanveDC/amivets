@@ -170,7 +170,10 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
     // <b>x</b> prueba el innerHTML sin escapar; la comilla doble prueba la
     // fuga del argumento onclick="fn('...')" (escapeJsAttr, no solo escapeHtml).
     const nombreMalicioso = `${testTag('xss')}<b>x</b>"`;
-    const prod = await createTestProduct(request, { nombre: nombreMalicioso });
+    // El código también es texto libre y se renderiza en la misma fila
+    // (inventario.js::loadInventario) -- probamos ambos campos.
+    const codigoMalicioso = `${testTag('xss')}<b>y</b>`.slice(0, 50);
+    const prod = await createTestProduct(request, { nombre: nombreMalicioso, codigo: codigoMalicioso });
 
     try {
       await loginAsAdmin(page);
@@ -182,6 +185,7 @@ test.describe.serial('Gestión de inventario — huecos no cubiertos por inventa
       // Se ve como texto plano -- ningún <b> real en el DOM de la fila.
       await expect(fila.locator('b')).toHaveCount(0);
       await expect(fila).toContainText(nombreMalicioso);
+      await expect(fila).toContainText(codigoMalicioso);
 
       // Los botones de acción siguen andando: si escapeJsAttr no escapara la
       // comilla, el atributo onclick se cortaría ahí y el botón quedaría roto
