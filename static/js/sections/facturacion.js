@@ -259,7 +259,7 @@ export const abrirPreviewFactura = async (facturaId) => {
         document.getElementById('previewFacturaNumero').textContent = `(#${factura.numero_factura || factura.id})`;
         document.getElementById('previewFacturaFecha').textContent = new Date(factura.fecha_emision).toLocaleDateString();
         document.getElementById('previewFacturaEstado').textContent = factura.estado;
-        document.getElementById('previewFacturaMetodo').textContent = factura.metodo_pago;
+        document.getElementById('previewFacturaMetodo').textContent = factura.metodo_pago || '-';
         document.getElementById('previewFacturaConsulta').textContent = factura.consulta_id ? `Consulta #${factura.consulta_id}` : 'General';
 
         const tbody = document.getElementById('previewFacturaItems');
