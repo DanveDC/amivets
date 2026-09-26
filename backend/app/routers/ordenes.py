@@ -14,10 +14,11 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.models.models import Mascota, OrdenServicio, Propietario, Usuario
+from app.models.models import Mascota, OrdenServicio, Propietario, ServicioConsulta, Usuario
 from app.routers.usuarios import get_current_admin, require_roles
 from app.routers.servicios import validar_tipo_servicio_por_rol
 from app.schemas.schemas import (
@@ -135,6 +136,7 @@ def listar_ordenes(
     ),
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
+    por_cobrar: bool = Query(False, description="Solo órdenes CERRADA con algún servicio vivo, no cancelado y sin facturar"),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -176,6 +178,21 @@ def listar_ordenes(
         q = q.filter(OrdenServicio.mascota_id == mascota_id)
     if propietario_id:
         q = q.filter(OrdenServicio.propietario_id == propietario_id)
+    if por_cobrar:
+        # "Órdenes por cobrar" (Facturación): una orden CERRADA sin nada
+        # pendiente (todo cancelado o ya facturado) no se puede cobrar -- "Cobrar"
+        # le daba 409 y se quedaba en la lista para siempre (fix de revisión).
+        pendiente = (
+            db.query(ServicioConsulta.id)
+            .filter(
+                ServicioConsulta.orden_id == OrdenServicio.id,
+                ServicioConsulta.is_deleted == False,  # noqa: E712
+                ServicioConsulta.estado != "CANCELADO",
+                or_(ServicioConsulta.facturado == False, ServicioConsulta.facturado.is_(None)),  # noqa: E712
+            )
+            .exists()
+        )
+        q = q.filter(OrdenServicio.estado == "CERRADA", pendiente)
 
     d_desde = _parse_fecha(fecha_desde, "fecha_desde")
     d_hasta = _parse_fecha(fecha_hasta, "fecha_hasta")

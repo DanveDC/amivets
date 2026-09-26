@@ -209,17 +209,24 @@ export const abrirPreviewFactura = async (facturaId) => {
 // (el router.js prometía "Abre las órdenes por cobrar" desde antes de que
 // existiera esta vista — ver proposal.md). El historial de facturas queda
 // como vista secundaria (pestaña "Historial", _mostrarVistaFacturacion).
+const LIMITE_POR_COBRAR = 200;
+
 export const cargarOrdenesPorCobrar = async () => {
     const tbody = document.getElementById('facOrdenesBody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
     try {
-        const ordenes = await fetchAPI('/ordenes/?estado=CERRADA&limit=200');
+        // por_cobrar: solo CERRADA con algo pendiente de facturar -- una orden
+        // cerrada sin nada que cobrar no puede salir de la lista (fix de revisión).
+        const ordenes = await fetchAPI(`/ordenes/?por_cobrar=true&limit=${LIMITE_POR_COBRAR}`);
         if (!ordenes || ordenes.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes cerradas esperando cobro.</td></tr>';
             return;
         }
-        tbody.innerHTML = ordenes.map(o => {
+        const aviso = ordenes.length >= LIMITE_POR_COBRAR
+            ? `<tr><td colspan="6" style="text-align:center; color:var(--text-secondary); padding:0.75rem;">Se muestran las ${LIMITE_POR_COBRAR} órdenes más recientes; buscá una más vieja por su número con la búsqueda global.</td></tr>`
+            : '';
+        tbody.innerHTML = aviso + ordenes.map(o => {
             const fecha = o.fecha_cierre || o.fecha_apertura;
             return `
             <tr>
