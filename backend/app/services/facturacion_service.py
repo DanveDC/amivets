@@ -496,8 +496,16 @@ class FacturacionService:
 
         # Decisión 7 de orden-servicio-carrito: anular la factura de una orden
         # FACTURADA la devuelve a CERRADA para que se pueda volver a cobrar.
+        # Excepción: una venta de caja rápida no tiene nada que "volver a
+        # cobrar" -- sus productos van en la factura, no en la orden, así que
+        # reabrirla la mostraba en "Órdenes por cobrar" solo con los servicios.
+        # Anular su factura deshace la venta: la orden queda ANULADA.
         if orden_a_revertir is not None and orden_a_revertir.estado == "FACTURADA":
-            orden_a_revertir.estado = "CERRADA"
+            if orden_a_revertir.origen == "CAJA_RAPIDA":
+                orden_a_revertir.estado = "ANULADA"
+                orden_a_revertir.motivo_anulacion = f"Factura {factura.numero_factura} anulada"
+            else:
+                orden_a_revertir.estado = "CERRADA"
 
         db.commit()
         db.refresh(factura)
@@ -675,24 +683,20 @@ class FacturacionService:
                 detail=f"La orden {orden.numero} no tiene ítems pendientes de facturar.",
             )
 
-        detalles = [
-            DetalleFacturaCreate(
-                producto_id=None,
-                servicio_id=it["id_interno"],
-                # DetalleFactura.cantidad es Integer (misma deuda preexistente
-                # que crear_factura_desde_consulta).
-                cantidad=int(round(float(it["cantidad"] or 1))),
-                precio_unitario=it["precio_unitario"] or 0.0,
-                descripcion=it["descripcion"],
-            )
-            for it in items
-        ]
+        detalles = [FacturacionService._detalle_de_item_orden(it) for it in items]
 
         # Si la orden tiene consulta, la factura la referencia (decisión 6):
         # es la misma línea CONSULTA que ya vive en orden.servicios, no una
-        # columna nueva.
+        # columna nueva. Solo si esa línea está entre lo PENDIENTE: si el
+        # honorario ya se cobró en otra factura, mandar su consulta_id hace que
+        # crear_factura rechace con 409 ("consulta con factura activa") y el
+        # resto de la orden quedaría imposible de cobrar.
+        ids_pendientes = {it["id_interno"] for it in items}
         consulta_id = next(
-            (s.consulta_id for s in orden.servicios if s.tipo_servicio == "CONSULTA" and not s.is_deleted),
+            (
+                s.consulta_id for s in orden.servicios
+                if s.tipo_servicio == "CONSULTA" and not s.is_deleted and s.id in ids_pendientes
+            ),
             None,
         )
 
@@ -706,11 +710,37 @@ class FacturacionService:
             detalles=detalles,
         )
 
+        # FACTURADA ANTES de crear_factura: su commit es el único, así orden y
+        # factura quedan confirmadas juntas mientras el lock de la orden sigue
+        # tomado. Con un segundo commit después, una anulación en el medio veía
+        # la orden CERRADA, no la revertía, y quedaba FACTURADA con su factura
+        # ANULADA. Si crear_factura falla, su rollback deshace también esto.
+        orden.estado = "FACTURADA"
         factura = FacturacionService.crear_factura(
             db, factura_create, usuario_id=usuario.id if usuario else None
         )
-
-        orden.estado = "FACTURADA"
-        db.commit()
-        db.refresh(orden)
         return factura
+
+    @staticmethod
+    def _detalle_de_item_orden(it: dict) -> DetalleFacturaCreate:
+        """Línea de factura para un ítem pendiente de una orden.
+
+        DetalleFactura.cantidad es Integer, pero ServicioConsulta.cantidad es
+        Float (una orden acepta 0.5). Redondear la cantidad cobraba mal (0.5 ->
+        0, 2.5 -> 2 con el redondeo bancario de Python) y la línea quedaba
+        igual marcada como facturada. Una cantidad fraccionaria se factura como
+        1 unidad por el subtotal exacto, con la cantidad real en la descripción.
+        """
+        cantidad = float(it["cantidad"] or 1)
+        precio = float(it["precio_unitario"] or 0.0)
+        descripcion = it["descripcion"]
+        if cantidad.is_integer():
+            return DetalleFacturaCreate(
+                producto_id=None, servicio_id=it["id_interno"],
+                cantidad=int(cantidad), precio_unitario=precio, descripcion=descripcion,
+            )
+        return DetalleFacturaCreate(
+            producto_id=None, servicio_id=it["id_interno"],
+            cantidad=1, precio_unitario=round(cantidad * precio, 2),
+            descripcion=f"{descripcion} ({cantidad:g} × {precio:.2f})"[:255],
+        )
