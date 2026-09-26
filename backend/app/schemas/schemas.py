@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, field_serializer, computed_field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -605,6 +605,38 @@ class OrdenFacturarBody(BaseModel):
     total_pagado: Optional[float] = Field(default=0.0)
     descuento: Optional[float] = Field(default=0.0)
     impuesto: Optional[float] = Field(default=0.0)
+
+
+# ========== CAJA RÁPIDA SCHEMAS (caja-rapida) ==========
+class VentaRapidaItem(BaseModel):
+    """Una línea de la venta de mostrador. `id` es un Inventario.id (PRODUCTO)
+    o un CatalogoServicio.id (SERVICIO). `precio_unitario` solo se usa en
+    servicios de precio variable (decisión 5): el resto se cobra al precio del
+    maestro, venga lo que venga del cliente."""
+    tipo: Literal["PRODUCTO", "SERVICIO"]
+    id: int = Field(..., gt=0)
+    cantidad: int = Field(..., ge=1)
+    precio_unitario: Optional[float] = None
+
+
+class VentaRapidaCreate(BaseModel):
+    """Body de POST /api/caja-rapida/ventas. Sin `propietario_id` se factura a
+    "Consumidor final" (decisión 1). Cobro completo obligatorio (decisión 6)."""
+    propietario_id: Optional[int] = Field(None, gt=0)
+    metodo_pago: Literal["EFECTIVO", "TARJETA", "TRANSFERENCIA", "MULTIPLE"]
+    items: List[VentaRapidaItem] = Field(..., min_length=1)
+
+
+class ItemCajaResponse(BaseModel):
+    """Resultado de GET /api/caja-rapida/items: productos y servicios
+    vendibles en un solo listado."""
+    tipo: Literal["PRODUCTO", "SERVICIO"]
+    id: int
+    nombre: str
+    codigo: Optional[str] = None
+    precio: float
+    precio_variable: bool = False
+    stock: Optional[float] = None
 
 
 class FacturaUpdate(BaseModel):

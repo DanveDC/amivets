@@ -29,6 +29,7 @@ import { loadPropietarios } from '../sections/propietarios.js';
 import { initMascotas } from '../sections/mascotas.js';
 import { loadInventario } from '../sections/inventario.js';
 import { initFacturacion } from '../sections/facturacion.js';
+import { initCajaRapida } from '../sections/caja-rapida.js';
 import { loadReportes } from '../sections/reportes.js';
 import { loadUsuarios } from '../sections/usuarios.js';
 import { loadPerfil } from '../sections/perfil.js';
@@ -72,6 +73,7 @@ const SECTIONS = [
     { id: 'sec-consulta-abierta', label: 'Consulta abierta',   tab: false, init: null },
     { id: 'sec-inventario',      label: 'Inventario',          tab: true,  init: loadInventario,       roles: ['admin'] },
     { id: 'sec-facturacion',     label: 'Facturación',         tab: true,  init: initFacturacion, roles: ['admin', 'recepcionista'] },
+    { id: 'sec-caja-rapida',     label: 'Caja rápida',         tab: true,  init: initCajaRapida,  roles: ['admin', 'recepcionista'] },
     { id: 'sec-reportes',        label: 'Informes',            tab: true,  init: loadReportes,         roles: ['admin'] },
     // Reachable via the user menu and the command palette — no sidebar entry.
     { id: 'sec-citas-web',       label: 'Citas web / QR',      tab: false, init: initCitasWeb },
@@ -119,9 +121,9 @@ const MODULES = [
         icon: iconSvg('<path d="m7.5 4.3 9 5.1"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>'),
     },
     {
-        num: 5, label: 'Facturación', sectionIds: ['sec-facturacion'],
+        num: 5, label: 'Facturación', sectionIds: ['sec-facturacion', 'sec-caja-rapida'],
         descripcion: 'Facturar una orden completa o por partes, cobros y abonos, y el resumen por método de pago.',
-        cta: { 'sec-facturacion': 'Abre las órdenes por cobrar' },
+        cta: { 'sec-facturacion': 'Abre las órdenes por cobrar', 'sec-caja-rapida': 'Vende en el mostrador sin registrar al cliente' },
         icon: iconSvg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>'),
     },
     {

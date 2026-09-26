@@ -549,6 +549,26 @@ async function facturarOrden(request, ordenId, body = {}, token = null) {
   });
 }
 
+/**
+ * POST /api/caja-rapida/ventas (caja-rapida). `body` is
+ * { propietario_id?, metodo_pago, items: [{ tipo, id, cantidad, precio_unitario? }] }.
+ * Returns the raw response — specs assert 201/404/409/422/403/401 on
+ * `.status()` themselves. Without a token the request goes unauthenticated.
+ */
+async function ventaRapida(request, body, token = null) {
+  return request.post('/api/caja-rapida/ventas', {
+    headers: token ? authHeaders(token) : {},
+    data: body,
+  });
+}
+
+/** GET /api/caja-rapida/items?q= (caja-rapida). Returns the raw response. */
+async function buscarItemsCaja(request, q, token = null) {
+  return request.get(`/api/caja-rapida/items?q=${encodeURIComponent(q || '')}&limit=100`, {
+    headers: token ? authHeaders(token) : {},
+  });
+}
+
 /** Soft-deletes (is_deleted=True) a test servicio. Best-effort — never throws.
  * DELETE exige admin/veterinario (Tarea 06, decisión 9); pasa un token para
  * que la limpieza realmente funcione. */
@@ -1110,6 +1130,8 @@ module.exports = {
   confirmarServiciosOrden,
   pendientesFacturarOrden,
   facturarOrden,
+  ventaRapida,
+  buscarItemsCaja,
   facturarDesdeConsulta,
   createTestFactura,
   anularTestFactura,
