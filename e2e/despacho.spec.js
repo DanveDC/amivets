@@ -191,10 +191,22 @@ test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
     );
     expect(servicio.estado).toBe('SOLICITADO');
 
+    // orden-servicio-carrito, decisiones 3-5: anexar NO despacha ni mueve la
+    // orden -- el carrito sigue ABIERTA y sin notificaciones hasta confirmar.
+    const antesDeConfirmar = await (await request.get(`/api/ordenes/${orden.id}`, {
+      headers: authHeaders(S.vetToken),
+    })).json();
+    expect(antesDeConfirmar.estado).toBe('ABIERTA');
+    const sinNotifsAun = await listarNotificaciones(request, S.gestorA.token, { no_leidas: true });
+    expect(sinNotifsAun.some((n) => n.servicio_id === servicio.id)).toBe(false);
+
     const confirmada = await confirmarServiciosOrden(request, orden.id, S.vetToken);
     const linea = confirmada.servicios.find((s) => s.id === servicio.id);
     expect(linea.estado).toBe('ASIGNADO');
     expect(linea.advertencias).toBeFalsy();
+    // Confirmar es el punto de despacho Y el que pasa la orden a EN_ATENCION
+    // (decisión 5).
+    expect(confirmada.estado).toBe('EN_ATENCION');
 
     const notifsA = await listarNotificaciones(request, S.gestorA.token, { no_leidas: true });
     const notifsB = await listarNotificaciones(request, S.gestorB.token, { no_leidas: true });
@@ -218,6 +230,7 @@ test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
     expect(linea.estado).toBe('ASIGNADO');
     expect(linea.advertencias).toBeTruthy();
     expect(linea.advertencias[0].servicio_id).toBe(servicio.id);
+    expect(confirmada.estado).toBe('EN_ATENCION');
 
     const notifsAdmin = await listarNotificaciones(request, S.token, { no_leidas: true });
     expect(notifsAdmin.some((n) => n.tipo === 'SERVICIO_SIN_GESTOR' && n.servicio_id === servicio.id)).toBe(true);
@@ -315,7 +328,15 @@ test.describe.serial('Despacho y bandejas (Tarea 06, etapa 5)', () => {
     );
     expect(servicio.estado).toBe('SOLICITADO');
 
-    await confirmarServiciosOrden(request, orden.id, S.vetToken);
+    // Anexar sola no despacha: la orden sigue ABIERTA hasta confirmar
+    // (orden-servicio-carrito, decisiones 3-5).
+    const antesDeConfirmar = await (await request.get(`/api/ordenes/${orden.id}`, {
+      headers: authHeaders(S.vetToken),
+    })).json();
+    expect(antesDeConfirmar.estado).toBe('ABIERTA');
+
+    const confirmada = await confirmarServiciosOrden(request, orden.id, S.vetToken);
+    expect(confirmada.estado).toBe('EN_ATENCION');
 
     const notifs = await listarNotificaciones(request, S.gestorA.token, { no_leidas: true });
     expect(notifs.some((n) => n.tipo === 'SERVICIO_ASIGNADO' && n.servicio_id === servicio.id)).toBe(true);

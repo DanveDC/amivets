@@ -233,7 +233,32 @@ class ConsultaResponse(ConsultaBase):
     mascota_id: int
     servicios: List[ServicioConsultaResponse] = []
     factura_id: Optional[int] = None
-    
+    # Derivado de la línea tipo_servicio='CONSULTA' de `servicios` (Tarea 06,
+    # decisión 3: `consultas` NO tiene columna orden_id a propósito, sería una
+    # segunda fuente de verdad -- orden_service.orden_de_consulta es la fuente
+    # real). orden-servicio-carrito, decisión 10: se expone acá para que
+    # Historia clínica pueda armar "Ir a la orden" sin buscarlo a mano en
+    # `servicios[]`. No agrega una query nueva: `servicios` ya se carga para
+    # este mismo response.
+    orden_id: Optional[int] = None
+
+    @model_validator(mode='before')
+    def _derivar_orden_id(cls, data):
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                linea = next(
+                    (
+                        s for s in (getattr(data, 'servicios', None) or [])
+                        if getattr(s, 'tipo_servicio', None) == 'CONSULTA' and not getattr(s, 'is_deleted', False)
+                    ),
+                    None,
+                )
+                if linea is not None:
+                    data.orden_id = linea.orden_id
+            except Exception:
+                pass
+        return data
+
     model_config = ConfigDict(from_attributes=True)
 
 # ========== RECETA SCHEMAS ==========
@@ -562,6 +587,19 @@ class FacturaDesdeConsulta(BaseModel):
     El servidor arma los detalles desde consulta.servicios + el honorario; el
     cliente solo pasa datos de cobro. Todo opcional: sin body se emite una
     factura PENDIENTE por el total.
+    """
+    metodo_pago: Optional[str] = Field(None, max_length=50)
+    total_pagado: Optional[float] = Field(default=0.0)
+    descuento: Optional[float] = Field(default=0.0)
+    impuesto: Optional[float] = Field(default=0.0)
+
+
+class OrdenFacturarBody(BaseModel):
+    """Body opcional de POST /api/ordenes/{id}/facturar (orden-servicio-carrito,
+    decisión 6). Misma forma que FacturaDesdeConsulta -- el servidor arma los
+    detalles desde los servicios sin facturar de la orden; el cliente solo
+    manda datos de cobro. Todo opcional: sin body se emite una factura
+    PENDIENTE por el total.
     """
     metodo_pago: Optional[str] = Field(None, max_length=50)
     total_pagado: Optional[float] = Field(default=0.0)
@@ -970,6 +1008,11 @@ class OrdenServicioResponse(BaseModel):
     propietario_nombre: Optional[str] = None
     mascota_nombre: Optional[str] = None
     veterinario_nombre: Optional[str] = None
+    # Presupuesto en tiempo real (orden-servicio-carrito, decisión 2): NO es
+    # una columna de la orden -- se calcula acá, al leer, sobre los servicios
+    # vivos (no CANCELADO, no is_deleted). Así no hay migración ni forma de
+    # que se desincronice de las líneas reales.
+    total: float = 0.0
 
     @model_validator(mode='before')
     def _adjuntar_nombres(cls, data):
@@ -984,6 +1027,17 @@ class OrdenServicioResponse(BaseModel):
                 vet = getattr(data, 'veterinario', None)
                 if vet:
                     data.veterinario_nombre = vet.username
+            except Exception:
+                pass
+            try:
+                total = 0.0
+                for servicio in getattr(data, 'servicios', None) or []:
+                    if getattr(servicio, 'is_deleted', False):
+                        continue
+                    if getattr(servicio, 'estado', None) == 'CANCELADO':
+                        continue
+                    total += (servicio.cantidad or 0) * (servicio.precio_unitario or 0)
+                data.total = total
             except Exception:
                 pass
         return data

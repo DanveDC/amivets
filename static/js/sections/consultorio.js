@@ -24,6 +24,11 @@ import { abrirServicioDirectoParaMascota } from './hoy.js';
 // este módulo). showSection es una función exportada hoisted; sólo se usa dentro
 // de handlers, nunca en la evaluación del módulo.
 import { showSection } from '../core/router.js';
+// orden-servicio-carrito, decisión 10: "Ir a la orden" navega a la pantalla
+// de la orden en vez de facturar la consulta acá. abrirOrden es una función
+// hoisted, usada solo dentro de handlers -- no hay relación cíclica
+// (orden-abierta.js no importa de este módulo).
+import { abrirOrden } from './orden-abierta.js';
 
 // Estados de ServicioConsulta que ya descontaron insumos del stock (Tarea 06,
 // decisión 4 — espejo de consumo_service.ESTADOS_CONSUMIDOS en el backend).
@@ -595,9 +600,11 @@ export const verConsultaCompleta = async (consultaId, mascotaId) => {
         _cargarRecetasConsultaAbierta(c.id);
         _cargarNotasConsultaAbierta(c.mascota_id);
 
-        // El botón "Cerrar y facturar" no aplica a una consulta ya cerrada.
-        const btnFact = document.getElementById('btnConsultaCerrarFacturar');
-        if (btnFact) btnFact.hidden = (c.estado || 'ABIERTA').toUpperCase() !== 'ABIERTA';
+        // "Ir a la orden" (orden-servicio-carrito, decisión 10) solo tiene
+        // sentido si la consulta resolvió su orden -- siempre debería, pero
+        // se guarda igual contra una respuesta vieja en caché.
+        const btnOrden = document.getElementById('btnConsultaIrAOrden');
+        if (btnOrden) btnOrden.hidden = !c.orden_id;
     } catch (e) {
         showNotification('Error cargando la consulta: ' + e.message, 'error');
     }
@@ -845,20 +852,18 @@ export const guardarNotaConsultaAbierta = async (e) => {
     }
 };
 
-export const cerrarYFacturarConsulta = async () => {
-    if (!currentViewedConsultaId) return;
-    if (!confirm('¿Emitir la factura de esta consulta y cerrarla?')) return;
-    const id = currentViewedConsultaId;
-    try {
-        // Un paso (Tarea 09, decisión 8): el servidor arma los detalles desde
-        // consulta.servicios + honorario y deja la consulta CERRADA.
-        await fetchAPI(`/facturas/from-consulta/${id}`, { method: 'POST', body: JSON.stringify({}) });
-        showNotification('Factura emitida. Consulta cerrada.', 'success');
-        showSection('sec-consultorio');
-        if (currentMascotaId) actualizarCountsPet(currentMascotaId);
-    } catch (err) {
-        showNotification('No se pudo facturar: ' + err.message, 'error');
+// orden-servicio-carrito, decisión 10: la consulta ya no factura por fuera de
+// su orden -- "Ir a la orden" navega a sec-orden-abierta con el orden_id
+// derivado (ver ConsultaResponse.orden_id, orden_de_consulta). El endpoint de
+// facturar por consulta queda en el backend por compatibilidad, pero el front
+// ya no lo usa.
+export const irALaOrdenDesdeConsulta = () => {
+    const ordenId = currentConsultaAbierta?.orden_id;
+    if (!ordenId) {
+        showNotification('Esta consulta no tiene una orden asociada.', 'error');
+        return;
     }
+    abrirOrden(ordenId);
 };
 
 // Enlaza los controles estáticos de la pantalla (una sola vez).
@@ -866,7 +871,7 @@ export const initConsultaAbierta = () => {
     document.getElementById('formVitalesConsulta')?.addEventListener('submit', guardarVitalesConsulta);
     document.getElementById('formDiagnosticoConsulta')?.addEventListener('submit', guardarDiagnosticoConsulta);
     document.getElementById('formNotaConsultaAbierta')?.addEventListener('submit', guardarNotaConsultaAbierta);
-    document.getElementById('btnConsultaCerrarFacturar')?.addEventListener('click', cerrarYFacturarConsulta);
+    document.getElementById('btnConsultaIrAOrden')?.addEventListener('click', irALaOrdenDesdeConsulta);
     document.getElementById('btnConsultaGuardarSalir')?.addEventListener('click', () => showSection('sec-consultorio'));
     document.getElementById('btnNuevaRecetaCA')?.addEventListener('click', () => {
         if (currentViewedConsultaId) abrirModalReceta(currentViewedConsultaId);
@@ -1329,7 +1334,7 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
                     <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--secondary-subtle); color: var(--secondary-dark); border-color: var(--secondary);">${ICONS.pill} Recetar</button>
                     ${c.factura_id ?
                         `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--info); border-color: var(--info-dark); margin-top: 4px;">${ICONS.fileText} Facturado</button>` :
-                        `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`
+                        (c.orden_id ? `<button class="btn-secondary btn-sm" onclick="abrirOrden(${c.orden_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.clipboard} Ir a la orden</button>` : '')
                     }
                     <button class="btn-secondary btn-sm" onclick="switchPetTab('servicios'); setTimeout(()=>abrirRegistroClinico('hospitalizacion'), 300);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>
                 </td>

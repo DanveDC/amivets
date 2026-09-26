@@ -28,7 +28,7 @@ import { loadAgenda } from '../sections/agenda.js';
 import { loadPropietarios } from '../sections/propietarios.js';
 import { initMascotas } from '../sections/mascotas.js';
 import { loadInventario } from '../sections/inventario.js';
-import { cargarHistorialFacturas } from '../sections/facturacion.js';
+import { initFacturacion } from '../sections/facturacion.js';
 import { loadReportes } from '../sections/reportes.js';
 import { loadUsuarios } from '../sections/usuarios.js';
 import { loadPerfil } from '../sections/perfil.js';
@@ -71,7 +71,7 @@ const SECTIONS = [
     { id: 'sec-consultorio',     label: 'Historia clínica',    tab: true,  init: initConsultorio,      roles: MASCOTAS_ROLES },
     { id: 'sec-consulta-abierta', label: 'Consulta abierta',   tab: false, init: null },
     { id: 'sec-inventario',      label: 'Inventario',          tab: true,  init: loadInventario,       roles: ['admin'] },
-    { id: 'sec-facturacion',     label: 'Facturación',         tab: true,  init: cargarHistorialFacturas, roles: ['admin', 'recepcionista'] },
+    { id: 'sec-facturacion',     label: 'Facturación',         tab: true,  init: initFacturacion, roles: ['admin', 'recepcionista'] },
     { id: 'sec-reportes',        label: 'Informes',            tab: true,  init: loadReportes,         roles: ['admin'] },
     // Reachable via the user menu and the command palette — no sidebar entry.
     { id: 'sec-citas-web',       label: 'Citas web / QR',      tab: false, init: initCitasWeb },

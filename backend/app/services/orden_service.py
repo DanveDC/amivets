@@ -160,6 +160,10 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
     nada que "reconfirmar": una vez que una linea sale de SOLICITADO, este
     endpoint ya no vuelve a tocarla.
 
+    Ademas pasa la orden ABIERTA -> EN_ATENCION (decision 5 de
+    orden-servicio-carrito): confirmar es una de las formas legitimas de
+    empezar a atender una orden, junto con tomarla o abrirle una consulta.
+
     Devuelve (orden, advertencias): `advertencias` es una lista de dicts
     {"servicio_id", "mensaje"} -- el router (routers/ordenes.py) los adjunta
     a `ServicioConsultaResponse.advertencias` de la linea correspondiente
@@ -198,6 +202,12 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
             servicio.ejecutado_at = ahora
             consumo_service.consumir_para_servicio(db, servicio, usuario_id=current_user.id)
 
+    # Decision 5 de orden-servicio-carrito: confirmar es tambien el punto en
+    # que la orden empieza a atenderse. Idempotente (marcar_en_atencion no
+    # hace nada si ya esta EN_ATENCION), asi que confirmar una orden ya
+    # confirmada o sin SOLICITADOs no rompe nada.
+    marcar_en_atencion(orden)
+
     db.commit()
     db.refresh(orden)
     return orden, advertencias
@@ -218,21 +228,21 @@ def crear_servicio_en_orden(
     current_user: Usuario,
 ) -> tuple:
     """Anexa una linea de servicio a la orden SIN pasar por una consulta
-    (Tarea 06, decision 1: venta de mostrador, orden solo de estetica). La usa
-    POST /api/ordenes/{id}/servicios.
+    (Tarea 06, decision 1: venta de mostrador, orden solo de estetica; y
+    orden-servicio-carrito, decision 3: la orden es un carrito/presupuesto).
+    La usa POST /api/ordenes/{id}/servicios.
 
-    Decide el estado inicial por el AREA del item (decision 4, "atajo sin
-    despacho"): sin area (sin catalogo_servicio_id, o con uno cuyo area_id es
-    NULL) entra directo en EJECUTADO -- no hay a quien despacharselo, lo
-    ejecuta quien lo anexa --; con area queda SOLICITADO a la espera de
-    POST /api/ordenes/{id}/confirmar.
+    Todo servicio entra SIEMPRE en SOLICITADO, tenga o no area (decision 3 de
+    orden-servicio-carrito): agregar un item al carrito no lo ejecuta ni
+    consume inventario, y no mueve la orden de ABIERTA. El atajo "sin area"
+    (que antes pasaba directo a EJECUTADO) se resuelve recien al confirmar
+    (POST /api/ordenes/{id}/confirmar -> confirmar_servicios), donde ya existe
+    la rama sin area.
 
     Esto es DELIBERADAMENTE distinto de agregar_servicio_consulta
     (routers/consultas.py) y crear_servicio_directo (routers/servicios.py):
     esos dos toman el `estado` que manda el cliente, para no romper su
-    contrato ya cubierto por la suite. Este es el unico de los tres que decide
-    el estado por el area, porque es el unico endpoint pensado para trabajo
-    SIN consulta que puede necesitar despacho real a un area.
+    contrato ya cubierto por la suite.
 
     No commitea: el llamador decide la transaccion. Devuelve
     (servicio, advertencias).
@@ -241,8 +251,6 @@ def crear_servicio_en_orden(
     if catalogo_servicio_id:
         item = db.query(CatalogoServicio).filter(CatalogoServicio.id == catalogo_servicio_id).first()
         area_id = item.area_id if item else None
-
-    estado_inicial = "SOLICITADO" if area_id is not None else "EJECUTADO"
 
     servicio = ServicioConsulta(
         orden_id=orden.id,
@@ -259,24 +267,15 @@ def crear_servicio_en_orden(
         precio_unitario=precio_unitario,
         detalles_clinicos=detalles_clinicos,
         area_id=area_id,
-        estado=estado_inicial,
+        estado="SOLICITADO",
         is_deleted=False,
     )
     db.add(servicio)
     db.flush()  # id necesario para anclar movimientos/consumos
 
-    advertencias = []
-    if servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
-        advertencias = consumo_service.consumir_para_servicio(
-            db,
-            servicio,
-            overrides=consumo_service.overrides_from_payload(consumos_override),
-            usuario_id=current_user.id if current_user else None,
-        )
-
-    # Decision 1, regla 1: automatica, no un boton aparte.
-    marcar_en_atencion(orden)
-    return servicio, advertencias
+    # Agregar al carrito NO consume inventario ni cambia el estado de la
+    # orden (decision 3 de orden-servicio-carrito): eso pasa al confirmar.
+    return servicio, []
 
 
 def cerrar_orden(db: Session, orden: OrdenServicio, current_user: Usuario) -> OrdenServicio:

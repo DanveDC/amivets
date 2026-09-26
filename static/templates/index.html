@@ -1044,10 +1044,10 @@
                                 </div>
                                 <table class="oa-table">
                                     <thead>
-                                        <tr><th>Servicio / insumos que consume</th><th>Categoría</th><th>Cant.</th><th>Precio</th><th>Estado</th><th></th></tr>
+                                        <tr><th>Servicio / insumos que consume</th><th>Categoría</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>Estado</th><th></th></tr>
                                     </thead>
                                     <tbody id="oaServiciosBody">
-                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                        <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
                                     </tbody>
                                 </table>
                                 <button type="button" class="oa-anexar-row" id="btnOaAnexar">
@@ -1167,7 +1167,7 @@
                     </div>
                     <div class="av-row-actions">
                         <button type="button" class="btn-secondary" id="btnConsultaGuardarSalir">Guardar y salir</button>
-                        <button type="button" class="btn-primary" id="btnConsultaCerrarFacturar">Cerrar y facturar</button>
+                        <button type="button" class="btn-primary" id="btnConsultaIrAOrden">Ir a la orden</button>
                     </div>
                 </div>
 
@@ -1725,44 +1725,82 @@
 
 
             <!-- Content Area: Facturación -->
+            <!-- orden-servicio-carrito, decisión 8: la vista por defecto es
+                 "Órdenes por cobrar" (#facViewOrdenes) -- el Historial de
+                 facturas emitidas queda como pestaña secundaria
+                 (#facViewHistorial). initFacturacion() (facturacion.js) abre
+                 en "ordenes"; el toggle no usa un sub-router, son dos <div>
+                 hermanos con `hidden` (mismo criterio que bandeja-gestor.js). -->
             <section id="sec-facturacion" class="content-area spa-section">
-                <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 2rem;">
+                <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 1.25rem;">
                     <div>
-                        <h2 style="margin:0;">Historial de Facturación</h2>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem;">Gestione y consulte los comprobantes de pago emitidos.</p>
+                        <h2 style="margin:0;">Facturación</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">Cobrá las órdenes cerradas y consultá el historial de comprobantes.</p>
                     </div>
-                    <div style="display: flex; gap: 0.75rem; align-items: center;">
-                        <input type="text" id="searchFactura" placeholder="Buscar por # o cliente..." class="search-input" style="width: 280px; margin: 0;">
-                        <select id="filterEstadoFactura" class="search-input" style="width: 150px; margin: 0; padding-left: 1rem;">
-                            <option value="">Todos los estados</option>
-                            <option value="PAGADA">Pagada</option>
-                            <option value="PENDIENTE">Pendiente</option>
-                            <option value="PARCIAL">Parcial</option>
-                            <option value="ANULADA">Anulada</option>
-                        </select>
+                    <div class="pd-orders-filters">
+                        <button type="button" id="facTabOrdenes" class="pd-filter" aria-pressed="true">Órdenes por cobrar</button>
+                        <button type="button" id="facTabHistorial" class="pd-filter" aria-pressed="false">Historial</button>
                     </div>
                 </div>
 
-                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
-                    <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
-                        <thead>
-                            <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Estado</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Pagado</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Saldo Pendiente</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Método</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="facturacionTableBody">
-                            <!-- Loaded via JS -->
-                        </tbody>
-                    </table>
+                <!-- Vista: Órdenes por cobrar (órdenes CERRADA a la espera de cobro) -->
+                <div id="facViewOrdenes">
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                        <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Orden #</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Tutor</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Paciente</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facOrdenesBody">
+                                <!-- Loaded via JS: cargarOrdenesPorCobrar() -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Vista: Historial de facturas emitidas (secundaria) -->
+                <div id="facViewHistorial" hidden>
+                    <div class="content-header" style="justify-content: flex-end; align-items: center; display: flex; margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <input type="text" id="searchFactura" placeholder="Buscar por # o cliente..." class="search-input" style="width: 280px; margin: 0;">
+                            <select id="filterEstadoFactura" class="search-input" style="width: 150px; margin: 0; padding-left: 1rem;">
+                                <option value="">Todos los estados</option>
+                                <option value="PAGADA">Pagada</option>
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="PARCIAL">Parcial</option>
+                                <option value="ANULADA">Anulada</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                        <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Estado</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Pagado</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Saldo Pendiente</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Método</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facturacionTableBody">
+                                <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </section>
+
 
             <!-- Content Area: Reportes -->
             <section id="sec-reportes" class="content-area spa-section">
@@ -2363,70 +2401,10 @@
         </div>
     </div>
 
-    <!-- Modal Facturación -->
-    <div id="modalFactura" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
-            <span class="close" data-modal="modalFactura" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
-            <div class="modal-header">
-                <h2>Generar Factura <span id="facturaConsultaIdTxt" style="color: var(--text-secondary); font-size:1rem;"></span></h2>
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">Revise los ítems consumidos y genere el comprobante de pago.</p>
-            </div>
-            
-            <div style="padding: 0 2.5rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">TUTOR</label>
-                        <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
-                    </div>
-                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">PACIENTE</label>
-                        <div id="facturaMascotaNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <form id="formFactura">
-                <input type="hidden" id="facturaConsultaId">
-                <input type="hidden" id="facturaPropietarioId">
-                
-                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Metodo de Pago</label>
-                        <select id="facturaMetodoPago" required>
-                            <option value="EFECTIVO">Efectivo ($)</option>
-                            <option value="TARJETA">Punto de Venta / Tarjeta</option>
-                            <option value="TRANSFERENCIA">Transferencia / Zelle</option>
-                            <option value="MULTIPLE">Múltiple / Otros</option>
-                        </select>
-                    </div>
-                </div>
-
-                <h3 style="margin-bottom: 1rem; color:var(--text-primary); font-size: 1rem; font-weight: 700;">Detalle de Cargos a Facturar</h3>
-                <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.5rem; background: var(--surface); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);" id="facturaItemsList">
-                    <p style="text-align: center; color: var(--text-muted); padding: 1rem;">Buscando cargos aplicados...</p>
-                </div>
-                
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
-                    <div style="text-align: right; background: var(--warning-subtle); padding: 1.5rem 2.5rem; border-radius: var(--radius-lg); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: var(--shadow-sm);">
-                        <span style="font-size: 0.85rem; color: var(--warning-dark); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: var(--warning-dark); letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label>Monto a Pagar Ahora</label>
-                    <input type="number" id="facturaMontoPagar" min="0" step="0.01" required>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">Dejá el total para pago completo, o ingresá un monto menor para abonar.</small>
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Saldo pendiente: $<span id="facturaSaldoPendienteCalculado">0.00</span></div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" data-close="modalFactura">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Emitir y Guardar</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- El viejo "Modal Facturación" (pendientes por consulta, POST /facturas/
+         con detalles[] armados en el cliente) se quitó acá: orden-servicio-
+         carrito, decisión 8 -- facturar es por orden (#modalFacturarOrden,
+         POST /ordenes/{id}/facturar), no por consulta. -->
 
             <!-- Modal: Nuevo Horario -->
             <div id="modalNuevoHorario" class="modal">

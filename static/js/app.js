@@ -85,8 +85,8 @@ Object.assign(window, {
     guardarTarifaVeterinario: reportes.guardarTarifaVeterinario,
     // ordenes
     atenderOrden: ordenes.atenderOrden,
+    abrirOrden: ordenAbierta.abrirOrden,
     // facturacion
-    facturarConsulta: facturacion.facturarConsulta,
     exportarFacturaPDF: facturacion.exportarFacturaPDF,
     exportarAbonoPDF: facturacion.exportarAbonoPDF,
     abrirModalAbono: facturacion.abrirModalAbono,

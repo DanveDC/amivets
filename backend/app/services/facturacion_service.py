@@ -7,7 +7,8 @@ from datetime import datetime
 from app.models.models import (
     Factura, DetalleFactura, Inventario, MovimientoInventario,
     Consulta, PruebaComplementaria, Vacunacion, Desparasitacion,
-    Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento
+    Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento,
+    OrdenServicio, Usuario
 )
 from app.services import consumo_service
 
@@ -48,7 +49,7 @@ def _consumo_en_ledger(db: Session, servicio_id) -> bool:
         ServicioConsulta.id == servicio_id
     ).first()
     return bool(serv and serv[0] in consumo_service.ESTADOS_CONSUMIDOS)
-from app.schemas.schemas import FacturaCreate, FacturaUpdate
+from app.schemas.schemas import FacturaCreate, FacturaUpdate, DetalleFacturaCreate
 
 
 class FacturacionService:
@@ -400,6 +401,33 @@ class FacturacionService:
         # (deadlock). Se calcula acá arriba para poder bloquear ambos
         # conjuntos de filas en ese orden antes de mutar nada.
         servicio_ids = [d.servicio_id for d in factura.detalles if d.servicio_id]
+
+        # Si además hay que revertir una orden FACTURADA (decisión 7), esa
+        # fila se bloquea PRIMERO -- mismo orden global que facturar_orden
+        # (OrdenServicio -> ServicioConsulta -> Inventario) -- para no
+        # deadlockear con una facturación de orden concurrente. Se resuelve
+        # antes de bloquear nada más, con una lectura simple (sin lock).
+        orden_a_revertir = None
+        if servicio_ids:
+            orden_ids = {
+                row[0]
+                for row in db.query(ServicioConsulta.orden_id)
+                .filter(ServicioConsulta.id.in_(servicio_ids))
+                .all()
+                if row[0] is not None
+            }
+            # Solo se revierte si TODOS los servicios de la factura son de la
+            # MISMA orden (decisión 7; riesgo anotado en el diseño: una
+            # factura vieja armada a mano con servicios de más de una orden
+            # no revierte ninguna).
+            if len(orden_ids) == 1:
+                orden_a_revertir = (
+                    db.query(OrdenServicio)
+                    .filter(OrdenServicio.id == orden_ids.pop())
+                    .with_for_update()
+                    .first()
+                )
+
         if servicio_ids:
             db.query(ServicioConsulta).filter(
                 ServicioConsulta.id.in_(servicio_ids)
@@ -465,6 +493,11 @@ class FacturacionService:
                 for d in consulta.desparasitaciones: d.facturado = False
                 for c in consulta.cirugias: c.facturado = False
                 for h in consulta.hospitalizaciones: h.facturado = False
+
+        # Decisión 7 de orden-servicio-carrito: anular la factura de una orden
+        # FACTURADA la devuelve a CERRADA para que se pueda volver a cobrar.
+        if orden_a_revertir is not None and orden_a_revertir.estado == "FACTURADA":
+            orden_a_revertir.estado = "CERRADA"
 
         db.commit()
         db.refresh(factura)
@@ -550,3 +583,134 @@ class FacturacionService:
             "mascota_nombre": consulta.mascota.nombre,
             "items": items
         }
+
+    # -----------------------------------------------------------------
+    # Facturar por orden (orden-servicio-carrito, decisión 6)
+    # -----------------------------------------------------------------
+    @staticmethod
+    def obtener_items_pendientes_orden(db: Session, orden_id: int) -> dict:
+        """Ítems vivos y sin facturar de una orden.
+
+        A diferencia de obtener_items_pendientes_consulta, acá NO hay ítem
+        sintético de "Consulta Veterinaria": la línea `tipo_servicio='CONSULTA'`
+        es una línea más de la orden (Tarea 06, decisión 3) y se factura igual
+        que cualquier otra -- el puente que dejó pendiente el comentario de
+        arriba se cierra acá.
+        """
+        orden = db.query(OrdenServicio).filter(OrdenServicio.id == orden_id).first()
+        if not orden:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+
+        items = []
+        total = 0.0
+        for s in orden.servicios:
+            if s.is_deleted or s.estado == "CANCELADO" or s.facturado:
+                continue
+            cantidad = s.cantidad or 1.0
+            precio = s.precio_unitario or 0.0
+            subtotal = cantidad * precio
+            total += subtotal
+            items.append({
+                "descripcion": s.nombre_servicio or s.tipo_servicio,
+                "cantidad": cantidad,
+                "precio_unitario": precio,
+                "subtotal": subtotal,
+                "tipo": "SERVICIO",
+                "id_interno": s.id,
+            })
+
+        return {
+            "orden_id": orden.id,
+            "propietario_id": orden.propietario_id,
+            "propietario_nombre": (
+                f"{orden.propietario.nombre} {orden.propietario.apellido}" if orden.propietario else None
+            ),
+            "mascota_nombre": orden.mascota.nombre if orden.mascota else None,
+            "items": items,
+            "total": total,
+        }
+
+    @staticmethod
+    def facturar_orden(
+        db: Session,
+        orden_id: int,
+        usuario: Optional[Usuario] = None,
+        metodo_pago: Optional[str] = None,
+        total_pagado: float = 0.0,
+        descuento: float = 0.0,
+        impuesto: float = 0.0,
+    ) -> Factura:
+        """Factura de una sola vez todos los ítems sin facturar de una orden
+        `CERRADA` (orden-servicio-carrito, decisión 6).
+
+        Bloquea la orden (`FOR UPDATE`) antes de decidir si se puede facturar:
+        una segunda llamada concurrente espera a que la primera termine su
+        transacción y recién ahí lee el estado/los `facturado` ya actualizados,
+        en vez de pasar el chequeo en paralelo. Delega en `crear_factura` con
+        los detalles armados acá adentro, así hereda el mismo orden de lock
+        determinista (`ServicioConsulta` por id, después `Inventario` por id) y
+        el guard de doble submit por `servicio.facturado` que ya usa el resto
+        de la facturación (decisión 6).
+        """
+        orden = (
+            db.query(OrdenServicio)
+            .filter(OrdenServicio.id == orden_id)
+            .with_for_update()
+            .first()
+        )
+        if not orden:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+
+        if orden.estado != "CERRADA":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"La orden {orden.numero} está {orden.estado}; solo se factura una orden CERRADA.",
+            )
+
+        data = FacturacionService.obtener_items_pendientes_orden(db, orden_id)
+        items = data["items"]
+        if not items:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"La orden {orden.numero} no tiene ítems pendientes de facturar.",
+            )
+
+        detalles = [
+            DetalleFacturaCreate(
+                producto_id=None,
+                servicio_id=it["id_interno"],
+                # DetalleFactura.cantidad es Integer (misma deuda preexistente
+                # que crear_factura_desde_consulta).
+                cantidad=int(round(float(it["cantidad"] or 1))),
+                precio_unitario=it["precio_unitario"] or 0.0,
+                descripcion=it["descripcion"],
+            )
+            for it in items
+        ]
+
+        # Si la orden tiene consulta, la factura la referencia (decisión 6):
+        # es la misma línea CONSULTA que ya vive en orden.servicios, no una
+        # columna nueva.
+        consulta_id = next(
+            (s.consulta_id for s in orden.servicios if s.tipo_servicio == "CONSULTA" and not s.is_deleted),
+            None,
+        )
+
+        factura_create = FacturaCreate(
+            propietario_id=orden.propietario_id,
+            consulta_id=consulta_id,
+            metodo_pago=metodo_pago,
+            total_pagado=total_pagado or 0.0,
+            descuento=descuento or 0.0,
+            impuesto=impuesto or 0.0,
+            detalles=detalles,
+        )
+
+        factura = FacturacionService.crear_factura(
+            db, factura_create, usuario_id=usuario.id if usuario else None
+        )
+
+        orden.estado = "FACTURADA"
+        db.commit()
+        db.refresh(orden)
+        return factura

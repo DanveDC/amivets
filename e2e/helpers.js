@@ -472,9 +472,10 @@ async function createTestServicioDirecto(request, mascotaId, overrides = {}, tok
  * Attaches a servicio directly to an orden, without a consulta (Tarea 06,
  * etapa 4: POST /api/ordenes/{id}/servicios). It's the sibling of
  * anexarServicioConsulta for orders that have no consulta (venta de
- * mostrador, orden solo de estética). `tipo_servicio` defaults to a
- * non-clinical type without `catalogo_servicio_id`, so the atajo sin
- * despacho (decisión 4) lands it in EJECUTADO. Throws on rejection.
+ * mostrador, orden solo de estética). Every service added this way lands in
+ * SOLICITADO (orden-servicio-carrito, decisión 3: the order is a
+ * carrito/presupuesto — see `anexarServicioOrden`'s new area-based state
+ * only kicked in after confirming, not at add time). Throws on rejection.
  */
 async function anexarServicioOrden(request, ordenId, overrides = {}, token = null) {
   const payload = {
@@ -513,6 +514,39 @@ async function confirmarServiciosOrden(request, ordenId, token = null) {
     );
   }
   return res.json();
+}
+
+/**
+ * GET /api/ordenes/{id}/pendientes-facturar (orden-servicio-carrito, decisión 6).
+ * Returns the raw response — the "409 sobre orden no cerrada" scenario is
+ * about POST /facturar, not this read-only preview, but a caller that wants
+ * to assert on status can still do so via `.status()`. Throws on rejection
+ * for the common case.
+ */
+async function pendientesFacturarOrden(request, ordenId, token = null) {
+  const res = await request.get(`/api/ordenes/${ordenId}/pendientes-facturar`, {
+    headers: token ? authHeaders(token) : {},
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to get pendientes-facturar of orden ${ordenId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/**
+ * POST /api/ordenes/{id}/facturar (orden-servicio-carrito, decisión 6).
+ * Returns the raw response — several specs deliberately expect 409 (orden no
+ * cerrada, doble facturación), so this does NOT throw on a non-2xx status;
+ * callers assert on `.status()` themselves and call `.json()` for the happy
+ * path.
+ */
+async function facturarOrden(request, ordenId, body = {}, token = null) {
+  return request.post(`/api/ordenes/${ordenId}/facturar`, {
+    headers: token ? authHeaders(token) : {},
+    data: body,
+  });
 }
 
 /** Soft-deletes (is_deleted=True) a test servicio. Best-effort — never throws.
@@ -1074,6 +1108,8 @@ module.exports = {
   anexarServicioConsulta,
   anexarServicioOrden,
   confirmarServiciosOrden,
+  pendientesFacturarOrden,
+  facturarOrden,
   facturarDesdeConsulta,
   createTestFactura,
   anularTestFactura,
