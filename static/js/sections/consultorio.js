@@ -858,13 +858,30 @@ export const guardarNotaConsultaAbierta = async (e) => {
 // facturar por consulta queda en el backend por compatibilidad, pero el front
 // ya no lo usa.
 // Única excepción a "la consulta no factura por fuera de la orden": una
-// consulta SIN orden asociada no tiene otro camino de cobro. Usa el endpoint
-// de compatibilidad POST /facturas/from-consulta/{id}, que arma la factura en
-// el servidor (queda PENDIENTE; se cobra desde Facturación).
+// consulta SIN orden -- anterior a las órdenes y sin servicios, porque si
+// tuviera alguno su orden se deriva de él -- no tiene otro camino de cobro.
+// Se cobra SOLO su honorario (POST /facturas/ con consulta_id, para que la
+// liquidación del veterinario la vea); no se usa from-consulta, que arrastra
+// todo lo que cuelga de la consulta (fix de revisión).
 export const facturarConsultaSinOrden = async (consultaId) => {
-    if (!confirm('Esta consulta no tiene una orden asociada. ¿Emitir su factura?')) return;
     try {
-        const factura = await fetchAPI(`/facturas/from-consulta/${consultaId}`, { method: 'POST', body: JSON.stringify({}) });
+        const c = await fetchAPI(`/consultas/${consultaId}`);
+        const honorario = Number(c.precio_consulta || 0);
+        if (!(honorario > 0)) {
+            showNotification('Esta consulta no tiene honorario para facturar.', 'warning');
+            return;
+        }
+        if (!confirm(`Esta consulta no tiene una orden asociada. ¿Emitir la factura de su honorario ($${honorario.toFixed(2)})?`)) return;
+        const m = await fetchAPI(`/mascotas/${c.mascota_id}`);
+        const factura = await fetchAPI('/facturas/', {
+            method: 'POST',
+            body: JSON.stringify({
+                propietario_id: m.propietario_id,
+                consulta_id: c.id,
+                total_pagado: 0,
+                detalles: [{ descripcion: `Consulta veterinaria - ${c.motivo || ''}`.trim().slice(0, 255), cantidad: 1, precio_unitario: honorario }],
+            }),
+        });
         showNotification(`Factura #${factura.numero_factura || factura.id} emitida.`, 'success');
         if (currentMascotaId) {
             actualizarCountsPet(currentMascotaId);

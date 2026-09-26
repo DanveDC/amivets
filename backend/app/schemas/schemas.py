@@ -261,6 +261,19 @@ class ConsultaResponse(ConsultaBase):
                 )
                 if linea is not None:
                     data.orden_id = linea.orden_id
+                else:
+                    # Consulta anterior a las órdenes (sin línea CONSULTA): el
+                    # backfill enganchó sus servicios a una orden, así que se
+                    # llega a ella por cualquiera de ellos (fix de revisión).
+                    otra = next(
+                        (
+                            s for s in (getattr(data, 'servicios', None) or [])
+                            if getattr(s, 'orden_id', None) and not getattr(s, 'is_deleted', False)
+                        ),
+                        None,
+                    )
+                    if otra is not None:
+                        data.orden_id = otra.orden_id
             except Exception:
                 pass
         return data
