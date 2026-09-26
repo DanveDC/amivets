@@ -180,8 +180,22 @@ def _filtro_encargado(encargado_id: int):
     )
 
 
-def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[Tuple[ServicioConsulta, Factura]]:
-    """(línea, factura PAGADA que la cobró) del encargado en el rango."""
+def _factor_descuento(f: Factura) -> Decimal:
+    """Parte del subtotal de la factura que efectivamente se cobró, sin
+    impuesto: (subtotal - descuento) / subtotal. 1 si no hay subtotal."""
+    subtotal = _dec(f.subtotal)
+    if subtotal <= 0:
+        return Decimal("1")
+    return max(Decimal("0"), (subtotal - _dec(f.descuento)) / subtotal)
+
+
+def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[Tuple[ServicioConsulta, Factura, Decimal]]:
+    """(línea, factura PAGADA que la cobró, monto cobrado por esa línea) del
+    encargado en el rango.
+
+    El monto es lo COBRADO, no el precio de lista de la línea: el subtotal de
+    su DetalleFactura prorrateado por el descuento de la factura. Así la
+    comisión nunca se calcula sobre plata que no entró."""
     base_filtros = [
         ServicioConsulta.is_deleted == False,  # noqa: E712
         ServicioConsulta.facturado == True,  # noqa: E712
@@ -196,22 +210,27 @@ def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[
     # 1) Factura por DetalleFactura.servicio_id (cobro por orden, servicio
     #    directo, caja rápida...).
     por_detalle = (
-        db.query(ServicioConsulta, Factura)
+        db.query(ServicioConsulta, Factura, DetalleFactura)
         .join(DetalleFactura, DetalleFactura.servicio_id == ServicioConsulta.id)
         .join(Factura, Factura.id == DetalleFactura.factura_id)
         .outerjoin(Consulta, Consulta.id == ServicioConsulta.consulta_id)
         .filter(*base_filtros)
         .all()
     )
-    pares: Dict[Tuple[int, int], Tuple[ServicioConsulta, Factura]] = {}
-    con_detalle = set()
-    for s, f in por_detalle:
-        pares[(s.id, f.id)] = (s, f)
-        con_detalle.add(s.id)
+    pares: Dict[Tuple[int, int], Tuple[ServicioConsulta, Factura, Decimal]] = {}
+    for s, f, d in por_detalle:
+        cobrado = _centavos(_dec(d.subtotal) * _factor_descuento(f))
+        previo = pares.get((s.id, f.id))
+        # Una misma línea podría estar en dos detalles de la misma factura:
+        # se suman (el par sigue siendo uno solo para el candado de pago).
+        pares[(s.id, f.id)] = (s, f, cobrado + (previo[2] if previo else Decimal("0")))
 
     # 2) Honorario facturado por el endpoint de compatibilidad from-consulta:
     #    la línea no lleva servicio_id y la factura se enlaza por consulta_id.
-    #    Si hubiera más de una PAGADA, se toma la más reciente.
+    #    Solo aplica a líneas CONSULTA que NUNCA tuvieron un DetalleFactura
+    #    propio, en ninguna factura y sin importar el rango: si no, una línea
+    #    cobrada por detalle fuera del rango se emparejaba además con otra
+    #    factura de la consulta y la comisión se pagaba dos veces.
     por_consulta = (
         db.query(ServicioConsulta, Factura)
         .join(Consulta, Consulta.id == ServicioConsulta.consulta_id)
@@ -220,11 +239,20 @@ def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[
         .order_by(Factura.fecha_emision.desc(), Factura.id.desc())
         .all()
     )
+    candidatas = {s.id for s, _ in por_consulta}
+    con_detalle_alguna_vez = {
+        r[0] for r in db.query(DetalleFactura.servicio_id)
+        .filter(DetalleFactura.servicio_id.in_(candidatas or {0}))
+        .distinct()
+        .all()
+    }
+    tomadas = set()
     for s, f in por_consulta:
-        if s.id in con_detalle:
+        if s.id in con_detalle_alguna_vez or s.id in tomadas:
             continue
-        con_detalle.add(s.id)
-        pares[(s.id, f.id)] = (s, f)
+        tomadas.add(s.id)
+        cobrado = _centavos(_dec(s.cantidad) * _dec(s.precio_unitario) * _factor_descuento(f))
+        pares[(s.id, f.id)] = (s, f, cobrado)
     return list(pares.values())
 
 
@@ -245,7 +273,7 @@ def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=No
     if not pares:
         return []
 
-    servicio_ids = {s.id for s, _ in pares}
+    servicio_ids = {s.id for s, _, _ in pares}
     ya_liquidados = set(
         db.query(LiquidacionComisionDetalle.servicio_id, LiquidacionComisionDetalle.factura_id)
         .filter(
@@ -257,18 +285,18 @@ def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=No
     # Consultas ya pagadas con la tarifa fija (Unidad E): nunca más comisión.
     consultas_tarifa_fija = {
         r[0] for r in db.query(LiquidacionDetalle.consulta_id)
-        .filter(LiquidacionDetalle.consulta_id.in_({s.consulta_id for s, _ in pares if s.consulta_id}))
+        .filter(LiquidacionDetalle.consulta_id.in_({s.consulta_id for s, _, _ in pares if s.consulta_id}))
         .all()
     }
-    numeros = _numeros_orden(db, (s.orden_id for s, _ in pares))
+    numeros = _numeros_orden(db, (s.orden_id for s, _, _ in pares))
 
     lineas = []
-    for s, f in pares:
+    for s, f, cobrado in pares:
         if (s.id, f.id) in ya_liquidados:
             continue
         if s.tipo_servicio == "CONSULTA" and s.consulta_id in consultas_tarifa_fija:
             continue
-        subtotal = _centavos(_dec(s.cantidad) * _dec(s.precio_unitario))
+        subtotal = cobrado
         enc, ami = _repartir(subtotal, porcentaje)
         lineas.append(Linea(
             servicio_id=s.id,
