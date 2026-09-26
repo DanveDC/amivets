@@ -188,6 +188,12 @@ def actualizar_servicio_impl(
             detail="No se puede cambiar la cantidad de un servicio en EJECUTADO/FACTURADO; revertí el estado primero",
         )
 
+    # Editar los consumos de un servicio que todavía no consume actualiza lo
+    # previsto: si no, al ejecutarse se usaba lo que se indicó al agregarlo
+    # (fix de revisión).
+    if toca_consumos and nuevo_estado not in consumo_service.ESTADOS_CONSUMIDOS:
+        consumo_service.guardar_consumo_previsto(db, servicio, consumos_override, reemplazar=True)
+
     # --- Fila 11 de la matriz (etapa 5): EN_PROCESO -> EJECUTADO de un
     # servicio despachado a un area es una transicion con gate propio, mas
     # fino que el require_roles del endpoint (que solo filtra por rol, no por

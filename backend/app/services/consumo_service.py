@@ -78,9 +78,12 @@ def overrides_from_payload(consumos) -> dict:
     return out
 
 
-def guardar_consumo_previsto(db: Session, servicio: ServicioConsulta, consumos) -> None:
-    """Guarda el consumo real indicado al agregar el servicio a una orden
-    (ver ConsumoPrevisto). No descuenta stock: eso pasa al ejecutar."""
+def guardar_consumo_previsto(db: Session, servicio: ServicioConsulta, consumos, reemplazar: bool = False) -> None:
+    """Guarda el consumo real indicado para un servicio que todavía no se
+    ejecutó (ver ConsumoPrevisto). No descuenta stock: eso pasa al ejecutar.
+    Con `reemplazar`, lo nuevo sustituye a lo guardado (edición del servicio)."""
+    if reemplazar:
+        db.query(ConsumoPrevisto).filter(ConsumoPrevisto.servicio_consulta_id == servicio.id).delete()
     for inv_id, cantidad in overrides_from_payload(consumos).items():
         db.add(ConsumoPrevisto(servicio_consulta_id=servicio.id, inventario_id=inv_id, cantidad=cantidad))
 
@@ -181,9 +184,10 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
     if _ya_consumido(db, servicio.id):
         return []
 
-    # Sin override explicito, se usa el consumo indicado al agregar el
-    # servicio a la orden (ConsumoPrevisto), si lo hay.
-    overrides = overrides or consumo_previsto(db, servicio.id)
+    # El consumo indicado al agregar el servicio a la orden (ConsumoPrevisto)
+    # es la base; un override explicito lo pisa material por material, no
+    # entero (un override parcial no debe tirar el resto de lo previsto).
+    overrides = {**consumo_previsto(db, servicio.id), **(overrides or {})}
     necesidades = _necesidades(db, servicio, overrides)
     if not necesidades:
         return []
@@ -197,6 +201,9 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
             continue
 
         necesita = _q(necesita)
+        if necesita <= 0:
+            # Override en 0 = "no se usó": no hay nada que descontar.
+            continue
         unidad = inv.unidad_medida or UNIDAD_DEFAULT
 
         if inv.stock_actual < necesita:

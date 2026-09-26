@@ -429,7 +429,9 @@ async function confirmarAnexo() {
         precio_unitario: _svcSeleccionado.precio_ref,
     };
     if (_consumos.length) {
-        body.consumos = _consumos.filter(c => c.cantidad > 0).map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
+        // Se mandan también los 0 ("no se usó"): si se omitían, al ejecutar
+        // se descontaba la cantidad de la receta (fix de revisión).
+        body.consumos = _consumos.filter(c => c.cantidad >= 0).map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
     }
     try {
         const resp = await fetchAPI(`/ordenes/${_ordenId}/servicios`, { method: 'POST', body: JSON.stringify(body) });

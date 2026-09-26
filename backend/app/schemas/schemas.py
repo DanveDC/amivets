@@ -169,7 +169,9 @@ class ConsumoMaterialOverride(BaseModel):
     receta sin override usan la cantidad estandar de la receta.
     """
     inventario_id: int = Field(..., gt=0)
-    cantidad: Decimal = Field(..., gt=0)
+    # 0 = "no se usó" ese material (fix de revisión): antes se rechazaba y el
+    # front lo omitía, así que terminaba descontándose la receta.
+    cantidad: Decimal = Field(..., ge=0)
 
 
 class ServicioConsultaBase(BaseModel):
