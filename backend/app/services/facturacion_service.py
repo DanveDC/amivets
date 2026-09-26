@@ -1,3 +1,4 @@
+import re
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
@@ -378,7 +379,7 @@ class FacturacionService:
         return factura
     
     @staticmethod
-    def anular_factura(db: Session, factura_id: int) -> Optional[Factura]:
+    def anular_factura(db: Session, factura_id: int, usuario_id: Optional[int] = None) -> Optional[Factura]:
         """
         Anula una factura y devuelve el stock al inventario
         """
@@ -424,6 +425,19 @@ class FacturacionService:
                 orden_a_revertir = (
                     db.query(OrdenServicio)
                     .filter(OrdenServicio.id == orden_ids.pop())
+                    .with_for_update()
+                    .first()
+                )
+
+        # Venta de caja rápida solo con productos: la factura no tiene líneas
+        # de servicio, así que la orden se encuentra por la referencia que
+        # caja_rapida_service deja en las observaciones (fix de revisión).
+        if orden_a_revertir is None and factura.observaciones:
+            m = re.search(r"orden (OS-\d+)", factura.observaciones)
+            if m:
+                orden_a_revertir = (
+                    db.query(OrdenServicio)
+                    .filter(OrdenServicio.numero == m.group(1), OrdenServicio.origen == "CAJA_RAPIDA")
                     .with_for_update()
                     .first()
                 )
@@ -502,8 +516,7 @@ class FacturacionService:
         # Anular su factura deshace la venta: la orden queda ANULADA.
         if orden_a_revertir is not None and orden_a_revertir.estado == "FACTURADA":
             if orden_a_revertir.origen == "CAJA_RAPIDA":
-                orden_a_revertir.estado = "ANULADA"
-                orden_a_revertir.motivo_anulacion = f"Factura {factura.numero_factura} anulada"
+                FacturacionService._anular_orden_caja(db, orden_a_revertir, factura, usuario_id)
             else:
                 orden_a_revertir.estado = "CERRADA"
 
@@ -722,25 +735,51 @@ class FacturacionService:
         return factura
 
     @staticmethod
+    def _anular_orden_caja(db: Session, orden: OrdenServicio, factura: Factura, usuario_id: Optional[int]) -> None:
+        """Deshace una venta de caja rápida: igual que orden_service.anular_orden,
+        devuelve el material consumido por sus servicios y los deja CANCELADO,
+        y la orden queda ANULADA. No commitea: lo hace anular_factura."""
+        servicios = (
+            db.query(ServicioConsulta)
+            .filter(ServicioConsulta.orden_id == orden.id, ServicioConsulta.is_deleted == False)  # noqa: E712
+            .all()
+        )
+        for servicio in servicios:
+            if servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
+                consumo_service.revertir_para_servicio(db, servicio, usuario_id=usuario_id)
+            servicio.estado = "CANCELADO"
+        orden.estado = "ANULADA"
+        orden.anulada_por_id = usuario_id
+        orden.motivo_anulacion = f"Factura {factura.numero_factura} anulada"
+
+    @staticmethod
     def _detalle_de_item_orden(it: dict) -> DetalleFacturaCreate:
-        """Línea de factura para un ítem pendiente de una orden.
+        """Línea de factura para un ítem pendiente de una orden."""
+        return FacturacionService.linea_factura(
+            it["descripcion"], it["cantidad"], it["precio_unitario"], servicio_id=it["id_interno"],
+        )
+
+    @staticmethod
+    def linea_factura(descripcion, cantidad, precio, servicio_id=None, producto_id=None) -> DetalleFacturaCreate:
+        """DetalleFacturaCreate sin perder plata por el redondeo.
 
         DetalleFactura.cantidad es Integer, pero ServicioConsulta.cantidad es
         Float (una orden acepta 0.5). Redondear la cantidad cobraba mal (0.5 ->
         0, 2.5 -> 2 con el redondeo bancario de Python) y la línea quedaba
         igual marcada como facturada. Una cantidad fraccionaria se factura como
         1 unidad por el subtotal exacto, con la cantidad real en la descripción.
+        Las líneas de PRODUCTO mantienen el redondeo: ahí la cantidad mueve
+        stock en unidades enteras.
         """
-        cantidad = float(it["cantidad"] or 1)
-        precio = float(it["precio_unitario"] or 0.0)
-        descripcion = it["descripcion"]
-        if cantidad.is_integer():
+        cantidad = float(cantidad or 1)
+        precio = float(precio or 0.0)
+        if cantidad.is_integer() or producto_id:
             return DetalleFacturaCreate(
-                producto_id=None, servicio_id=it["id_interno"],
-                cantidad=int(cantidad), precio_unitario=precio, descripcion=descripcion,
+                producto_id=producto_id, servicio_id=servicio_id,
+                cantidad=int(round(cantidad)), precio_unitario=precio, descripcion=descripcion,
             )
         return DetalleFacturaCreate(
-            producto_id=None, servicio_id=it["id_interno"],
+            producto_id=producto_id, servicio_id=servicio_id,
             cantidad=1, precio_unitario=round(cantidad * precio, 2),
             descripcion=f"{descripcion} ({cantidad:g} × {precio:.2f})"[:255],
         )
