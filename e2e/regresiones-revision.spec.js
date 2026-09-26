@@ -292,6 +292,25 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     expect(detalle.servicios.every((s) => s.estado === 'CANCELADO')).toBe(true);
   });
 
+  test('2b. una nota libre en las observaciones de otra factura no anula una venta de caja ajena', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const p = await createTestProduct(request, { stock_actual: 5, precio_unitario: 100 }, admin);
+    const prop = await createTestPropietario(request, {}, admin);
+    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 1 }] }, admin);
+    expect(r.status()).toBe(201);
+    const [orden] = await (await request.get(`/api/ordenes/?propietario_id=${prop.id}`, { headers: authHeaders(admin) })).json();
+
+    const manual = await request.post('/api/facturas/', {
+      headers: authHeaders(admin),
+      data: { propietario_id: prop.id, observaciones: `Reintegro orden ${orden.numero}`, total_pagado: 0,
+              detalles: [{ descripcion: 'Ajuste manual', cantidad: 1, precio_unitario: 10 }] },
+    });
+    expect(manual.status(), await manual.text()).toBe(201);
+    await request.post(`/api/facturas/${(await manual.json()).id}/anular`, { headers: authHeaders(admin) });
+    const [despues] = await (await request.get(`/api/ordenes/?propietario_id=${prop.id}`, { headers: authHeaders(admin) })).json();
+    expect(despues.estado).toBe('FACTURADA');
+  });
+
   test('7c. anular una venta de caja rápida solo de productos también anula su orden', async ({ request }) => {
     const admin = await getAdminToken(request);
     const p = await createTestProduct(request, { stock_actual: 5, precio_unitario: 100 }, admin);
@@ -338,6 +357,41 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     expect(f.detalles[0].servicio_id ?? null).toBeNull();
     expect(f.total).toBeCloseTo(c0.precio_consulta, 2);
     await anularTestFactura(request, f.id, admin);
+  });
+
+  test('1c. el honorario que le falta a la orden se agrega y se cobra con ella', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id, precio_consulta: 25000 }, admin);
+    const srv = await anexarServicioConsulta(request, consulta.id, { precio_unitario: 1000 }, admin);
+    const c0 = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(admin) })).json();
+    const linea = c0.servicios.find((x) => x.tipo_servicio === 'CONSULTA');
+    await request.delete(`/api/servicios/${linea.id}`, { headers: authHeaders(admin) });
+    const c1 = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(admin) })).json();
+    expect(c1.orden_id).toBe(srv.orden_id);
+    expect(c1.honorario_en_orden).toBe(false);
+
+    // UI: ofrece "Ir a la orden" y "Agregar honorario a la orden".
+    await loginAdmin(page);
+    await gotoSection(page, 'sec-consultorio');
+    const nombreBase = mascota.nombre.split(' ')[0];
+    await page.fill('#consultorioSearchMascota', nombreBase);
+    await page.locator('#consultorioMascotasList .pet-list-item', { hasText: nombreBase }).first().click();
+    await page.click('.pet-nav-item[data-tab="consultas"]');
+    const seccion = page.locator('#sec-consultorio');
+    await expect(seccion.getByRole('button', { name: /Ir a la orden/ })).toBeVisible({ timeout: 15000 });
+    page.once('dialog', (d) => d.accept());
+    await seccion.getByRole('button', { name: /Agregar honorario a la orden/ }).click();
+    await expect(page.locator('.notification-toast', { hasText: /Honorario agregado/ }).first()).toBeVisible({ timeout: 10000 });
+    await expect(seccion.getByRole('button', { name: /Agregar honorario a la orden/ })).toHaveCount(0);
+
+    // La orden ahora lista el honorario para cobrarlo, y no se puede agregar dos veces.
+    const pend = await (await request.get(`/api/ordenes/${srv.orden_id}/pendientes-facturar`, { headers: authHeaders(admin) })).json();
+    expect(pend.items.some((it) => it.descripcion === 'Consulta veterinaria' && it.precio_unitario === 25000)).toBe(true);
+    const otra = await request.post(`/api/consultas/${consulta.id}/honorario-en-orden`, { headers: authHeaders(admin), data: {} });
+    expect(otra.status()).toBe(409);
   });
 
   test('9b. una consulta sin línea CONSULTA pero con servicios llega a su orden por ellos', async ({ request }) => {
