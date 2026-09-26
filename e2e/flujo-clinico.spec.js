@@ -106,6 +106,11 @@ test.describe.serial('Flujo clínico — Propietario → Mascota → Cita → Co
     await page.fill('#propietarioDireccion', 'Av. Siempreviva 742');
     await page.click('#formPropietario button[type="submit"]');
     await expect(page.locator('#modalPropietario')).toBeHidden();
+    // propietario-a-mascota: el alta lleva directo al form de mascota. Acá no
+    // se carga ninguna, así que se cierra para seguir con la edición.
+    await expect(page.locator('#modalMascota')).toBeVisible();
+    await page.click('#modalMascota .close[data-modal="modalMascota"]');
+    await expect(page.locator('#modalMascota')).toBeHidden();
 
     // Contraste API: el alta debe existir y estar activa.
     const listRes = await request.get('/api/propietarios/?activo=true', { headers: authHeaders(S.token) });
