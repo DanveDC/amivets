@@ -187,7 +187,9 @@ def listar_ordenes(
             .filter(
                 ServicioConsulta.orden_id == OrdenServicio.id,
                 ServicioConsulta.is_deleted == False,  # noqa: E712
-                ServicioConsulta.estado != "CANCELADO",
+                # NULL cuenta como pendiente, igual que en
+                # obtener_items_pendientes_orden (filas viejas/migradas).
+                or_(ServicioConsulta.estado != "CANCELADO", ServicioConsulta.estado.is_(None)),
                 or_(ServicioConsulta.facturado == False, ServicioConsulta.facturado.is_(None)),  # noqa: E712
             )
             .exists()
