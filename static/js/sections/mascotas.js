@@ -16,7 +16,7 @@
 import { fetchAPI } from '../core/api.js';
 import { escapeHtml, openModal } from '../core/ui.js';
 import { showSection } from '../core/router.js';
-import { seleccionarMascota, ownerSelectInstance, whenCustomSelectsReady } from './consultorio.js';
+import { seleccionarMascota, refrescarPropietariosSelect } from './consultorio.js';
 
 let especieActiva = '';
 let searchTimer = null;
@@ -68,15 +68,8 @@ function wireNuevaMascota() {
         // sec-mascotas puede correr antes de que consultorio.js termine de
         // armar el select -- ownerSelectInstance sigue null, `?.setOptions`
         // no-opea en silencio y el combo del modal queda vacío sin aviso.
-        await whenCustomSelectsReady();
         try {
-            const propietarios = await fetchAPI('/propietarios/');
-            const ownerOptions = propietarios.map((p) => ({
-                value: p.id,
-                label: `${p.nombre} ${p.apellido}`,
-                subtext: `Cédula: ${p.cedula}`,
-            }));
-            ownerSelectInstance?.setOptions(ownerOptions);
+            await refrescarPropietariosSelect();
         } catch (_) { /* el modal igual abre, sólo no se refresca el combo */ }
         openModal('modalMascota');
     });

@@ -97,6 +97,26 @@ def actualizar_area(
     return area
 
 
+@router.get("/{area_id}/gestores")
+def listar_gestores(area_id: int, db: Session = Depends(get_db), _: Usuario = Depends(require_roles("admin"))):
+    """Gestores de un área (areas-y-gestores): para la pantalla "Áreas y
+    gestores". Solo usuarios; los inactivos se marcan para poder quitarlos."""
+    area = db.query(AreaServicio).filter(AreaServicio.id == area_id).first()
+    if not area:
+        raise HTTPException(status_code=404, detail="Área no encontrada")
+    filas = (
+        db.query(GestorArea, Usuario)
+        .join(Usuario, Usuario.id == GestorArea.usuario_id)
+        .filter(GestorArea.area_id == area_id)
+        .order_by(Usuario.username)
+        .all()
+    )
+    return [
+        {"usuario_id": u.id, "username": u.username, "role": u.role, "activo": bool(u.is_active)}
+        for _, u in filas
+    ]
+
+
 @router.post(
     "/{area_id}/gestores",
     response_model=GestorAreaResponse,

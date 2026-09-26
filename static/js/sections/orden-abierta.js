@@ -30,6 +30,7 @@ import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
 import { money, totalServicios } from '../core/format.js';
 import { showSection } from '../core/router.js';
+import { getRole } from '../core/session.js';
 
 const ESTADO_LABEL_ORDEN = { ABIERTA: 'Abierta', EN_ATENCION: 'En atención', CERRADA: 'Cerrada', ANULADA: 'Anulada' };
 
@@ -165,8 +166,42 @@ function pintarMeta(orden) {
     document.getElementById('oaMetaApertura').textContent = orden.fecha_apertura
         ? new Date(orden.fecha_apertura).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         : '—';
-    document.getElementById('oaMetaVeterinario').textContent = orden.veterinario_nombre || 'Sin asignar';
+    pintarVeterinario(orden);
     document.getElementById('oaMetaEstado').textContent = ESTADO_LABEL_ORDEN[orden.estado] || orden.estado;
+}
+
+// Veterinario de la orden: admin y recepción lo pueden cambiar mientras la
+// orden admite trabajo (PUT /ordenes/{id}/veterinario, orden-veterinario-y-
+// tutores); el resto solo lo ve.
+async function pintarVeterinario(orden) {
+    const el = document.getElementById('oaMetaVeterinario');
+    if (!el) return;
+    const puedeCambiar = ['admin', 'recepcionista'].includes(getRole())
+        && ['ABIERTA', 'EN_ATENCION'].includes(orden.estado);
+    if (!puedeCambiar) {
+        el.textContent = orden.veterinario_nombre || 'Sin asignar';
+        return;
+    }
+    try {
+        const vets = await fetchAPI('/usuarios/veterinarios');
+        el.innerHTML = `<select id="oaVeterinarioSelect" aria-label="Veterinario de la orden" style="max-width: 160px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit;">
+            <option value="">Sin asignar</option>
+            ${(vets || []).map(v => `<option value="${v.id}" ${v.id === orden.veterinario_id ? 'selected' : ''}>${escapeHtml(v.username)}</option>`).join('')}
+        </select>`;
+        document.getElementById('oaVeterinarioSelect')?.addEventListener('change', async (e) => {
+            const vetId = Number(e.target.value);
+            if (!vetId) return;
+            try {
+                await fetchAPI(`/ordenes/${_ordenId}/veterinario`, { method: 'PUT', body: JSON.stringify({ veterinario_id: vetId }) });
+                showNotification('Veterinario asignado.', 'success');
+                await cargarOrden();
+            } catch (err) {
+                showNotification('No se pudo asignar el veterinario: ' + err.message, 'error');
+            }
+        });
+    } catch (_) {
+        el.textContent = orden.veterinario_nombre || 'Sin asignar';
+    }
 }
 
 function pintarAcciones(orden) {

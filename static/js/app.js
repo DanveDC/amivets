@@ -143,13 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await consultorio.whenCustomSelectsReady();
         // Refresh owners list when opening pet registration
         try {
-            const propietariosList = await fetchAPI('/propietarios/');
-            const ownerOptions = propietariosList.map(p => ({
-                value: p.id,
-                label: `${p.nombre} ${p.apellido}`,
-                subtext: `Cédula: ${p.cedula}`
-            }));
-            consultorio.ownerSelectInstance?.setOptions(ownerOptions);
+            await consultorio.refrescarPropietariosSelect();
         } catch (e) { }
         openModal('modalMascota');
     });

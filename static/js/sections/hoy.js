@@ -14,7 +14,7 @@
 // podría exponer esos dos campos ya agregados en el listado.
 
 import { fetchAPI } from '../core/api.js';
-import { showNotification, openModal, closeModal, debounce } from '../core/ui.js';
+import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
 import { money, totalServicios, fechaLargaEsVE } from '../core/format.js';
 import { getRole, getUserId, whenReady } from '../core/session.js';
 import {
@@ -182,7 +182,7 @@ const pintarOrdenes = () => {
     const estados = FILTRO_ESTADOS[_filtroActual];
     const filtradas = estados ? _ordenesCache.filter(o => estados.includes(o.estado)) : _ordenesCache;
     if (filtradas.length === 0) {
-        body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes en este filtro.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes en este filtro.</td></tr>';
         return;
     }
     body.innerHTML = filtradas.map(o => `
@@ -190,6 +190,7 @@ const pintarOrdenes = () => {
             <td><span class="num pd-order-link">${o.numero}</span></td>
             <td style="font-weight:500;">${o.mascota_nombre || '—'}</td>
             <td style="color:var(--text-secondary);">${o.propietario_nombre || '—'}</td>
+            <td style="color:var(--text-secondary);">${escapeHtml(o.veterinario_nombre || 'Sin asignar')}</td>
             <td class="num" style="color:var(--text-secondary);">${o._serviciosCount ?? '—'}</td>
             <td class="num" style="font-weight:500;">${o._total != null ? money(o._total) : '—'}</td>
             <td><span class="av-pill ${ESTADO_PILL[o.estado] || 'av-pill--neutral'}">${ESTADO_LABEL[o.estado] || o.estado}</span></td>
@@ -328,25 +329,66 @@ export const abrirNuevaConsultaFlow = () => {
 };
 
 // ── flujo: nueva orden de servicio ──────────────────────────────────────────
-// Abre el selector de paciente y, con la mascota elegida, abre la orden
-// (propietario_id se deriva de la mascota — POST /api/ordenes/ lo exige).
+// Elegido el paciente, se abre #modalAbrirOrden para asignar veterinario y
+// motivo ANTES de crear la orden (orden-veterinario-y-tutores): antes se creaba
+// en el acto sin veterinario y no aparecía en el panel de ninguno.
+let _abrirOrdenPaciente = null; // { mascotaId, nombre, propietarioId }
+
 export const abrirNuevaOrdenFlow = () => {
     abrirSelectorMascota('Nueva orden — elegí el paciente', async (mascotaId, nombre, propietarioId) => {
         if (!propietarioId) {
             showNotification('Ese paciente no tiene un propietario asociado; no se puede abrir la orden.', 'error');
             return;
         }
-        try {
-            const orden = await fetchAPI('/ordenes/', {
-                method: 'POST',
-                body: JSON.stringify({ propietario_id: propietarioId, mascota_id: mascotaId }),
-            });
-            showNotification(`Orden ${orden.numero} abierta.`, 'success');
-            abrirOrden(orden.id);
-        } catch (err) {
-            showNotification('No se pudo abrir la orden: ' + err.message, 'error');
-        }
+        _abrirOrdenPaciente = { mascotaId, nombre, propietarioId };
+        const label = document.getElementById('abrirOrdenPaciente');
+        if (label) label.textContent = `Paciente: ${nombre || ('#' + mascotaId)}`;
+        const motivo = document.getElementById('abrirOrdenMotivo');
+        if (motivo) motivo.value = '';
+        await cargarVeterinariosAbrirOrden();
+        openModal('modalAbrirOrden');
     });
+};
+
+const cargarVeterinariosAbrirOrden = async () => {
+    const select = document.getElementById('abrirOrdenVeterinario');
+    if (!select) return;
+    try {
+        const vets = await fetchAPI('/usuarios/veterinarios');
+        select.innerHTML = '<option value="">Seleccioná un veterinario...</option>' +
+            (vets || []).map(v => `<option value="${v.id}">${escapeHtml(v.username)}</option>`).join('');
+        // Un veterinario que abre una orden queda asignado a sí mismo.
+        if (getRole() === 'veterinario' && getUserId()) select.value = String(getUserId());
+    } catch (e) {
+        showNotification('No se pudieron cargar los veterinarios: ' + e.message, 'error');
+    }
+};
+
+const confirmarAbrirOrden = async () => {
+    if (!_abrirOrdenPaciente) return;
+    const vetId = Number(document.getElementById('abrirOrdenVeterinario')?.value);
+    if (!vetId) {
+        showNotification('Elegí el veterinario que va a atender la orden.', 'warning');
+        return;
+    }
+    const motivo = document.getElementById('abrirOrdenMotivo')?.value.trim() || null;
+    try {
+        const orden = await fetchAPI('/ordenes/', {
+            method: 'POST',
+            body: JSON.stringify({
+                propietario_id: _abrirOrdenPaciente.propietarioId,
+                mascota_id: _abrirOrdenPaciente.mascotaId,
+                veterinario_id: vetId,
+                motivo_visita: motivo,
+            }),
+        });
+        closeModal('modalAbrirOrden');
+        _abrirOrdenPaciente = null;
+        showNotification(`Orden ${orden.numero} abierta.`, 'success');
+        abrirOrden(orden.id);
+    } catch (err) {
+        showNotification('No se pudo abrir la orden: ' + err.message, 'error');
+    }
 };
 
 // ── flujo: agregar servicio directo ─────────────────────────────────────────
@@ -424,6 +466,7 @@ const cobrarServicioDirecto = async (servicio) => {
 // ── wiring (una sola vez) ────────────────────────────────────────────────────
 export const initHoy = () => {
     document.getElementById('btnHoyNuevaOrden')?.addEventListener('click', abrirNuevaOrdenFlow);
+    document.getElementById('btnConfirmarAbrirOrden')?.addEventListener('click', (e) => submitWithLoading(e.currentTarget, confirmarAbrirOrden));
     document.getElementById('btnHoyServicioDirecto')?.addEventListener('click', abrirServicioDirectoFlow);
     document.getElementById('btnNuevoConsulta')?.addEventListener('click', () => {
         document.getElementById('avNewMenu')?.removeAttribute('open');

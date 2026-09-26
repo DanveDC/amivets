@@ -18,6 +18,7 @@ import { escapeHtml } from './ui.js';
 import { getRole } from './session.js';
 import { abrirOrden } from '../sections/orden-abierta.js';
 import { abrirPreviewFactura } from '../sections/facturacion.js';
+import { verMascotasPropietario } from '../sections/propietarios.js';
 
 // Roles sin acceso a la búsqueda global (Decisión 4, navegacion-v2.md, regla
 // 5): el gestor sólo ve sus propios servicios/orden de origen, un buscador
@@ -197,7 +198,7 @@ async function runSearch(q) {
             console.info('[cmdk] /propietarios/?search no disponible — filtrando client-side.');
         }
         try {
-            const all = await fetchAPI('/propietarios/');
+            const all = await fetchAPI('/propietarios/?activo=true&limit=1000');
             if (token !== queryToken) return;
             const needle = q.toLowerCase();
             owners = (Array.isArray(all) ? all : []).filter(p =>
@@ -353,7 +354,9 @@ function activate(i) {
             window.seleccionarMascota(r.id, r.data.nombre, r.data.especie, r.data.codigo_historia);
         }
     } else if (r.type === 'propietario') {
-        showSection('sec-propietarios');
+        // Todas las mascotas del tutor elegido, no el listado general de
+        // propietarios (orden-veterinario-y-tutores).
+        verMascotasPropietario(r.id, r.label);
     } else if (r.type === 'orden') {
         abrirOrden(r.id);
     } else if (r.type === 'factura') {

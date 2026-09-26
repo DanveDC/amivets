@@ -141,7 +141,9 @@ const abrirTransferirMascota = async (id, nombre) => {
         document.getElementById('transferNuevoPropietarioId').value = '';
         document.getElementById('transferMotivo').value = '';
 
-        const propietarios = await fetchAPI('/propietarios/');
+        // limit explícito: sin él el API corta en 100 y la mayoría de los
+        // tutores no aparecían (orden-veterinario-y-tutores).
+        const propietarios = await fetchAPI('/propietarios/?activo=true&limit=1000');
         const activePropietarios = propietarios.filter(p => p.activo !== false);
         const ownerOptions = activePropietarios.map(p => ({
             value: p.id,
@@ -194,6 +196,36 @@ export const handleTransferirSubmit = async (e) => {
 let _customSelectsReadyPromise = null;
 export const whenCustomSelectsReady = () => _customSelectsReadyPromise || Promise.resolve();
 
+// Opciones del selector de propietario del alta de mascota, con TODOS los
+// propietarios activos (limit explícito: sin él el API corta en 100). Lo usan
+// el alta desde el listado, el botón del menú y el alta encadenada después de
+// crear un propietario (orden-veterinario-y-tutores, propietario-a-mascota).
+export const refrescarPropietariosSelect = async () => {
+    await whenCustomSelectsReady();
+    const propietarios = await fetchAPI('/propietarios/?activo=true&limit=1000');
+    ownerSelectInstance?.setOptions(propietarios.map(p => ({
+        value: p.id,
+        label: `${p.nombre} ${p.apellido}`,
+        subtext: `Cédula: ${p.cedula}`,
+    })));
+    return propietarios;
+};
+
+// Alta de mascota con el propietario ya elegido: se usa al terminar de crear
+// un propietario, para seguir de corrido con su mascota (propietario-a-mascota).
+export const abrirNuevaMascotaParaPropietario = async (propietario) => {
+    document.getElementById('formMascota')?.reset();
+    try {
+        await refrescarPropietariosSelect();
+    } catch (_) { /* el combo queda con lo que tenía; igual se preselecciona */ }
+    const label = `${propietario.nombre} ${propietario.apellido}`;
+    ownerSelectInstance?.setValue(propietario.id, label);
+    const hidden = document.getElementById('mascotaPropietarioId');
+    if (hidden) hidden.value = propietario.id;
+    openModal('modalMascota');
+    document.getElementById('mascotaNombre')?.focus();
+};
+
 export const initCustomSelects = () => {
     _customSelectsReadyPromise = _doInitCustomSelects();
     return _customSelectsReadyPromise;
@@ -209,7 +241,8 @@ const _doInitCustomSelects = async () => {
 
     // 2. Owner Select for Registration
     try {
-        const propietarios = await fetchAPI('/propietarios/');
+        // limit explícito: sin él el API corta en 100 (orden-veterinario-y-tutores).
+        const propietarios = await fetchAPI('/propietarios/?activo=true&limit=1000');
         const ownerOptions = propietarios.map(p => ({
             value: p.id,
             label: `${p.nombre} ${p.apellido}`,

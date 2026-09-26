@@ -907,6 +907,23 @@ class CatalogoServicioCreate(CatalogoServicioBase):
     requiere_adjunto: Optional[bool] = None
 
 
+class CostoRecetaLinea(BaseModel):
+    inventario_id: int
+    nombre: str
+    cantidad: float
+    unidad: Optional[str] = None
+    costo_unitario: float  # por unidad base (ml, g o unidad)
+    subtotal: float
+
+
+class CostoServicioResponse(BaseModel):
+    """Costo de los insumos de la receta de un servicio del catálogo
+    (catalogo-servicios-configurable): base para fijar su precio."""
+    servicio_id: int
+    total: float
+    lineas: List[CostoRecetaLinea] = []
+
+
 class CatalogoServicioUpdate(BaseModel):
     nombre: Optional[str] = Field(None, min_length=1, max_length=255)
     categoria: Optional[str] = Field(None, min_length=1, max_length=100)

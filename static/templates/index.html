@@ -774,6 +774,8 @@
                         <select id="userRole" required>
                             <option value="user">Usuario Estándar</option>
                             <option value="veterinario">Veterinario</option>
+                            <option value="recepcionista">Recepcionista</option>
+                            <option value="gestor">Gestor de área</option>
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
@@ -807,6 +809,8 @@
                         <select id="editRole" required>
                             <option value="user">Usuario Estándar</option>
                             <option value="veterinario">Veterinario</option>
+                            <option value="recepcionista">Recepcionista</option>
+                            <option value="gestor">Gestor de área</option>
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
@@ -877,6 +881,32 @@
             </div>
         </div>
 
+        <!-- Modal: abrir orden (orden-veterinario-y-tutores): elegido el
+             paciente, se asigna el veterinario y el motivo antes de crearla. -->
+        <div id="modalAbrirOrden" class="modal">
+            <div class="modal-content" style="max-width: 480px;">
+                <div class="modal-header">
+                    <h2>Abrir orden</h2>
+                    <span class="close" data-modal="modalAbrirOrden" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <p class="text-muted" id="abrirOrdenPaciente" style="margin: 0 0 1rem;"></p>
+                <div class="form-group">
+                    <label for="abrirOrdenVeterinario">Veterinario asignado *</label>
+                    <select id="abrirOrdenVeterinario">
+                        <option value="">Seleccioná un veterinario...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="abrirOrdenMotivo">Motivo de la visita</label>
+                    <input type="text" id="abrirOrdenMotivo" maxlength="255" placeholder="Ej.: control, vacunación, baño…">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalAbrirOrden">Cancelar</button>
+                    <button type="button" class="av-btn av-btn--primary" id="btnConfirmarAbrirOrden">Abrir orden</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal: servicio directo (Tarea 09, etapa 4) -->
         <div id="modalServicioDirecto" class="modal">
             <div class="modal-content">
@@ -942,6 +972,14 @@
                  Ver docs/diseno/navegacion-v2.md, Decisión 2. -->
             <section id="sec-inicio" class="spa-section" hidden>
                 <div class="av-launcher-canvas">
+                    <!-- inicio-marca-cabecera: identidad del sistema arriba del saludo. -->
+                    <div class="av-launcher-brand" id="inicioMarca">
+                        <img src="/static/img/logo-amivets.png" alt="Logo de AmiVets" width="56" height="56">
+                        <div>
+                            <strong class="ser">AMIVETS</strong>
+                            <span>Sistema integral de gestión</span>
+                        </div>
+                    </div>
                     <div class="av-launcher-head">
                         <div>
                             <h1 id="inicioSaludo">Bienvenida</h1>
@@ -1011,7 +1049,7 @@
                                 </div>
                                 <table class="pd-table">
                                     <thead>
-                                        <tr><th>Orden</th><th>Paciente</th><th>Tutor</th><th>Servicios</th><th>Total</th><th>Estado</th></tr>
+                                        <tr><th>Orden</th><th>Paciente</th><th>Tutor</th><th>Veterinario</th><th>Servicios</th><th>Total</th><th>Estado</th></tr>
                                     </thead>
                                     <tbody id="pdOrdersBody">
                                         <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
@@ -2384,6 +2422,58 @@
                  historial de precios por servicio (Tarea 07/08) -- vivían
                  dentro del modal de edición, acá quedan siempre visibles
                  para el servicio seleccionado, igual que dibuja el boceto. -->
+            <!-- areas-y-gestores: el admin crea áreas de despacho, les asigna gestores y servicios. -->
+            <section id="sec-areas" class="content-area spa-section">
+                <div class="content-header">
+                    <h2>Áreas y gestores</h2>
+                </div>
+
+                <div class="cat-grid">
+                    <section class="cat-master">
+                        <div class="cat-master-head">
+                            <span class="rp-panel-title">Áreas</span>
+                            <button type="button" id="btnAreaNueva" class="av-btn av-btn--primary">+ Nueva área</button>
+                        </div>
+                        <div class="cat-list" id="areasLista">
+                            <p class="rp-empty-text">Cargando…</p>
+                        </div>
+                    </section>
+
+                    <section class="cat-detail" id="areaDetalle">
+                        <form id="formArea" class="ar-form">
+                            <input type="hidden" id="areaId">
+                            <div class="form-group">
+                                <label for="areaNombre">Nombre *</label>
+                                <input type="text" id="areaNombre" required maxlength="100" placeholder="Ej: Hospitalización">
+                            </div>
+                            <div class="form-group">
+                                <label for="areaCodigo">Código *</label>
+                                <input type="text" id="areaCodigo" required maxlength="50" placeholder="Ej: HOSPITALIZACION">
+                            </div>
+                            <label class="ar-check"><input type="checkbox" id="areaRequiereAdjunto"> Exige cargar un adjunto (resultado, informe, foto) al realizar el servicio</label>
+                            <label class="ar-check"><input type="checkbox" id="areaActiva" checked> Activa</label>
+                            <button type="submit" id="btnGuardarArea" class="av-btn av-btn--primary">Guardar área</button>
+                        </form>
+
+                        <div id="areaAsignaciones" hidden>
+                            <h3 class="ar-subtitle">Gestores que atienden esta área</h3>
+                            <ul id="areaGestoresLista" class="ar-lista"></ul>
+                            <div class="ar-add-row">
+                                <select id="areaGestorSelect" aria-label="Usuario para sumar como gestor"></select>
+                                <button type="button" id="btnAreaAgregarGestor" class="av-btn">Agregar gestor</button>
+                            </div>
+
+                            <h3 class="ar-subtitle">Servicios que despacha</h3>
+                            <ul id="areaServiciosLista" class="ar-lista"></ul>
+                            <div class="ar-add-row">
+                                <select id="areaServicioSelect" aria-label="Servicio del catálogo para asignar"></select>
+                                <button type="button" id="btnAreaAgregarServicio" class="av-btn">Asignar servicio</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
             <section id="sec-catalogo" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Catálogo de Servicios</h2>
@@ -2530,6 +2620,24 @@
                         <option value="PELUQUERIA">PELUQUERIA</option>
                         <option value="QUIROFANO">QUIROFANO</option>
                         <option value="SERVICIOS">SERVICIOS</option>
+                        <option value="__nueva__">Otra (nueva categoría)…</option>
+                    </select>
+                    <input type="text" id="catalogoCategoriaNueva" maxlength="100" placeholder="Nombre de la nueva categoría" hidden style="width:100%; margin-top:0.5rem;">
+                </div>
+                <!-- catalogo-servicios-configurable: área que ejecuta el servicio y
+                     exigencia de adjunto al cargar el resultado. -->
+                <div class="form-group" id="catalogoAreaGroup">
+                    <label for="catalogoArea">Área que lo ejecuta</label>
+                    <select id="catalogoArea" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md);">
+                        <option value="">Sin despacho (se ejecuta al confirmar)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="catalogoAdjuntoGroup">
+                    <label for="catalogoAdjunto">Adjunto al cargar el resultado</label>
+                    <select id="catalogoAdjunto" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md);">
+                        <option value="">Como diga el área</option>
+                        <option value="si">Obligatorio</option>
+                        <option value="no">No hace falta</option>
                     </select>
                 </div>
                 <div class="form-group">
