@@ -54,3 +54,6 @@ static/uploads/
 node_modules/
 playwright-report/
 test-results/
+
+# Respaldos locales de la base (tienen datos personales): nunca a git.
+backups/

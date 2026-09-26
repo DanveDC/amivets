@@ -1,163 +1,18 @@
 // sections/facturacion.js — facturación, abonos y previews de factura.
 // Movido verbatim desde app.js (etapa 2a). Sin cambio de comportamiento.
-// Los listeners de nivel superior (monto a pagar, submit de factura, submit de
-// abono, buscador, filtro y el click en .nav-link[data-target="sec-facturacion"])
-// se mantienen a nivel de módulo: corren una sola vez al cargar el módulo.
-// Depende de consultorio.js (currentMascotaId / cargarConsultas / actualizarCountsPet);
-// la relación es cíclica pero segura: sólo se usa dentro de handlers, nunca en la
-// evaluación del módulo.
+// Los listeners de nivel superior (submit de abono, buscador, filtro, pestañas
+// y el click en .nav-link[data-target="sec-facturacion"]) se mantienen a nivel
+// de módulo: corren una sola vez al cargar el módulo.
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
-import { ICONS, showNotification, openModal, closeModal } from '../core/ui.js';
-import { currentMascotaId, actualizarCountsPet, cargarConsultas } from './consultorio.js';
+import { ICONS, showNotification, openModal, closeModal, escapeHtml } from '../core/ui.js';
 
 // ============ FACTURACIÓN LOGIC ============
-export const facturarConsulta = async (consultaId) => {
-    // Si ya estamos cargando algo, evitamos duplicidad
-    if (window.loadingFactura) return;
-    window.loadingFactura = true;
-
-    document.getElementById('facturaConsultaId').value = consultaId;
-    document.getElementById('facturaConsultaIdTxt').textContent = `(Consulta #${consultaId})`;
-
-    const itemsList = document.getElementById('facturaItemsList');
-    itemsList.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 1rem;">Calculando items y validando precios...</p>';
-
-    try {
-        // Primero intentamos abrir el modal para que el usuario vea que algo ocurre
-        openModal('modalFactura');
-
-        const dataContext = await fetchAPI(`/facturas/pendientes/${consultaId}`);
-        window.loadingFactura = false;
-
-        if (!dataContext || !dataContext.items || dataContext.items.length === 0) {
-            itemsList.innerHTML = `<div style="text-align:center; padding: 2.5rem; color: var(--text-secondary);">
-                <div style="font-size: 2rem; margin-bottom: 1rem;">${ICONS.notePencil}</div>
-                No hay cargos pendientes para facturar en esta consulta.<br>
-                <small>Agregue servicios o medicamentos en el expediente clínico primero.</small>
-            </div>`;
-            document.getElementById('facturaTotalCalculado').textContent = '0.00';
-            return;
-        }
-
-        // Auto-populate context from backend response
-        document.getElementById('facturaPropietarioId').value = dataContext.propietario_id;
-        document.getElementById('facturaMascotaNombre').textContent = dataContext.mascota_nombre;
-        document.getElementById('facturaPropietarioNombre').textContent = dataContext.propietario_nombre;
-
-        let total = 0;
-        let html = '<table class="data-table" style="width:100%;"><thead><tr><th>Detalle</th><th>Cant.</th><th>P. Unitario</th><th>Subtotal</th></tr></thead><tbody>';
-
-        dataContext.items.forEach(item => {
-            const rowTotal = item.cantidad * item.precio_unitario;
-            total += rowTotal;
-            html += `
-                <tr>
-                    <td>${item.descripcion}</td>
-                    <td>${item.cantidad}</td>
-                    <td>$${item.precio_unitario.toFixed(2)}</td>
-                    <td style="font-weight:bold;">$${rowTotal.toFixed(2)}</td>
-                </tr>
-            `;
-        });
-
-        html += '</tbody></table>';
-        itemsList.innerHTML = html;
-        document.getElementById('facturaTotalCalculado').textContent = total.toFixed(2);
-
-        const montoPagarInput = document.getElementById('facturaMontoPagar');
-        montoPagarInput.max = total.toFixed(2);
-        montoPagarInput.value = total.toFixed(2);
-        document.getElementById('facturaSaldoPendienteCalculado').textContent = '0.00';
-
-        // Save items data globally so the submit handler can use it
-        // servicio_id sólo aplica a items tipo SERVICIO: para tipo CONSULTA,
-        // id_interno es un Consulta.id (no un ServicioConsulta.id) -- mismo
-        // criterio que facturas.py::from-consulta (es_servicio). La línea
-        // CONSULTA queda igualmente anclada vía consulta_id en el payload.
-        window.currentFacturaItems = dataContext.items.map(p => ({
-            servicio_id: p.tipo === 'SERVICIO' ? p.id_interno : null,
-            producto_id: p.producto_id || (p.tipo === 'SERVICIO' ? p.referencia_id : null),
-            descripcion: p.descripcion,
-            cantidad: p.cantidad,
-            precio_unitario: p.precio_unitario,
-            subtotal: p.subtotal
-        }));
-        window.currentFacturaTotal = total;
-
-        // openModal('modalFactura'); // Already opened above
-    } catch (e) {
-        window.loadingFactura = false;
-        alert("Error cargando detalles para facturar: " + e.message);
-    }
-};
-
-document.getElementById('facturaMontoPagar')?.addEventListener('input', (e) => {
-    const total = window.currentFacturaTotal || 0;
-    const monto = parseFloat(e.target.value) || 0;
-    const saldo = Math.max(0, total - monto);
-    document.getElementById('facturaSaldoPendienteCalculado').textContent = saldo.toFixed(2);
-});
-
-document.getElementById('formFactura')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!window.currentFacturaItems || window.currentFacturaItems.length === 0) {
-        alert("No hay items para facturar.");
-        return;
-    }
-
-    const total = window.currentFacturaTotal;
-    const montoPagar = parseFloat(document.getElementById('facturaMontoPagar').value);
-
-    if (isNaN(montoPagar) || montoPagar < 0 || montoPagar > total) {
-        alert(`El monto a pagar debe estar entre 0 y $${total.toFixed(2)}.`);
-        return;
-    }
-
-    // Validar el body de acuerdo a FacturaCreate del router
-    const data = {
-        propietario_id: parseInt(document.getElementById('facturaPropietarioId').value),
-        consulta_id: parseInt(document.getElementById('facturaConsultaId').value),
-        metodo_pago: document.getElementById('facturaMetodoPago').value,
-        descuento: 0.0,
-        impuesto: 0.0,
-        total_pagado: montoPagar,
-        es_presupuesto: false,
-        detalles: window.currentFacturaItems.map(item => ({
-             descripcion: item.descripcion,
-             cantidad: item.cantidad,
-             precio_unitario: item.precio_unitario,
-             producto_id: item.producto_id,
-             servicio_id: item.servicio_id
-        }))
-    };
-
-    try {
-        const result = await fetchAPI('/facturas/', { method: 'POST', body: JSON.stringify(data) });
-
-        showNotification('Factura generada con éxito.', 'success');
-        closeModal('modalFactura');
-
-        // Refresh Consultation UI
-        if (currentMascotaId) {
-            actualizarCountsPet(currentMascotaId);
-            const activeTab = document.querySelector('.pet-nav-item.active')?.dataset.tab;
-            if (activeTab === 'consultas') {
-                cargarConsultas(currentMascotaId);
-            }
-        }
-
-        setTimeout(() => {
-            if (confirm("¿Desea descargar el comprobante/PDF de la factura ahora?")) {
-                exportarFacturaPDF(result.id);
-            }
-        }, 500);
-
-    } catch (err) {
-        alert('Error emitiendo factura: ' + err.message);
-    }
-});
-
+// orden-servicio-carrito, decisión 8: se quitó el cobro por consulta y su
+// modal de ítems pendientes -- facturar es por orden (ver
+// cargarOrdenesPorCobrar más abajo: "Cobrar" abre la orden vía
+// window.abrirOrden, y #modalFacturarOrden en orden-abierta.js factura con
+// POST /ordenes/{id}/facturar).
 
 export const exportarFacturaPDF = async (facturaId) => {
     try {
@@ -349,6 +204,71 @@ export const abrirPreviewFactura = async (facturaId) => {
     }
 };
 
+// ── Órdenes por cobrar (orden-servicio-carrito, decisión 8) ──────────────────
+// Vista POR DEFECTO de Facturación: las órdenes CERRADA a la espera de cobro
+// (el router.js prometía "Abre las órdenes por cobrar" desde antes de que
+// existiera esta vista — ver proposal.md). El historial de facturas queda
+// como vista secundaria (pestaña "Historial", _mostrarVistaFacturacion).
+const LIMITE_POR_COBRAR = 200;
+
+export const cargarOrdenesPorCobrar = async () => {
+    const tbody = document.getElementById('facOrdenesBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
+    try {
+        // por_cobrar: solo CERRADA con algo pendiente de facturar -- una orden
+        // cerrada sin nada que cobrar no puede salir de la lista (fix de revisión).
+        const ordenes = await fetchAPI(`/ordenes/?por_cobrar=true&limit=${LIMITE_POR_COBRAR}`);
+        if (!ordenes || ordenes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes cerradas esperando cobro.</td></tr>';
+            return;
+        }
+        const aviso = ordenes.length >= LIMITE_POR_COBRAR
+            ? `<tr><td colspan="6" style="text-align:center; color:var(--text-secondary); padding:0.75rem;">Se muestran las ${LIMITE_POR_COBRAR} órdenes más recientes; buscá una más vieja por su número con la búsqueda global.</td></tr>`
+            : '';
+        tbody.innerHTML = aviso + ordenes.map(o => {
+            const fecha = o.fecha_cierre || o.fecha_apertura;
+            return `
+            <tr>
+                <td><b>${escapeHtml(o.numero)}</b></td>
+                <td>${escapeHtml(o.propietario_nombre || '—')}</td>
+                <td>${escapeHtml(o.mascota_nombre || 'Sin paciente')}</td>
+                <td>${fecha ? new Date(fecha).toLocaleDateString() : '—'}</td>
+                <td class="num"><b>$${parseFloat(o.total || 0).toFixed(2)}</b></td>
+                <td style="text-align:right;">
+                    <button class="btn-primary btn-sm" onclick="abrirOrden(${o.id})" style="padding:0.4rem 0.75rem; font-size:0.8rem; background: var(--secondary); border-color: var(--secondary-dark); color:#fff; border-radius:6px;">${ICONS.dollar} Cobrar</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        console.error('Error cargando órdenes por cobrar:', e);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--accent);">Error cargando.</td></tr>';
+    }
+};
+
+// Toggle entre las dos vistas de la sección (sin sub-router: son dos <div>
+// hermanos, mismo criterio que otras secciones con pestañas internas del
+// front, ej. bandeja-gestor.js).
+const _mostrarVistaFacturacion = (vista) => {
+    const viewOrdenes = document.getElementById('facViewOrdenes');
+    const viewHistorial = document.getElementById('facViewHistorial');
+    const tabOrdenes = document.getElementById('facTabOrdenes');
+    const tabHistorial = document.getElementById('facTabHistorial');
+    if (viewOrdenes) viewOrdenes.hidden = vista !== 'ordenes';
+    if (viewHistorial) viewHistorial.hidden = vista !== 'historial';
+    if (tabOrdenes) tabOrdenes.setAttribute('aria-pressed', String(vista === 'ordenes'));
+    if (tabHistorial) tabHistorial.setAttribute('aria-pressed', String(vista === 'historial'));
+    if (vista === 'ordenes') cargarOrdenesPorCobrar();
+    else cargarHistorialFacturas();
+};
+
+document.getElementById('facTabOrdenes')?.addEventListener('click', () => _mostrarVistaFacturacion('ordenes'));
+document.getElementById('facTabHistorial')?.addEventListener('click', () => _mostrarVistaFacturacion('historial'));
+
+// initFn de la sección (router.js): Facturación abre en "Órdenes por cobrar",
+// no en el historial (decisión 8).
+export const initFacturacion = () => _mostrarVistaFacturacion('ordenes');
+
 const ESTADO_FACTURA_COLORS = {
     PAGADA: { bg: 'var(--secondary-subtle)', fg: 'var(--secondary-dark)' },
     ANULADA: { bg: 'var(--accent-subtle)', fg: 'var(--accent-dark)' },
@@ -448,8 +368,13 @@ document.getElementById('searchFactura')?.addEventListener('input', (e) => {
 
 document.getElementById('filterEstadoFactura')?.addEventListener('change', cargarHistorialFacturas);
 
+// `.nav-link[data-target=…]` es del shell viejo de pestañas planas (pre
+// etapa 7); ya no hay ningún `.nav-link` en el DOM del shell actual (barra
+// lateral, core/router.js), así que este listener nunca dispara. Se deja tal
+// cual -- no forma parte de este cambio -- el wiring real es router.js
+// (`init: initFacturacion` en SECTIONS).
 document.querySelector('.nav-link[data-target="sec-facturacion"]')?.addEventListener('click', () => {
     cargarHistorialFacturas();
 });
 
-export { cargarHistorialFacturas as init };
+export { initFacturacion as init };

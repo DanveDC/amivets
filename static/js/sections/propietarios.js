@@ -3,9 +3,9 @@
 // `verMascotasPropietario` navega a Consultorio por el router del shell 1A.
 
 import { fetchAPI } from '../core/api.js';
-import { ICONS, openModal, closeModal } from '../core/ui.js';
+import { ICONS, openModal, closeModal, escapeHtml, escapeJsAttr, showNotification } from '../core/ui.js';
 import { showSection } from '../core/router.js';
-import { setOwnerFilter } from './consultorio.js';
+import { setOwnerFilter, abrirNuevaMascotaParaPropietario } from './consultorio.js';
 
 // ============ PROPIETARIOS MODULE ============
 export const loadPropietarios = async (filter = '') => {
@@ -29,15 +29,15 @@ export const loadPropietarios = async (filter = '') => {
         tbody.innerHTML = propietarios.map(p => `
             <tr class="table-row-hover">
                 <td><span class="badge-id">#${p.id}</span></td>
-                <td style="font-weight: 500;">${p.nombre} ${p.apellido}</td>
-                <td>${p.cedula}</td>
-                <td>${p.telefono}</td>
-                <td>${p.email || '<span style="color: var(--text-muted);">N/D</span>'}</td>
+                <td style="font-weight: 500;">${escapeHtml(p.nombre)} ${escapeHtml(p.apellido)}</td>
+                <td>${escapeHtml(p.cedula)}</td>
+                <td>${escapeHtml(p.telefono || '')}</td>
+                <td>${p.email ? escapeHtml(p.email) : '<span style="color: var(--text-muted);">N/D</span>'}</td>
                 <td style="text-align: right;">
                     <div class="row-actions">
-                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="verMascotasPropietario(${p.id}, '${p.nombre}')" title="Ver mascotas" aria-label="Ver mascotas">${ICONS.paw} Mascotas</button>
+                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="verMascotasPropietario(${p.id}, '${escapeJsAttr(p.nombre)}')" title="Ver mascotas" aria-label="Ver mascotas">${ICONS.paw} Mascotas</button>
                         <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px;" onclick="abrirEditarPropietario(${p.id})" title="Editar" aria-label="Editar">${ICONS.edit}</button>
-                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px; color:var(--accent); border-color:var(--accent);" onclick="confirmEliminarPropietario(${p.id}, '${p.nombre} ${p.apellido}')" title="Eliminar" aria-label="Eliminar">${ICONS.trash}</button>
+                        <button class="av-btn" style="height:30px; padding:0 10px; font-size:12.5px; color:var(--accent); border-color:var(--accent);" onclick="confirmEliminarPropietario(${p.id}, '${escapeJsAttr(`${p.nombre} ${p.apellido}`)}')" title="Eliminar" aria-label="Eliminar">${ICONS.trash}</button>
                     </div>
                 </td>
             </tr>
@@ -110,8 +110,12 @@ export const handlePropietarioSubmit = async (e) => {
             direccion: document.getElementById('propietarioDireccion').value || null
         };
         const result = await fetchAPI('/propietarios/', { method: 'POST', body: JSON.stringify(data) });
-        alert(`Propietario registrado: ${result.nombre} ${result.apellido}`);
+        showNotification(`Propietario registrado: ${result.nombre} ${result.apellido}. Ahora cargá su mascota.`, 'success');
         closeModal('modalPropietario');
+        document.getElementById('formPropietario')?.reset();
+        // Se sigue de corrido con la mascota del propietario nuevo
+        // (propietario-a-mascota).
+        await abrirNuevaMascotaParaPropietario(result);
     } catch (error) {
         alert('Error: ' + error.message);
     }

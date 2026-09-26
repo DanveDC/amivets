@@ -39,6 +39,10 @@ const {
   createTestFactura,
   deleteTestConsulta,
   anularTestFactura,
+  anexarServicioOrden,
+  confirmarServiciosOrden,
+  cerrarTestOrden,
+  gotoSection,
 } = require('./helpers');
 
 async function loginUI(page, username, password) {
@@ -470,7 +474,14 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       await expect(page.locator('#sec-orden-abierta')).toBeVisible();
 
       // La línea CONSULTA nace EJECUTADA (atajo sin despacho): nada que
-      // confirmar, se puede facturar directo.
+      // confirmar. orden-servicio-carrito, decisión 9: "Facturar" solo se
+      // habilita con la orden CERRADA -- hay que cerrarla primero (sin
+      // pendientes SOLICITADO/ASIGNADO/EN_PROCESO, la única línea que hay es
+      // la CONSULTA ya EJECUTADA, así que cierra sin objeciones).
+      await page.once('dialog', (dialog) => dialog.accept());
+      await page.locator('#btnOaCerrar').click();
+      await expect(page.locator('.notification-toast')).toContainText(/cerrada/i, { timeout: 10000 });
+
       // Tarea 11: "Facturar orden" ahora abre el checkout del boceto
       // Facturacion.html (conceptos + forma de pago) en vez de crear la
       // factura directo -- se confirma con "Emitir factura".
@@ -478,7 +489,8 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       await expect(page.locator('#modalFacturarOrden')).toBeVisible();
       await expect(page.locator('#facOrdenTotal')).not.toHaveText('$0.00');
       await page.locator('#btnConfirmarFacturarOrden').click();
-      await expect(page.locator('.notification-toast')).toContainText(/[Ff]actura/, { timeout: 10000 });
+      // Filtrado por texto: el toast "Orden cerrada." puede seguir visible.
+      await expect(page.locator('.notification-toast', { hasText: /Factura #/ }).first()).toBeVisible({ timeout: 10000 });
 
       // /api/facturas/ no tiene filtro por consulta_id -- se filtra por
       // propietario_id (que sí soporta) y se busca a mano entre las suyas.
@@ -521,6 +533,11 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       await fila.click();
       await expect(page.locator('#sec-orden-abierta')).toBeVisible();
 
+      // orden-servicio-carrito, decisión 9: Facturar exige la orden CERRADA.
+      await page.once('dialog', (dialog) => dialog.accept());
+      await page.locator('#btnOaCerrar').click();
+      await expect(page.locator('.notification-toast')).toContainText(/cerrada/i, { timeout: 10000 });
+
       await page.locator('#btnOaFacturar').click();
       await expect(page.locator('#modalFacturarOrden')).toBeVisible();
       await expect(page.locator('#facOrdenTotal')).not.toHaveText('$0.00');
@@ -530,7 +547,8 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       // clics rápidos mandaban dos POST /facturas/ casi simultáneos con las
       // mismas líneas y creaban dos facturas para la misma orden.
       await page.locator('#btnConfirmarFacturarOrden').dblclick();
-      await expect(page.locator('.notification-toast')).toContainText(/[Ff]actura/, { timeout: 10000 });
+      // Filtrado por texto: el toast "Orden cerrada." puede seguir visible.
+      await expect(page.locator('.notification-toast', { hasText: /Factura #/ }).first()).toBeVisible({ timeout: 10000 });
 
       const facturasRes = await request.get(`/api/facturas/?propietario_id=${propietario.id}&limit=100`, { headers: authHeaders(adminToken) });
       expect(facturasRes.ok()).toBeTruthy();
@@ -564,6 +582,120 @@ test.describe('Shell — regresiones de seguridad y alcance (revisión etapa 7)'
       // servicios-desde-consulta.spec.js::afterAll): la factura activa
       // bloquea el DELETE de la consulta por FK, así que se anula primero.
       if (facturaIdParaAnular) await anularTestFactura(request, facturaIdParaAnular, adminToken);
+      await deleteTestConsulta(request, consulta.id);
+      await deleteTestMascota(request, mascota.id);
+      await deleteTestPropietario(request, propietario.id);
+      await deleteTestUser(request, adminToken, vet.id);
+    }
+  });
+});
+
+// orden-servicio-carrito, decisión 8: Facturación abre en "Órdenes por
+// cobrar" (no en el historial) y "Cobrar" ahí abre la orden en vez de armar
+// una factura en el cliente.
+test.describe('Shell — Facturación: Órdenes por cobrar (orden-servicio-carrito)', () => {
+  test('una orden CERRADA aparece en "Órdenes por cobrar", se cobra desde ahí y pasa al historial', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const propietario = await createTestPropietario(request);
+    const mascota = await createTestMascota(request, propietario.id);
+
+    const orden = await createTestOrden(
+      request,
+      { propietarioId: propietario.id, mascotaId: mascota.id },
+      adminToken,
+    );
+    // ESTETICA sin catalogo_servicio_id: sin área conocida. Confirmar la
+    // manda directo a EJECUTADO (atajo sin área, decisión 4) y la orden
+    // puede cerrarse sin pasar por la bandeja del gestor.
+    await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA',
+      nombre_servicio: testTag('bano'),
+      precio_unitario: 9000,
+    }, adminToken);
+    await confirmarServiciosOrden(request, orden.id, adminToken);
+    await cerrarTestOrden(request, orden.id, adminToken);
+
+    try {
+      await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+      await gotoSection(page, 'sec-facturacion');
+      await expect(page.locator('#sec-facturacion')).toBeVisible();
+
+      // Vista por defecto: "Órdenes por cobrar", no el historial.
+      await expect(page.locator('#facTabOrdenes')).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#facViewHistorial')).toBeHidden();
+      const filaOrden = page.locator('#facOrdenesBody tr', { hasText: orden.numero });
+      await expect(filaOrden).toBeVisible({ timeout: 15000 });
+      await expect(filaOrden).toContainText('9000.00');
+
+      // "Cobrar" navega a la orden (no factura desde la lista).
+      await filaOrden.getByRole('button', { name: /Cobrar/i }).click();
+      await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+      await expect(page.locator('#oaMetaNumero')).toHaveText(orden.numero);
+
+      await page.locator('#btnOaFacturar').click();
+      await expect(page.locator('#modalFacturarOrden')).toBeVisible();
+      await page.locator('#btnConfirmarFacturarOrden').click();
+      // Filtrado por texto: el toast "Orden cerrada." puede seguir visible.
+      await expect(page.locator('.notification-toast', { hasText: /Factura #/ }).first()).toBeVisible({ timeout: 10000 });
+
+      // Vuelve a Facturación: la orden ya facturada no está más en "Órdenes
+      // por cobrar" (dejó de estar CERRADA) y su factura sí aparece en el
+      // historial.
+      await gotoSection(page, 'sec-facturacion');
+      await expect(page.locator('#facOrdenesBody')).not.toContainText(orden.numero, { timeout: 15000 });
+      await page.locator('#facTabHistorial').click();
+      await expect(page.locator('#facViewOrdenes')).toBeHidden();
+      await expect(page.locator('#facturacionTableBody')).not.toContainText('Cargando', { timeout: 15000 });
+      const facturasRes = await request.get(`/api/facturas/?propietario_id=${propietario.id}&limit=10`, { headers: authHeaders(adminToken) });
+      const facturas = await facturasRes.json();
+      expect(facturas.length, 'la orden cobrada tiene que haber dejado una factura').toBeGreaterThan(0);
+      await expect(page.locator('#facturacionTableBody')).toContainText(facturas[0].numero_factura);
+    } finally {
+      await deleteTestMascota(request, mascota.id);
+      await deleteTestPropietario(request, propietario.id);
+    }
+  });
+});
+
+// orden-servicio-carrito, decisión 10: Historia clínica no factura la
+// consulta por fuera de su orden -- ofrece "Ir a la orden" en su lugar.
+test.describe('Shell — Historia clínica: "Ir a la orden" (orden-servicio-carrito)', () => {
+  test('una consulta sin facturar no ofrece "Facturar" y "Ir a la orden" abre su orden', async ({ page, request }) => {
+    const adminToken = await getAdminToken(request);
+    const propietario = await createTestPropietario(request);
+    const mascota = await createTestMascota(request, propietario.id);
+    const vet = await createTestVeterinario(request, adminToken);
+    const orden = await createTestOrden(
+      request,
+      { propietarioId: propietario.id, mascotaId: mascota.id, veterinarioId: vet.id },
+      adminToken,
+    );
+    const consulta = await createTestConsulta(
+      request,
+      { mascotaId: mascota.id, veterinarioId: vet.id, orden_id: orden.id },
+      adminToken,
+    );
+
+    try {
+      await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+      const nombreBase = mascota.nombre.split(' ')[0];
+      await gotoSection(page, 'sec-consultorio');
+      await page.fill('#consultorioSearchMascota', nombreBase);
+      const item = page.locator('#consultorioMascotasList .pet-list-item', { hasText: nombreBase }).first();
+      await expect(item).toBeVisible({ timeout: 15000 });
+      await item.click();
+      await expect(page.locator('#patientWrapper')).toBeVisible();
+      await page.click('.pet-nav-item[data-tab="consultas"]');
+
+      const seccion = page.locator('#sec-consultorio');
+      const irALaOrden = seccion.getByRole('button', { name: /Ir a la orden/ });
+      await expect(irALaOrden).toBeVisible({ timeout: 15000 });
+      await expect(seccion.getByRole('button', { name: /^\W*Facturar$/ })).toHaveCount(0);
+
+      await irALaOrden.click();
+      await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+      await expect(page.locator('#oaMetaNumero')).toHaveText(orden.numero);
+    } finally {
       await deleteTestConsulta(request, consulta.id);
       await deleteTestMascota(request, mascota.id);
       await deleteTestPropietario(request, propietario.id);

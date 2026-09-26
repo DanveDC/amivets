@@ -797,6 +797,112 @@ class LiquidacionDetalle(Base):
         return f"<LiquidacionDetalle {self.id} - Consulta {self.consulta_id}>"
 
 
+# ========== COMISIONES POR SERVICIO (comisiones-por-servicio) ==========
+# Tablas nuevas a proposito (decision 1): el dev corre create_all, que crea
+# tablas pero no agrega columnas a las existentes.
+
+class ConfiguracionComision(Base):
+    """Fila unica con el porcentaje de comision por defecto (0-100) que aplica
+    a todo encargado sin porcentaje propio."""
+    __tablename__ = "configuracion_comision"
+
+    id = Column(Integer, primary_key=True)
+    porcentaje_defecto = Column(Numeric(5, 2), nullable=False, default=0)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("porcentaje_defecto >= 0 AND porcentaje_defecto <= 100", name="ck_config_comision_rango"),
+    )
+
+
+class ComisionEncargado(Base):
+    """Porcentaje propio de un encargado; reemplaza al de defecto. Sin fila,
+    el encargado usa ConfiguracionComision.porcentaje_defecto."""
+    __tablename__ = "comision_encargados"
+
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, unique=True, index=True)
+    porcentaje = Column(Numeric(5, 2), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    usuario = relationship("Usuario")
+
+    __table_args__ = (
+        CheckConstraint("porcentaje >= 0 AND porcentaje <= 100", name="ck_comision_encargado_rango"),
+    )
+
+
+class LiquidacionComision(Base):
+    """Cabecera de una liquidacion de comisiones a un encargado. Los totales
+    son la suma de sus detalles (ajustes negativos incluidos)."""
+    __tablename__ = "liquidaciones_comision"
+
+    id = Column(Integer, primary_key=True, index=True)
+    encargado_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    desde = Column(Date, nullable=False)
+    hasta = Column(Date, nullable=False)
+    fecha_calculo = Column(DateTime(timezone=True), server_default=func.now())
+    creada_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    total_encargado = Column(Numeric(12, 2), nullable=False, default=0)
+    total_amivets = Column(Numeric(12, 2), nullable=False, default=0)
+
+    encargado = relationship("Usuario", foreign_keys=[encargado_id])
+    detalles = relationship(
+        "LiquidacionComisionDetalle",
+        back_populates="liquidacion",
+        cascade="all, delete-orphan",
+        order_by="LiquidacionComisionDetalle.fecha_cobro",
+    )
+
+    @property
+    def numero(self) -> str:
+        return f"LC-{self.id:06d}" if self.id else ""
+
+
+class LiquidacionComisionDetalle(Base):
+    """Una linea de servicio liquidada (o su ajuste por anulacion), con el
+    porcentaje y los montos COPIADOS al liquidar: no cambian si despues
+    cambia el porcentaje del encargado.
+
+    Candado contra el doble pago (decision 2): un par (servicio, factura) se
+    liquida una sola vez como linea normal y una sola vez como ajuste. Si la
+    factura se anula y el servicio se vuelve a cobrar en otra factura, es otro
+    par y se puede liquidar de nuevo.
+    """
+    __tablename__ = "liquidacion_comision_detalles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    liquidacion_id = Column(Integer, ForeignKey("liquidaciones_comision.id"), nullable=False, index=True)
+    servicio_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=False)
+    factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False)
+    orden_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True)
+    descripcion = Column(String(255), nullable=True)
+    fecha_cobro = Column(DateTime(timezone=True), nullable=True)
+    subtotal = Column(Numeric(12, 2), nullable=False)
+    porcentaje = Column(Numeric(5, 2), nullable=False)
+    monto_encargado = Column(Numeric(12, 2), nullable=False)
+    monto_amivets = Column(Numeric(12, 2), nullable=False)
+    es_ajuste = Column(Boolean, nullable=False, default=False, server_default="false")
+
+    liquidacion = relationship("LiquidacionComision", back_populates="detalles")
+
+    __table_args__ = (
+        Index(
+            "uq_liq_comision_linea",
+            "servicio_id", "factura_id",
+            unique=True,
+            postgresql_where=text("es_ajuste = false"),
+        ),
+        Index(
+            "uq_liq_comision_ajuste",
+            "servicio_id", "factura_id",
+            unique=True,
+            postgresql_where=text("es_ajuste = true"),
+        ),
+    )
+
+
 class MovimientoInventario(Base):
     """Trazabilidad obligatoria: Cada vez que entra o sale un producto"""
     __tablename__ = "movimientos_inventario"
@@ -1105,6 +1211,44 @@ class ConsumoMaterial(Base):
 
     def __repr__(self):
         return f"<ConsumoMaterial svc_consulta={self.servicio_consulta_id} inv={self.inventario_id}>"
+
+
+class FacturaOrden(Base):
+    """Vínculo explícito factura -> orden de servicio que la originó (fix de
+    revisión). Antes la orden de una factura se deducía por sus líneas de
+    servicio, y una venta de caja rápida solo con productos no tiene ninguna.
+
+    Tabla aparte a propósito (y no una columna facturas.orden_id): el dev
+    corre create_all, que no agrega columnas a tablas existentes. Una factura
+    tiene como mucho una orden.
+    """
+    __tablename__ = "facturas_ordenes"
+
+    id = Column(Integer, primary_key=True)
+    factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False, unique=True, index=True)
+    orden_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=False, index=True)
+
+
+class ConsumoPrevisto(Base):
+    """Consumo real de un material que se indica al AGREGAR un servicio a una
+    orden, antes de que se ejecute (orden-servicio-carrito: todo servicio
+    entra SOLICITADO y recién consume al confirmarse o ejecutarse).
+
+    Sin esto el ajuste que manda el cliente al agregar se perdía y al ejecutar
+    se descontaba la receta estándar. consumo_service lo usa como override
+    cuando no le llega uno explícito. Tabla nueva a propósito: el dev corre
+    create_all, que no agrega columnas a tablas existentes.
+    """
+    __tablename__ = "consumos_previstos"
+
+    id = Column(Integer, primary_key=True)
+    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=False, index=True)
+    inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    cantidad = Column(Numeric(12, 3), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("servicio_consulta_id", "inventario_id", name="uq_consumo_previsto_servicio_inventario"),
+    )
 
 
 class HistorialPrecioInventario(Base):

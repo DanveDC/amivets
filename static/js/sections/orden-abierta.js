@@ -16,26 +16,21 @@
 //   (esa línea es exclusiva de POST /api/consultas/, orden_service.py). Se
 //   excluye la categoría CONSULTA del picker para no ofrecer una acción que
 //   el backend va a rechazar siempre.
-// - Facturar una orden no tiene endpoint propio: se arma con POST /api/facturas/
-//   (propietario_id + detalles[].servicio_id), el mismo patrón que ya usa
-//   sections/hoy.js para el servicio directo.
-// - FIX DE SEGURIDAD DE PLATA (post etapa 7, antes de etapa 8): si la orden
-//   tiene una línea CONSULTA viva, su consulta_id VA en el body de arriba.
-//   crear_factura (facturacion_service.py) sólo setea Factura.consulta_id
-//   cuando se lo pasan explícito -- nunca lo deriva de detalles[].servicio_id.
-//   Y Factura.consulta_id es el campo que mantiene viva la liquidación del
-//   veterinario (Decisión 3, docs/diseno/ordenes-de-servicio.md): sin él, la
-//   consulta nunca vuelve elegible en _consultas_elegibles y el veterinario
-//   deja de cobrar en silencio. Ver referencia_id de la línea CONSULTA
-//   (= consultas.id, misma convención que crear_linea_consulta en
-//   orden_service.py). NO se resuelve el bridge de facturación-por-orden
-//   completo acá (obtener_items_pendientes_orden sigue sin existir, queda
-//   diferido) -- esto es el mínimo que evita perder plata real.
+// - Facturar una orden usa su propio endpoint (orden-servicio-carrito,
+//   decisión 6): GET /api/ordenes/{id}/pendientes-facturar arma la vista
+//   previa (ítems + total) y POST /api/ordenes/{id}/facturar arma la factura
+//   en el servidor con TODOS los servicios sin facturar de la orden CERRADA
+//   -- el cliente ya no manda detalles[] ni servicio_id. El servidor también
+//   resuelve solo el consulta_id de la orden (si tiene una línea CONSULTA
+//   viva), así que la liquidación del veterinario (Decisión 3, docs/diseno/
+//   ordenes-de-servicio.md) sigue enganchada sin que el front tenga que
+//   conocer ese detalle.
 
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
 import { money, totalServicios } from '../core/format.js';
 import { showSection } from '../core/router.js';
+import { getRole } from '../core/session.js';
 
 const ESTADO_LABEL_ORDEN = { ABIERTA: 'Abierta', EN_ATENCION: 'En atención', CERRADA: 'Cerrada', ANULADA: 'Anulada' };
 
@@ -141,7 +136,7 @@ function pintarServicios(orden) {
         resumen.textContent = `${aplicados} aplicado${aplicados === 1 ? '' : 's'} · ${pendientes} pendiente${pendientes === 1 ? '' : 's'}`;
     }
     if (servicios.length === 0) {
-        body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Todavía no se anexó ningún servicio.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Todavía no se anexó ningún servicio.</td></tr>';
         return;
     }
     body.innerHTML = servicios.map(s => `
@@ -150,13 +145,18 @@ function pintarServicios(orden) {
             <td><span class="av-pill av-pill--info">${escapeHtml(s.tipo_servicio || '—')}</span></td>
             <td class="num">${s.cantidad}</td>
             <td class="num" style="font-weight:500;">${money(s.precio_unitario)}</td>
+            <td class="num" style="font-weight:500;">${money((s.cantidad || 0) * (s.precio_unitario || 0))}</td>
             <td><span class="av-pill ${ESTADO_PILL_SRV[s.estado] || 'av-pill--neutral'}">${ESTADO_LABEL_SRV[s.estado] || s.estado}</span></td>
             <td></td>
         </tr>`).join('');
 }
 
 function pintarResumen(orden) {
-    const total = totalServicios(orden.servicios);
+    // orden.total lo calcula el servidor al leer (orden-servicio-carrito,
+    // decisión 2): presupuesto real, incluye SOLICITADO/ASIGNADO/EN_PROCESO,
+    // no solo lo ejecutado. totalServicios queda de fallback por si el
+    // backend no lo manda (respuesta vieja en caché, etc.) — decisión 9.
+    const total = typeof orden.total === 'number' ? orden.total : totalServicios(orden.servicios);
     document.getElementById('oaResumenServicios').textContent = money(total);
     document.getElementById('oaTotal').textContent = money(total);
 }
@@ -166,8 +166,42 @@ function pintarMeta(orden) {
     document.getElementById('oaMetaApertura').textContent = orden.fecha_apertura
         ? new Date(orden.fecha_apertura).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
         : '—';
-    document.getElementById('oaMetaVeterinario').textContent = orden.veterinario_nombre || 'Sin asignar';
+    pintarVeterinario(orden);
     document.getElementById('oaMetaEstado').textContent = ESTADO_LABEL_ORDEN[orden.estado] || orden.estado;
+}
+
+// Veterinario de la orden: admin y recepción lo pueden cambiar mientras la
+// orden admite trabajo (PUT /ordenes/{id}/veterinario, orden-veterinario-y-
+// tutores); el resto solo lo ve.
+async function pintarVeterinario(orden) {
+    const el = document.getElementById('oaMetaVeterinario');
+    if (!el) return;
+    const puedeCambiar = ['admin', 'recepcionista'].includes(getRole())
+        && ['ABIERTA', 'EN_ATENCION'].includes(orden.estado);
+    if (!puedeCambiar) {
+        el.textContent = orden.veterinario_nombre || 'Sin asignar';
+        return;
+    }
+    try {
+        const vets = await fetchAPI('/usuarios/veterinarios');
+        el.innerHTML = `<select id="oaVeterinarioSelect" aria-label="Veterinario de la orden" style="max-width: 160px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; font: inherit;">
+            <option value="">Sin asignar</option>
+            ${(vets || []).map(v => `<option value="${v.id}" ${v.id === orden.veterinario_id ? 'selected' : ''}>${escapeHtml(v.username)}</option>`).join('')}
+        </select>`;
+        document.getElementById('oaVeterinarioSelect')?.addEventListener('change', async (e) => {
+            const vetId = Number(e.target.value);
+            if (!vetId) return;
+            try {
+                await fetchAPI(`/ordenes/${_ordenId}/veterinario`, { method: 'PUT', body: JSON.stringify({ veterinario_id: vetId }) });
+                showNotification('Veterinario asignado.', 'success');
+                await cargarOrden();
+            } catch (err) {
+                showNotification('No se pudo asignar el veterinario: ' + err.message, 'error');
+            }
+        });
+    } catch (_) {
+        el.textContent = orden.veterinario_nombre || 'Sin asignar';
+    }
 }
 
 function pintarAcciones(orden) {
@@ -183,7 +217,9 @@ function pintarAcciones(orden) {
     const btnAnexar = document.getElementById('btnOaAnexar');
     const btnAnexarInline = document.getElementById('btnOaAnexarInline');
     if (btnConfirmar) btnConfirmar.disabled = terminal || !hayPendientes;
-    if (btnFacturar) btnFacturar.disabled = terminal && orden.estado === 'ANULADA';
+    // Facturar por orden (decisión 9): solo tiene sentido con la orden
+    // CERRADA -- ABIERTA/EN_ATENCION todavía es presupuesto, no factura.
+    if (btnFacturar) btnFacturar.disabled = orden.estado !== 'CERRADA';
     if (btnCerrar) btnCerrar.disabled = terminal;
     if (btnAnular) btnAnular.disabled = orden.estado === 'ANULADA';
     // El backend ya bloquea anexar con 409 en una orden CERRADA/ANULADA, pero
@@ -205,32 +241,38 @@ async function confirmarServicios() {
     }
 }
 
-// Tarea 11 (revisión de bocetos, fidelidad estructural a Facturacion.html):
-// antes esto llamaba a POST /facturas/ directo, sin forma de pago ni cobro
-// -- el checkout del boceto (conceptos a cobrar, forma de pago, "Emitir
-// factura") no existía en ningún lado de la app. Ahora abre
-// #modalFacturarOrden con el mismo cálculo de servicios pendientes; el POST
-// real queda en confirmarFacturarOrden().
-function serviciosPendientesDeFacturar() {
-    if (!_ordenData) return [];
-    return (_ordenData.servicios || []).filter(s => !s.is_deleted && s.estado !== 'FACTURADO' && s.estado !== 'CANCELADO');
-}
+// orden-servicio-carrito, decisión 9: "Facturar" abre #modalFacturarOrden con
+// la vista previa que arma el SERVIDOR (GET /pendientes-facturar), no un
+// cálculo local sobre orden.servicios -- así el modal siempre refleja
+// exactamente lo que POST /facturar va a cobrar. Solo se ofrece con la orden
+// CERRADA (gate en pintarAcciones); acá se repite el chequeo por si el botón
+// quedó habilitado con datos viejos.
+let _pendientesFacturar = null;
 
-function facturarOrden() {
-    const servicios = serviciosPendientesDeFacturar();
-    if (servicios.length === 0) {
+async function facturarOrden() {
+    if (_ordenData?.estado !== 'CERRADA') {
+        showNotification('Solo se puede facturar una orden CERRADA.', 'warning');
+        return;
+    }
+    try {
+        _pendientesFacturar = await fetchAPI(`/ordenes/${_ordenId}/pendientes-facturar`);
+    } catch (e) {
+        showNotification('No se pudo cargar lo pendiente de facturar: ' + e.message, 'error');
+        return;
+    }
+    const items = _pendientesFacturar?.items || [];
+    if (items.length === 0) {
         showNotification('No hay servicios pendientes de facturar en esta orden.', 'warning');
         return;
     }
-    const total = servicios.reduce((acc, s) => acc + (s.precio_unitario || 0) * Math.max(1, Math.round(s.cantidad || 1)), 0);
 
     document.getElementById('facOrdenNumero').textContent = `orden ${_ordenData.numero || _ordenId}`;
-    document.getElementById('facOrdenConceptos').innerHTML = servicios.map(s => `
+    document.getElementById('facOrdenConceptos').innerHTML = items.map(it => `
         <div style="display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0;">
-            <span style="color:var(--text-secondary);">${escapeHtml(s.nombre_servicio || s.tipo_servicio)}</span>
-            <span class="rp-num" style="white-space:nowrap;">${money((s.precio_unitario || 0) * Math.max(1, Math.round(s.cantidad || 1)))}</span>
+            <span style="color:var(--text-secondary);">${escapeHtml(it.descripcion || '—')}</span>
+            <span class="rp-num" style="white-space:nowrap;">${money(it.subtotal)}</span>
         </div>`).join('');
-    document.getElementById('facOrdenTotal').textContent = money(total);
+    document.getElementById('facOrdenTotal').textContent = money(_pendientesFacturar.total);
     document.querySelector('input[name="facOrdenMetodo"][value="EFECTIVO"]').checked = true;
     document.getElementById('facOrdenPagaAhora').checked = true;
     document.getElementById('facOrdenPendienteNota').hidden = true;
@@ -239,45 +281,31 @@ function facturarOrden() {
 }
 
 async function confirmarFacturarOrden() {
-    const servicios = serviciosPendientesDeFacturar();
-    if (servicios.length === 0) return;
+    if (!_pendientesFacturar || (_pendientesFacturar.items || []).length === 0) return;
 
     const metodoPago = document.querySelector('input[name="facOrdenMetodo"]:checked')?.value || 'EFECTIVO';
     const pagaAhora = document.getElementById('facOrdenPagaAhora')?.checked;
-    const total = servicios.reduce((acc, s) => acc + (s.precio_unitario || 0) * Math.max(1, Math.round(s.cantidad || 1)), 0);
+    const total = _pendientesFacturar.total || 0;
 
-    // La línea CONSULTA (si la orden tiene una y sigue pendiente) ancla la
-    // factura a la consulta -- sin esto la liquidación del veterinario se
-    // rompe en silencio. Ver la nota al inicio del archivo. Se busca en
-    // `servicios` (ya filtrado a lo pendiente), no en el array crudo: si el
-    // honorario ya se facturó en una tanda anterior, NO hay que reintentar
-    // engancharlo -- crear_factura ya rechaza con 409 "consulta con factura
-    // activa", y eso rompería una segunda factura parcial legítima por el
-    // resto de los servicios.
-    const lineaConsulta = servicios.find(s => s.tipo_servicio === 'CONSULTA' && s.referencia_id);
     try {
-        const factura = await fetchAPI('/facturas/', {
+        // El servidor arma los detalles y resuelve el consulta_id de la
+        // orden solo (decisión 6): el front ya no manda detalles[] ni
+        // servicio_id, ni tiene que buscar la línea CONSULTA a mano.
+        const factura = await fetchAPI(`/ordenes/${_ordenId}/facturar`, {
             method: 'POST',
             body: JSON.stringify({
-                propietario_id: _ordenData.propietario_id,
-                ...(lineaConsulta ? { consulta_id: lineaConsulta.referencia_id } : {}),
                 // No se manda metodo_pago si no se cobra ahora (total_pagado
                 // 0): mandarlo igual dejaba una factura PENDIENTE marcada
                 // como cobrada por el método por defecto (hallazgo de
-                // revisión 11).
+                // revisión 11, se mantiene con el endpoint nuevo).
                 ...(pagaAhora ? { metodo_pago: metodoPago } : {}),
                 total_pagado: pagaAhora ? total : 0.0,
                 descuento: 0.0,
                 impuesto: 0.0,
-                detalles: servicios.map(s => ({
-                    descripcion: s.nombre_servicio,
-                    cantidad: Math.max(1, Math.round(s.cantidad || 1)),
-                    precio_unitario: s.precio_unitario || 0,
-                    servicio_id: s.id,
-                })),
             }),
         });
         closeModal('modalFacturarOrden');
+        _pendientesFacturar = null;
         showNotification(`Factura #${factura.numero_factura || factura.id} emitida${pagaAhora ? ' y cobrada' : ''}.`, 'success');
         await cargarOrden();
     } catch (e) {
@@ -413,7 +441,8 @@ async function seleccionarServicio(id) {
         list.querySelectorAll('input[data-idx]').forEach(inp => {
             inp.addEventListener('change', () => {
                 const idx = Number(inp.dataset.idx);
-                _consumos[idx].cantidad = parseFloat(inp.value) || 0;
+                // Vacío queda como null (no como 0): confirmarAnexo lo rechaza.
+                _consumos[idx].cantidad = inp.value.trim() === '' ? null : Number(inp.value);
             });
         });
     } catch (_) {
@@ -436,7 +465,14 @@ async function confirmarAnexo() {
         precio_unitario: _svcSeleccionado.precio_ref,
     };
     if (_consumos.length) {
-        body.consumos = _consumos.filter(c => c.cantidad > 0).map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
+        // Vacío o negativo no se adivina: se pide corregir. Se mandan también
+        // los 0 ("no se usó"): si se omitían, al ejecutar se descontaba la
+        // cantidad de la receta (fix de revisión).
+        if (_consumos.some(c => c.cantidad === null || !(c.cantidad >= 0))) {
+            showNotification('Completá la cantidad de cada material (0 si no se usó).', 'warning');
+            return;
+        }
+        body.consumos = _consumos.map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
     }
     try {
         const resp = await fetchAPI(`/ordenes/${_ordenId}/servicios`, { method: 'POST', body: JSON.stringify(body) });

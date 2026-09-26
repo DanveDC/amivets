@@ -14,13 +14,16 @@ from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
-from app.models.models import Mascota, OrdenServicio, Propietario, Usuario
+from app.models.models import Mascota, OrdenServicio, Propietario, ServicioConsulta, Usuario
 from app.routers.usuarios import get_current_admin, require_roles
 from app.routers.servicios import validar_tipo_servicio_por_rol
 from app.schemas.schemas import (
+    FacturaResponse,
+    OrdenFacturarBody,
     OrdenServicioAnexarServicio,
     OrdenServicioAnular,
     OrdenServicioAsignarVeterinario,
@@ -30,6 +33,15 @@ from app.schemas.schemas import (
     ServicioConsultaResponse,
 )
 from app.services import orden_service
+from app.services.facturacion_service import FacturacionService
+
+# Mismos roles que POST /api/facturas/ (routers/facturas.py, _ROLES_FACTURACION):
+# admin/recepción/veterinario. El paréntesis de la decisión 6 del diseño dice
+# "admin, recepcionista" a secas, pero el texto rector es "los mismos roles
+# que POST /api/facturas/" -- y ESE endpoint ya incluye veterinario (tensión
+# con la matriz de permisos, documentada y aceptada ahí mismo). Ampliar acá y
+# no ahí sería una inconsistencia nueva, no una corrección.
+_ROLES_FACTURACION_ORDEN = ("admin", "recepcionista", "veterinario")
 
 router = APIRouter(prefix="/api/ordenes", tags=["Órdenes"])
 
@@ -124,6 +136,7 @@ def listar_ordenes(
     ),
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
+    por_cobrar: bool = Query(False, description="Solo órdenes CERRADA con algún servicio vivo, no cancelado y sin facturar"),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -140,7 +153,11 @@ def listar_ordenes(
     navegacion-v2.md "Puntos abiertos" — cmdk.js documentaba la ausencia de
     este filtro).
     """
-    q = db.query(OrdenServicio)
+    # selectinload evita el N+1 de calcular `total` (OrdenServicioResponse)
+    # sobre cada fila del listado (decisión 2 de orden-servicio-carrito): una
+    # sola query trae los servicios de todas las órdenes de la página, en vez
+    # de una lazy-load por orden.
+    q = db.query(OrdenServicio).options(selectinload(OrdenServicio.servicios))
 
     if estado:
         estados = [e.strip().upper() for e in estado.split(",") if e.strip()]
@@ -161,6 +178,23 @@ def listar_ordenes(
         q = q.filter(OrdenServicio.mascota_id == mascota_id)
     if propietario_id:
         q = q.filter(OrdenServicio.propietario_id == propietario_id)
+    if por_cobrar:
+        # "Órdenes por cobrar" (Facturación): una orden CERRADA sin nada
+        # pendiente (todo cancelado o ya facturado) no se puede cobrar -- "Cobrar"
+        # le daba 409 y se quedaba en la lista para siempre (fix de revisión).
+        pendiente = (
+            db.query(ServicioConsulta.id)
+            .filter(
+                ServicioConsulta.orden_id == OrdenServicio.id,
+                ServicioConsulta.is_deleted == False,  # noqa: E712
+                # NULL cuenta como pendiente, igual que en
+                # obtener_items_pendientes_orden (filas viejas/migradas).
+                or_(ServicioConsulta.estado != "CANCELADO", ServicioConsulta.estado.is_(None)),
+                or_(ServicioConsulta.facturado == False, ServicioConsulta.facturado.is_(None)),  # noqa: E712
+            )
+            .exists()
+        )
+        q = q.filter(OrdenServicio.estado == "CERRADA", pendiente)
 
     d_desde = _parse_fecha(fecha_desde, "fecha_desde")
     d_hasta = _parse_fecha(fecha_hasta, "fecha_hasta")
@@ -348,3 +382,41 @@ def anular_orden(
     """
     orden = orden_service.obtener_orden(db, orden_id)
     return orden_service.anular_orden(db, orden, current_user, data.motivo_anulacion)
+
+
+@router.get("/{orden_id}/pendientes-facturar")
+def pendientes_facturar_orden(
+    orden_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION_ORDEN)),
+):
+    """Vista previa de lo que falta facturar en la orden (decisión 6): los
+    ítems vivos y sin facturar, y su total. No cambia nada -- es de solo
+    lectura, como GET /api/facturas/pendientes/{consulta_id}.
+    """
+    return FacturacionService.obtener_items_pendientes_orden(db, orden_id)
+
+
+@router.post("/{orden_id}/facturar", response_model=FacturaResponse, status_code=status.HTTP_201_CREATED)
+def facturar_orden(
+    orden_id: int,
+    body: Optional[OrdenFacturarBody] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*_ROLES_FACTURACION_ORDEN)),
+):
+    """Factura de una sola vez todos los ítems sin facturar de una orden
+    `CERRADA` (decisión 6): una única factura armada en el servidor, la orden
+    queda `FACTURADA`. Rechaza con 409 si la orden no está `CERRADA` o no
+    tiene ítems pendientes; no permite cobrar dos veces bajo concurrencia
+    (ver FacturacionService.facturar_orden).
+    """
+    body = body or OrdenFacturarBody()
+    return FacturacionService.facturar_orden(
+        db,
+        orden_id,
+        usuario=current_user,
+        metodo_pago=body.metodo_pago,
+        total_pagado=body.total_pagado or 0.0,
+        descuento=body.descuento or 0.0,
+        impuesto=body.impuesto or 0.0,
+    )

@@ -472,9 +472,10 @@ async function createTestServicioDirecto(request, mascotaId, overrides = {}, tok
  * Attaches a servicio directly to an orden, without a consulta (Tarea 06,
  * etapa 4: POST /api/ordenes/{id}/servicios). It's the sibling of
  * anexarServicioConsulta for orders that have no consulta (venta de
- * mostrador, orden solo de estética). `tipo_servicio` defaults to a
- * non-clinical type without `catalogo_servicio_id`, so the atajo sin
- * despacho (decisión 4) lands it in EJECUTADO. Throws on rejection.
+ * mostrador, orden solo de estética). Every service added this way lands in
+ * SOLICITADO (orden-servicio-carrito, decisión 3: the order is a
+ * carrito/presupuesto — see `anexarServicioOrden`'s new area-based state
+ * only kicked in after confirming, not at add time). Throws on rejection.
  */
 async function anexarServicioOrden(request, ordenId, overrides = {}, token = null) {
   const payload = {
@@ -513,6 +514,96 @@ async function confirmarServiciosOrden(request, ordenId, token = null) {
     );
   }
   return res.json();
+}
+
+/**
+ * GET /api/ordenes/{id}/pendientes-facturar (orden-servicio-carrito, decisión 6).
+ * Returns the raw response — the "409 sobre orden no cerrada" scenario is
+ * about POST /facturar, not this read-only preview, but a caller that wants
+ * to assert on status can still do so via `.status()`. Throws on rejection
+ * for the common case.
+ */
+async function pendientesFacturarOrden(request, ordenId, token = null) {
+  const res = await request.get(`/api/ordenes/${ordenId}/pendientes-facturar`, {
+    headers: token ? authHeaders(token) : {},
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to get pendientes-facturar of orden ${ordenId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/**
+ * POST /api/ordenes/{id}/facturar (orden-servicio-carrito, decisión 6).
+ * Returns the raw response — several specs deliberately expect 409 (orden no
+ * cerrada, doble facturación), so this does NOT throw on a non-2xx status;
+ * callers assert on `.status()` themselves and call `.json()` for the happy
+ * path.
+ */
+async function facturarOrden(request, ordenId, body = {}, token = null) {
+  return request.post(`/api/ordenes/${ordenId}/facturar`, {
+    headers: token ? authHeaders(token) : {},
+    data: body,
+  });
+}
+
+/**
+ * POST /api/caja-rapida/ventas (caja-rapida). `body` is
+ * { propietario_id?, metodo_pago, items: [{ tipo, id, cantidad, precio_unitario? }] }.
+ * Returns the raw response — specs assert 201/404/409/422/403/401 on
+ * `.status()` themselves. Without a token the request goes unauthenticated.
+ */
+async function ventaRapida(request, body, token = null) {
+  return request.post('/api/caja-rapida/ventas', {
+    headers: token ? authHeaders(token) : {},
+    data: body,
+  });
+}
+
+// ===========================================================================
+// Comisiones por servicio (/api/comisiones) — comisiones-por-servicio.
+// All return the raw response: specs assert 200/403/409/422 themselves.
+// ===========================================================================
+
+/** PUT /api/comisiones/configuracion { porcentaje_defecto }. */
+async function setPorcentajeDefecto(request, token, porcentaje) {
+  return request.put('/api/comisiones/configuracion', {
+    headers: authHeaders(token),
+    data: { porcentaje_defecto: porcentaje },
+  });
+}
+
+/** PUT /api/comisiones/encargados/{id} { porcentaje } (null = volver al defecto). */
+async function setPorcentajeEncargado(request, token, usuarioId, porcentaje) {
+  return request.put(`/api/comisiones/encargados/${usuarioId}`, {
+    headers: authHeaders(token),
+    data: { porcentaje },
+  });
+}
+
+/** GET /api/comisiones/?encargado_id=&desde=&hasta=. */
+async function controlComisiones(request, token, encargadoId, desde = null, hasta = null) {
+  const params = { encargado_id: encargadoId };
+  if (desde) params.desde = desde;
+  if (hasta) params.hasta = hasta;
+  return request.get('/api/comisiones/', { headers: authHeaders(token), params });
+}
+
+/** POST /api/comisiones/liquidaciones { encargado_id, desde, hasta }. */
+async function liquidarComisiones(request, token, encargadoId, desde, hasta) {
+  return request.post('/api/comisiones/liquidaciones', {
+    headers: authHeaders(token),
+    data: { encargado_id: encargadoId, desde, hasta },
+  });
+}
+
+/** GET /api/caja-rapida/items?q= (caja-rapida). Returns the raw response. */
+async function buscarItemsCaja(request, q, token = null) {
+  return request.get(`/api/caja-rapida/items?q=${encodeURIComponent(q || '')}&limit=100`, {
+    headers: token ? authHeaders(token) : {},
+  });
 }
 
 /** Soft-deletes (is_deleted=True) a test servicio. Best-effort — never throws.
@@ -1074,6 +1165,14 @@ module.exports = {
   anexarServicioConsulta,
   anexarServicioOrden,
   confirmarServiciosOrden,
+  pendientesFacturarOrden,
+  facturarOrden,
+  ventaRapida,
+  buscarItemsCaja,
+  setPorcentajeDefecto,
+  setPorcentajeEncargado,
+  controlComisiones,
+  liquidarComisiones,
   facturarDesdeConsulta,
   createTestFactura,
   anularTestFactura,

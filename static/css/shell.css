@@ -166,6 +166,9 @@
   cursor: text; font-family: inherit;
 }
 .av-search:hover { border-color: var(--text-muted); }
+/* `display:flex` de arriba le ganaba a [hidden]: el botón de búsqueda seguía
+   visible para el gestor (pantalla-encargado, decisión 1). */
+.av-search[hidden] { display: none; }
 .av-search span.av-search-label { flex-grow: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .av-search .av-kbd {
   font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);
@@ -183,6 +186,9 @@
 .av-btn:hover { background: var(--surface-hover); }
 .av-btn--primary { background: var(--primary); color: #fff; border-color: var(--primary-dark); }
 .av-btn--primary:hover { background: var(--primary-dark); }
+/* Sin esto un botón deshabilitado se veía igual que uno activo. */
+.av-btn:disabled, .av-btn:disabled:hover { opacity: 0.5; cursor: not-allowed; }
+.av-btn--primary:disabled:hover { background: var(--primary); }
 
 .av-iconbutton {
   width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 6px;
@@ -307,6 +313,11 @@
    ══════════════════════════════════════════════════════════════════════════ */
 .av-app--launcher .av-sidebar { display: none; }
 .av-launcher-canvas { flex-grow: 1; overflow-y: auto; padding: 26px 28px 24px; }
+.av-launcher-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.av-launcher-brand img { width: 56px; height: 56px; border-radius: 12px; object-fit: cover; }
+.av-launcher-brand div { display: flex; flex-direction: column; line-height: 1.2; }
+.av-launcher-brand strong { font-size: 26px; font-weight: 600; letter-spacing: 0.06em; color: var(--primary); }
+.av-launcher-brand span { font-size: 13.5px; color: var(--text-secondary); letter-spacing: 0.02em; }
 .av-launcher-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .av-launcher-head h1 {
   font-family: var(--font-serif); font-size: 27px; font-weight: 500; color: var(--text-primary); margin: 0;
@@ -604,6 +615,12 @@
    ══════════════════════════════════════════════════════════════════════════ */
 .bg-canvas { flex-grow: 1; overflow-y: auto; padding: 24px 28px 20px; display: flex; flex-direction: column; gap: 14px; }
 .bg-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* pantalla-encargado: cabecera con rubro + pestañas, y una vista por pestaña. */
+.bg-tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bg-rubro { font-size: 14px; color: var(--text-secondary); }
+.bg-rubro strong { color: var(--text-primary); }
+.bg-view { display: flex; flex-direction: column; gap: 14px; }
+.bg-view[hidden] { display: none; }
 .bg-columns { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; min-height: 0; align-items: start; }
 
 .bg-queue { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-sm); padding: 16px 4px 8px; }
@@ -632,6 +649,8 @@
   font-size: 12.5px; font-weight: 500; cursor: pointer; font-family: inherit;
 }
 .bg-btn-cargar:hover { background: var(--primary-dark); }
+/* La columna de acciones es angosta: sin esto "Tomar" se partía en tres líneas. */
+.bg-btn-take, .bg-btn-cargar { white-space: nowrap; }
 .bg-queue-note {
   display: flex; align-items: center; gap: 7px; padding: 12px 14px 4px; font-size: 12.5px; color: var(--text-muted);
 }
@@ -918,3 +937,13 @@
   .cat-grid { grid-template-columns: 1fr; }
   .cat-list { max-height: 40vh; }
 }
+
+/* areas-y-gestores: pantalla de admin "Áreas y gestores". */
+.ar-form { display: grid; gap: 12px; max-width: 520px; }
+.ar-check { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
+.ar-subtitle { margin: 24px 0 8px; font-size: 1rem; }
+.ar-lista { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.ar-lista li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.ar-lista .ar-vacio { border-style: dashed; color: var(--text-muted); }
+.ar-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.ar-add-row select { flex: 1; min-width: 200px; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }

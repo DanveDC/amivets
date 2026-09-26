@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator, field_serializer, computed_field, ConfigDict
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -169,7 +169,9 @@ class ConsumoMaterialOverride(BaseModel):
     receta sin override usan la cantidad estandar de la receta.
     """
     inventario_id: int = Field(..., gt=0)
-    cantidad: Decimal = Field(..., gt=0)
+    # 0 = "no se usó" ese material (fix de revisión): antes se rechazaba y el
+    # front lo omitía, así que terminaba descontándose la receta.
+    cantidad: Decimal = Field(..., ge=0)
 
 
 class ServicioConsultaBase(BaseModel):
@@ -221,6 +223,10 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     # Ya facturado sí/no — para el timeline de la ficha (el endpoint ya filtra
     # por ?facturado=, faltaba exponerlo por fila).
     facturado: Optional[bool] = None
+    # Área que ejecuta el servicio (snapshot al anexar). La bandeja del
+    # encargado lo usa para agrupar por rubro sin adivinarlo por el catálogo
+    # (pantalla-encargado, decisión 3).
+    area_id: Optional[int] = None
     # Advertencias de stock al aplicar (Decision 4): faltantes que se
     # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
     # que dispara el consumo.
@@ -233,7 +239,50 @@ class ConsultaResponse(ConsultaBase):
     mascota_id: int
     servicios: List[ServicioConsultaResponse] = []
     factura_id: Optional[int] = None
-    
+    # Derivado de la línea tipo_servicio='CONSULTA' de `servicios` (Tarea 06,
+    # decisión 3: `consultas` NO tiene columna orden_id a propósito, sería una
+    # segunda fuente de verdad -- orden_service.orden_de_consulta es la fuente
+    # real). orden-servicio-carrito, decisión 10: se expone acá para que
+    # Historia clínica pueda armar "Ir a la orden" sin buscarlo a mano en
+    # `servicios[]`. No agrega una query nueva: `servicios` ya se carga para
+    # este mismo response.
+    orden_id: Optional[int] = None
+    # True si la orden ya tiene la línea CONSULTA (el honorario). False con
+    # orden_id presente = consulta vieja o con la línea borrada: Historia
+    # clínica ofrece "Agregar honorario a la orden" (fix de revisión).
+    honorario_en_orden: bool = False
+
+    @model_validator(mode='before')
+    def _derivar_orden_id(cls, data):
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                linea = next(
+                    (
+                        s for s in (getattr(data, 'servicios', None) or [])
+                        if getattr(s, 'tipo_servicio', None) == 'CONSULTA' and not getattr(s, 'is_deleted', False)
+                    ),
+                    None,
+                )
+                if linea is not None:
+                    data.orden_id = linea.orden_id
+                    data.honorario_en_orden = True
+                else:
+                    # Consulta anterior a las órdenes (sin línea CONSULTA): el
+                    # backfill enganchó sus servicios a una orden, así que se
+                    # llega a ella por cualquiera de ellos (fix de revisión).
+                    otra = next(
+                        (
+                            s for s in (getattr(data, 'servicios', None) or [])
+                            if getattr(s, 'orden_id', None) and not getattr(s, 'is_deleted', False)
+                        ),
+                        None,
+                    )
+                    if otra is not None:
+                        data.orden_id = otra.orden_id
+            except Exception:
+                pass
+        return data
+
     model_config = ConfigDict(from_attributes=True)
 
 # ========== RECETA SCHEMAS ==========
@@ -569,6 +618,66 @@ class FacturaDesdeConsulta(BaseModel):
     impuesto: Optional[float] = Field(default=0.0)
 
 
+class OrdenFacturarBody(BaseModel):
+    """Body opcional de POST /api/ordenes/{id}/facturar (orden-servicio-carrito,
+    decisión 6). Misma forma que FacturaDesdeConsulta -- el servidor arma los
+    detalles desde los servicios sin facturar de la orden; el cliente solo
+    manda datos de cobro. Todo opcional: sin body se emite una factura
+    PENDIENTE por el total.
+    """
+    metodo_pago: Optional[str] = Field(None, max_length=50)
+    total_pagado: Optional[float] = Field(default=0.0)
+    descuento: Optional[float] = Field(default=0.0)
+    impuesto: Optional[float] = Field(default=0.0)
+
+
+# ========== CAJA RÁPIDA SCHEMAS (caja-rapida) ==========
+class VentaRapidaItem(BaseModel):
+    """Una línea de la venta de mostrador. `id` es un Inventario.id (PRODUCTO)
+    o un CatalogoServicio.id (SERVICIO). `precio_unitario` solo se usa en
+    servicios de precio variable (decisión 5): el resto se cobra al precio del
+    maestro, venga lo que venga del cliente."""
+    tipo: Literal["PRODUCTO", "SERVICIO"]
+    id: int = Field(..., gt=0)
+    cantidad: int = Field(..., ge=1)
+    precio_unitario: Optional[float] = None
+
+
+class VentaRapidaCreate(BaseModel):
+    """Body de POST /api/caja-rapida/ventas. Sin `propietario_id` se factura a
+    "Consumidor final" (decisión 1). Cobro completo obligatorio (decisión 6)."""
+    propietario_id: Optional[int] = Field(None, gt=0)
+    metodo_pago: Literal["EFECTIVO", "TARJETA", "TRANSFERENCIA", "MULTIPLE"]
+    items: List[VentaRapidaItem] = Field(..., min_length=1)
+
+
+class ServicioRealizadoResponse(BaseModel):
+    """Un servicio que el usuario tomó y ejecutó (pantalla-encargado,
+    decisión 4), con los nombres ya resueltos para la vista "Realizados"."""
+    id: int
+    nombre_servicio: Optional[str] = None
+    area_id: Optional[int] = None
+    area_nombre: Optional[str] = None
+    mascota_nombre: Optional[str] = None
+    orden_id: Optional[int] = None
+    orden_numero: Optional[str] = None
+    ejecutado_at: Optional[datetime] = None
+    detalles_clinicos: Optional[str] = None
+    adjuntos: int = 0
+
+
+class ItemCajaResponse(BaseModel):
+    """Resultado de GET /api/caja-rapida/items: productos y servicios
+    vendibles en un solo listado."""
+    tipo: Literal["PRODUCTO", "SERVICIO"]
+    id: int
+    nombre: str
+    codigo: Optional[str] = None
+    precio: float
+    precio_variable: bool = False
+    stock: Optional[float] = None
+
+
 class FacturaUpdate(BaseModel):
     estado: Optional[str] = Field(None, max_length=20)
     metodo_pago: Optional[str] = Field(None, max_length=50)
@@ -798,6 +907,23 @@ class CatalogoServicioCreate(CatalogoServicioBase):
     requiere_adjunto: Optional[bool] = None
 
 
+class CostoRecetaLinea(BaseModel):
+    inventario_id: int
+    nombre: str
+    cantidad: float
+    unidad: Optional[str] = None
+    costo_unitario: float  # por unidad base (ml, g o unidad)
+    subtotal: float
+
+
+class CostoServicioResponse(BaseModel):
+    """Costo de los insumos de la receta de un servicio del catálogo
+    (catalogo-servicios-configurable): base para fijar su precio."""
+    servicio_id: int
+    total: float
+    lineas: List[CostoRecetaLinea] = []
+
+
 class CatalogoServicioUpdate(BaseModel):
     nombre: Optional[str] = Field(None, min_length=1, max_length=255)
     categoria: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -898,6 +1024,88 @@ class LiquidacionResponse(BaseModel):
     detalles: List[LiquidacionDetalleResponse] = []
 
 
+# ========== COMISIONES POR SERVICIO (comisiones-por-servicio) ==========
+class ConfiguracionComisionUpdate(BaseModel):
+    porcentaje_defecto: Decimal = Field(..., ge=0, le=100)
+
+
+class ConfiguracionComisionResponse(BaseModel):
+    porcentaje_defecto: Decimal
+    updated_at: Optional[datetime] = None
+
+
+class PorcentajeEncargadoUpdate(BaseModel):
+    """`porcentaje` null quita el porcentaje propio: el encargado vuelve al
+    de defecto. Es obligatorio mandarlo (aunque sea null)."""
+    porcentaje: Optional[Decimal] = Field(..., ge=0, le=100)
+
+
+class EncargadoComisionResponse(BaseModel):
+    usuario_id: int
+    username: str
+    role: Optional[str] = None
+    porcentaje_propio: Optional[Decimal] = None
+    porcentaje_efectivo: Decimal
+
+
+class ComisionLineaResponse(BaseModel):
+    """Una línea del control de comisiones: pendiente (calculada con el
+    porcentaje actual) o liquidada (con el porcentaje congelado)."""
+    servicio_id: int
+    factura_id: int
+    orden_id: Optional[int] = None
+    orden_numero: Optional[str] = None
+    numero_factura: Optional[str] = None
+    descripcion: Optional[str] = None
+    fecha_cobro: Optional[datetime] = None
+    subtotal: Decimal
+    porcentaje: Decimal
+    monto_encargado: Decimal
+    monto_amivets: Decimal
+    es_ajuste: bool = False
+    liquidacion_id: Optional[int] = None
+
+
+class ComisionTotales(BaseModel):
+    encargado: Decimal
+    amivets: Decimal
+
+
+class ComisionControlResponse(BaseModel):
+    encargado_id: int
+    username: str
+    porcentaje_efectivo: Decimal
+    pendientes: List[ComisionLineaResponse] = []
+    liquidadas: List[ComisionLineaResponse] = []
+    totales_pendientes: ComisionTotales
+    totales_liquidadas: ComisionTotales
+
+
+class LiquidacionComisionCreate(BaseModel):
+    encargado_id: int = Field(..., gt=0)
+    desde: date
+    hasta: date
+
+    @model_validator(mode='after')
+    def validar_rango(self):
+        if self.hasta < self.desde:
+            raise ValueError("'hasta' no puede ser anterior a 'desde'")
+        return self
+
+
+class LiquidacionComisionResponse(BaseModel):
+    id: int
+    numero: str
+    encargado_id: int
+    encargado_username: Optional[str] = None
+    desde: date
+    hasta: date
+    fecha_calculo: Optional[datetime] = None
+    total_encargado: Decimal
+    total_amivets: Decimal
+    detalles: List[ComisionLineaResponse] = []
+
+
 # ========== ORDEN DE SERVICIO SCHEMAS (Tarea 06, decisiones 1 y 9) ==========
 class OrdenServicioCreate(BaseModel):
     """Abrir una orden (fila 1 de la matriz: admin / recepción / veterinario).
@@ -970,6 +1178,11 @@ class OrdenServicioResponse(BaseModel):
     propietario_nombre: Optional[str] = None
     mascota_nombre: Optional[str] = None
     veterinario_nombre: Optional[str] = None
+    # Presupuesto en tiempo real (orden-servicio-carrito, decisión 2): NO es
+    # una columna de la orden -- se calcula acá, al leer, sobre los servicios
+    # vivos (no CANCELADO, no is_deleted). Así no hay migración ni forma de
+    # que se desincronice de las líneas reales.
+    total: float = 0.0
 
     @model_validator(mode='before')
     def _adjuntar_nombres(cls, data):
@@ -984,6 +1197,17 @@ class OrdenServicioResponse(BaseModel):
                 vet = getattr(data, 'veterinario', None)
                 if vet:
                     data.veterinario_nombre = vet.username
+            except Exception:
+                pass
+            try:
+                total = 0.0
+                for servicio in getattr(data, 'servicios', None) or []:
+                    if getattr(servicio, 'is_deleted', False):
+                        continue
+                    if getattr(servicio, 'estado', None) == 'CANCELADO':
+                        continue
+                    total += (servicio.cantidad or 0) * (servicio.precio_unitario or 0)
+                data.total = total
             except Exception:
                 pass
         return data

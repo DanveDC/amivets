@@ -13,10 +13,13 @@
 //   - GET    /api/ordenes/{id}             → cabecera + servicios
 //   - GET    /api/ordenes/?estado=A,B      → listado del panel del día (filtros)
 //   - POST   /api/ordenes/{id}/servicios   → anexa un servicio SIN consulta (venta de
-//     mostrador / orden de estética); rechaza tipo_servicio='CONSULTA' (400);
-//     atajo sin despacho (decisión 4) → EJECUTADO si el ítem no tiene área.
+//     mostrador / orden de estética) al carrito/presupuesto de la orden;
+//     rechaza tipo_servicio='CONSULTA' (400); SIEMPRE queda SOLICITADO, tenga
+//     o no área, sin consumir inventario y sin mover la orden de ABIERTA
+//     (orden-servicio-carrito, decisiones 3 y 4).
 //   - POST   /api/ordenes/{id}/confirmar   → SOLICITADO -> ASIGNADO (con área) o
-//     EJECUTADO (sin área); idempotente (200 sin cambios si no hay nada en SOLICITADO).
+//     EJECUTADO (sin área); idempotente (200 sin cambios si no hay nada en
+//     SOLICITADO); pasa la orden ABIERTA -> EN_ATENCION (decisión 5).
 //   - POST   /api/ordenes/{id}/cerrar      → bloqueado con servicios SOLICITADO/ASIGNADO/EN_PROCESO
 //   - POST   /api/ordenes/{id}/anular      → SOLO admin, motivo obligatorio, terminal
 //   - POST   /api/consultas/               → exige orden_id; crea la línea
@@ -57,6 +60,10 @@ const {
   deleteTestConsulta,
   anexarServicioConsulta,
   anexarServicioOrden,
+  confirmarServiciosOrden,
+  pendientesFacturarOrden,
+  facturarOrden,
+  anularTestFactura,
   createTestFactura,
 } = require('./helpers');
 
@@ -395,6 +402,14 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
     }, S.vetToken);
     S.consultaIds.push(consulta.id);
 
+    // orden_id derivado (orden-servicio-carrito, decisión 10): sin columna
+    // nueva, resuelto vía la línea CONSULTA de sus servicios.
+    expect(consulta.orden_id).toBe(orden.id);
+    const consultaLeida = await (await request.get(`/api/consultas/${consulta.id}`, {
+      headers: authHeaders(S.vetToken),
+    })).json();
+    expect(consultaLeida.orden_id).toBe(orden.id);
+
     // Transición automática, sin botón aparte (decisión 1, regla 1).
     const detalle = await (await request.get(`/api/ordenes/${orden.id}`, {
       headers: authHeaders(S.vetToken),
@@ -488,18 +503,21 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
 
   // ---------------------------------------------------------------------
   // Anexar servicio directo a la orden (decisión 1: venta de mostrador, orden
-  // solo de estética) + el atajo sin despacho (decisión 4)
+  // solo de estética) como carrito/presupuesto (orden-servicio-carrito,
+  // decisiones 2-5): SIEMPRE SOLICITADO al anexar, EJECUTADO recién al
+  // confirmar si no tiene área.
   // ---------------------------------------------------------------------
-  test('orden sin consulta: anexa un servicio (atajo sin despacho), confirma sin cambios y factura', async ({ request }) => {
+  test('orden sin consulta: anexa un servicio al carrito (SOLICITADO), confirma (EJECUTADO sin área) y factura', async ({ request }) => {
     const orden = await createTestOrden(request, {
       propietarioId: S.propietario.id,
       mascotaId: S.mascota.id,
     }, S.recep.token);
     expect(orden.estado).toBe('ABIERTA');
+    expect(orden.total).toBe(0);
 
-    // ESTETICA sin catalogo_servicio_id: sin área conocida -> atajo sin
-    // despacho (decisión 4), directo a EJECUTADO al anexar (nadie a quien
-    // despachárselo, lo ejecuta quien lo anexa).
+    // ESTETICA sin catalogo_servicio_id: sin área conocida. Aun así, agregar
+    // al carrito deja el servicio en SOLICITADO -- el atajo "sin área" ahora
+    // se resuelve al confirmar, no al anexar (decisión 3).
     const servicio = await anexarServicioOrden(request, orden.id, {
       tipo_servicio: 'ESTETICA',
       nombre_servicio: testTag('bano'),
@@ -508,20 +526,24 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
     expect(servicio.orden_id).toBe(orden.id);
     expect(servicio.consulta_id).toBeNull();
     expect(servicio.mascota_id).toBe(S.mascota.id);
-    expect(servicio.estado).toBe('EJECUTADO');
+    expect(servicio.estado).toBe('SOLICITADO');
 
-    // Anexar transiciona la orden sola (decisión 1, regla 1), sin botón aparte.
+    // Anexar NO transiciona la orden (decisión 3): sigue ABIERTA, como un
+    // carrito, y ya expone el presupuesto acumulado.
     const detalle = await (await request.get(`/api/ordenes/${orden.id}`, {
       headers: authHeaders(S.recep.token),
     })).json();
-    expect(detalle.estado).toBe('EN_ATENCION');
+    expect(detalle.estado).toBe('ABIERTA');
+    expect(detalle.total).toBe(8000);
 
-    // Confirmar con nada en SOLICITADO es 200 sin cambios, no un error.
+    // Confirmar despacha el atajo sin área a EJECUTADO y recién ahí pasa la
+    // orden a EN_ATENCION (decisión 5).
     const confirmada = await request.post(`/api/ordenes/${orden.id}/confirmar`, {
       headers: authHeaders(S.token),
     });
     expect(confirmada.status()).toBe(200);
     const cuerpoConfirmado = await confirmada.json();
+    expect(cuerpoConfirmado.estado).toBe('EN_ATENCION');
     const lineaTrasConfirmar = cuerpoConfirmado.servicios.find((s) => s.id === servicio.id);
     expect(lineaTrasConfirmar.estado).toBe('EJECUTADO');
 
@@ -538,6 +560,55 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
       ],
     });
     expect(factura.total).toBe(8000);
+  });
+
+  // ---------------------------------------------------------------------
+  // El total del carrito (orden-servicio-carrito, decisión 2)
+  // ---------------------------------------------------------------------
+  test('el total de la orden acumula por línea y no cuenta canceladas ni borradas', async ({ request }) => {
+    const orden = await createTestOrden(request, {
+      propietarioId: S.propietario.id,
+      mascotaId: S.mascota.id,
+    }, S.recep.token);
+    expect(orden.total).toBe(0);
+
+    const uno = await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA',
+      nombre_servicio: testTag('corte'),
+      cantidad: 2,
+      precio_unitario: 100,
+    }, S.recep.token);
+    const dos = await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA',
+      nombre_servicio: testTag('unas'),
+      cantidad: 1,
+      precio_unitario: 50,
+    }, S.recep.token);
+
+    const conDos = await (await request.get(`/api/ordenes/${orden.id}`, {
+      headers: authHeaders(S.recep.token),
+    })).json();
+    expect(conDos.total).toBe(250);
+
+    // Cancelar una línea la saca del total (PATCH la mueve a CANCELADO).
+    const cancelado = await request.patch(`/api/servicios/${dos.id}`, {
+      headers: authHeaders(S.recep.token),
+      data: { estado: 'CANCELADO' },
+    });
+    expect(cancelado.status()).toBe(200);
+
+    const sinDos = await (await request.get(`/api/ordenes/${orden.id}`, {
+      headers: authHeaders(S.recep.token),
+    })).json();
+    expect(sinDos.total).toBe(200);
+
+    // El listado también expone el total (mismo cálculo, sin N+1).
+    const listado = await (await request.get(
+      `/api/ordenes/?propietario_id=${S.propietario.id}&limit=500`,
+      { headers: authHeaders(S.recep.token) },
+    )).json();
+    const fila = listado.find((o) => o.id === orden.id);
+    expect(fila.total).toBe(200);
   });
 
   test('no se puede anexar una línea CONSULTA por POST /api/ordenes/{id}/servicios', async ({ request }) => {
@@ -588,8 +659,9 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
       precio_unitario: 12000,
     }, S.vetToken);
     expect(vetClinico.tipo_servicio).toBe('VACUNACION');
-    // Sin catalogo_servicio_id no hay área conocida: atajo sin despacho.
-    expect(vetClinico.estado).toBe('EJECUTADO');
+    // Todo alta al carrito queda SOLICITADO, tenga o no área (decisión 3);
+    // el atajo sin área se resuelve recién al confirmar.
+    expect(vetClinico.estado).toBe('SOLICITADO');
   });
 
   test('confirmar servicios: gate de sesión/rol (fila 9 de la matriz)', async ({ request }) => {
@@ -709,5 +781,127 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
       },
     });
     expect(tarde.status()).toBe(409);
+  });
+
+  // ---------------------------------------------------------------------
+  // Facturar por orden (orden-servicio-carrito, decisión 6)
+  // ---------------------------------------------------------------------
+  test('vista previa de lo pendiente: lista los ítems sin facturar y su total', async ({ request }) => {
+    const orden = await createTestOrden(request, {
+      propietarioId: S.propietario.id,
+      mascotaId: S.mascota.id,
+    }, S.recep.token);
+    await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA', nombre_servicio: testTag('uno'), precio_unitario: 3000,
+    }, S.recep.token);
+    await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA', nombre_servicio: testTag('dos'), precio_unitario: 2000,
+    }, S.recep.token);
+    await confirmarServiciosOrden(request, orden.id, S.token);
+    await request.post(`/api/ordenes/${orden.id}/cerrar`, { headers: authHeaders(S.token) });
+
+    const preview = await pendientesFacturarOrden(request, orden.id, S.recep.token);
+    expect(preview.items.length).toBe(2);
+    expect(preview.total).toBe(5000);
+  });
+
+  test('facturar una orden cerrada: queda FACTURADA y los servicios facturados', async ({ request }) => {
+    const orden = await createTestOrden(request, {
+      propietarioId: S.propietario.id,
+      mascotaId: S.mascota.id,
+    }, S.recep.token);
+    const servicio = await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA', nombre_servicio: testTag('cobrar'), precio_unitario: 7000,
+    }, S.recep.token);
+    await confirmarServiciosOrden(request, orden.id, S.token);
+    await request.post(`/api/ordenes/${orden.id}/cerrar`, { headers: authHeaders(S.token) });
+
+    const res = await facturarOrden(request, orden.id, { metodo_pago: 'Efectivo', total_pagado: 7000 }, S.recep.token);
+    expect(res.status(), await res.text()).toBe(201);
+    const factura = await res.json();
+    expect(factura.propietario_id).toBe(S.propietario.id);
+    expect(factura.total).toBe(7000);
+    expect(factura.detalles.some((d) => d.servicio_id === servicio.id)).toBe(true);
+
+    const detalle = await (await request.get(`/api/ordenes/${orden.id}`, {
+      headers: authHeaders(S.recep.token),
+    })).json();
+    expect(detalle.estado).toBe('FACTURADA');
+    const lineaFacturada = detalle.servicios.find((s) => s.id === servicio.id);
+    expect(lineaFacturada.facturado).toBe(true);
+
+    S._facturaOrdenId = factura.id;
+    S._ordenFacturadaId = orden.id;
+    S._servicioFacturadoId = servicio.id;
+  });
+
+  test('facturar una orden no cerrada (ABIERTA o EN_ATENCION) es 409 y no crea factura', async ({ request }) => {
+    const orden = await createTestOrden(request, {
+      propietarioId: S.propietario.id,
+      mascotaId: S.mascota.id,
+    }, S.recep.token);
+    expect(orden.estado).toBe('ABIERTA');
+
+    const abierta = await facturarOrden(request, orden.id, {}, S.recep.token);
+    expect(abierta.status()).toBe(409);
+
+    await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA', nombre_servicio: testTag('pend'), precio_unitario: 1000,
+    }, S.recep.token);
+    await confirmarServiciosOrden(request, orden.id, S.token);
+    const enAtencion = await (await request.get(`/api/ordenes/${orden.id}`, {
+      headers: authHeaders(S.recep.token),
+    })).json();
+    expect(enAtencion.estado).toBe('EN_ATENCION');
+
+    const res = await facturarOrden(request, orden.id, {}, S.recep.token);
+    expect(res.status()).toBe(409);
+  });
+
+  test('facturar una orden CERRADA sin ítems pendientes es 409', async ({ request }) => {
+    const orden = await createTestOrden(request, {
+      propietarioId: S.propietario.id,
+      mascotaId: S.mascota.id,
+    }, S.recep.token);
+    await request.post(`/api/ordenes/${orden.id}/cerrar`, { headers: authHeaders(S.token) });
+
+    const res = await facturarOrden(request, orden.id, {}, S.recep.token);
+    expect(res.status()).toBe(409);
+  });
+
+  test('doble facturación de la misma orden: se crea una sola factura y la segunda es 409', async ({ request }) => {
+    const orden = await createTestOrden(request, {
+      propietarioId: S.propietario.id,
+      mascotaId: S.mascota.id,
+    }, S.recep.token);
+    await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'ESTETICA', nombre_servicio: testTag('doble'), precio_unitario: 4000,
+    }, S.recep.token);
+    await confirmarServiciosOrden(request, orden.id, S.token);
+    await request.post(`/api/ordenes/${orden.id}/cerrar`, { headers: authHeaders(S.token) });
+
+    const [primera, segunda] = await Promise.all([
+      facturarOrden(request, orden.id, {}, S.recep.token),
+      facturarOrden(request, orden.id, {}, S.recep.token),
+    ]);
+    const estados = [primera.status(), segunda.status()].sort();
+    expect(estados).toEqual([201, 409]);
+  });
+
+  test('anular la factura de una orden FACTURADA la reabre a CERRADA y sus servicios quedan sin facturar', async ({ request }) => {
+    expect(S._facturaOrdenId, 'depende del test de facturar una orden cerrada').toBeTruthy();
+
+    await anularTestFactura(request, S._facturaOrdenId, S.token);
+
+    const detalle = await (await request.get(`/api/ordenes/${S._ordenFacturadaId}`, {
+      headers: authHeaders(S.recep.token),
+    })).json();
+    expect(detalle.estado).toBe('CERRADA');
+    const linea = detalle.servicios.find((s) => s.id === S._servicioFacturadoId);
+    expect(linea.facturado).toBe(false);
+
+    // Puede volver a facturarse.
+    const preview = await pendientesFacturarOrden(request, S._ordenFacturadaId, S.recep.token);
+    expect(preview.items.some((it) => it.id_interno === S._servicioFacturadoId)).toBe(true);
   });
 });

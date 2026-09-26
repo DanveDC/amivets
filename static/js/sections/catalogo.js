@@ -143,27 +143,31 @@ async function cargarDetalle(id) {
     detalle.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
 
     try {
-        const [servicio, recetas, historial, usuarios, materiales] = await Promise.all([
+        const [servicio, recetas, historial, usuarios, materiales, costo] = await Promise.all([
             fetchAPI(`/catalogo/${id}`),
             fetchAPI(`/catalogo/${id}/recetas`),
             fetchAPI(`/catalogo/${id}/historial-precios`),
             getUsuariosMap(),
             cargarMaterialesCache(),
+            fetchAPI(`/catalogo/${id}/costo`),
         ]);
         if (id !== selectedId) return; // superseded por otra selección mientras cargaba
-        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales);
+        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales, costo);
     } catch (err) {
         detalle.innerHTML = `<p class="rp-empty-text">Error al cargar el servicio: ${escapeHtml(err.message)}</p>`;
     }
 }
 
-function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
+function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo) {
     const detalle = document.getElementById('catalogoDetalle');
     if (!detalle) return;
 
-    const materialPorId = new Map(materiales.map(m => [m.id, m]));
-    const costoLinea = (l) => (materialPorId.get(l.inventario_id)?.precio_unitario || 0) * Number(l.cantidad || 0);
-    const costoTotal = recetas.reduce((acc, l) => acc + costoLinea(l), 0);
+    // Costo desde GET /catalogo/{id}/costo (catalogo-servicios-configurable):
+    // precio por UNIDAD BASE del material (envase / contenido). Antes se
+    // multiplicaba el precio del envase por la cantidad en ml o g.
+    const costoPorMaterial = new Map((costo?.lineas || []).map(l => [l.inventario_id, l.subtotal]));
+    const costoLinea = (l) => costoPorMaterial.get(l.inventario_id) || 0;
+    const costoTotal = Number(costo?.total || 0);
 
     const filasReceta = recetas.length === 0
         ? '<tr><td colspan="4" class="rp-empty-text">Sin insumos en la receta.</td></tr>'
@@ -212,7 +216,8 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
             </div>
             <div class="cat-detail-precio">
                 <span class="rp-num" style="font-size:26px; font-weight:500; letter-spacing:-0.02em;">${formatMoney(servicio.precio_ref)}</span>
-                <span style="font-size:12px; color:var(--text-secondary);">costo de insumos ${formatMoney(costoTotal)}</span>
+                <span style="font-size:12px; color:var(--text-secondary);" id="catCostoInsumos">costo de insumos ${formatMoney(costoTotal)}</span>
+                ${costoTotal > 0 ? `<button type="button" class="av-btn" id="btnCatUsarCosto" style="height:28px; padding:0 10px; font-size:12px; margin-top:4px;">Usar como precio base</button>` : ''}
             </div>
             <button type="button" class="av-btn" id="btnCatEditar">Editar</button>
             ${servicio.activo ? '<button type="button" class="av-btn" style="color:var(--accent); border-color:var(--accent);" id="btnCatDesactivar">Desactivar</button>' : ''}
@@ -260,6 +265,21 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales) {
     // bindeado en window (app.js) pero ningún elemento de la UI la llamaba
     // desde la reescritura maestro-detalle -- hallazgo de revisión.
     document.getElementById('btnCatDesactivar')?.addEventListener('click', () => desactivarServicio(servicio.id));
+    // Precio base desde el costo de insumos (catalogo-servicios-configurable):
+    // queda registrado en el historial de precios con su motivo.
+    document.getElementById('btnCatUsarCosto')?.addEventListener('click', async () => {
+        if (!confirm(`¿Usar ${formatMoney(costoTotal)} (costo de insumos) como precio base del servicio?`)) return;
+        try {
+            await fetchAPI(`/catalogo/${servicio.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ precio_ref: costoTotal, motivo: 'Precio base desde costo de insumos' }),
+            });
+            showNotification('Precio base actualizado.', 'success');
+            cargarCatalogo();
+        } catch (err) {
+            showNotification('No se pudo actualizar el precio: ' + err.message, 'error');
+        }
+    });
 
     const filaVacia = document.getElementById('catRecetaBody');
     filaVacia?.addEventListener('click', (e) => {
@@ -373,9 +393,52 @@ async function actualizarRecetaCantidad(recetaId, valor) {
 // MODAL DE METADATA (nombre / categoría / precio / unidad) — CRUD
 // ============================================================
 
+// Categorías del modal: las del catálogo (pueden haberse creado nuevas) más
+// la opción "Otra…" (catalogo-servicios-configurable).
+async function cargarCategoriasModal() {
+    const select = document.getElementById('catalogoCategoria');
+    if (!select) return;
+    const fijas = [...select.options].map(o => o.value).filter(v => v && v !== '__nueva__');
+    try {
+        const cats = await fetchAPI('/catalogo/categorias');
+        const todas = [...new Set([...fijas, ...(cats || [])])].sort();
+        select.innerHTML = '<option value="">Seleccionar...</option>' +
+            todas.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('') +
+            '<option value="__nueva__">Otra (nueva categoría)…</option>';
+    } catch (_) { /* quedan las fijas */ }
+}
+
+// Áreas del modal: GET /areas/ es solo para admin/recepción/veterinario; si
+// falla, el campo se oculta y el servicio conserva su área.
+async function cargarAreasModal() {
+    const group = document.getElementById('catalogoAreaGroup');
+    const select = document.getElementById('catalogoArea');
+    if (!select) return;
+    try {
+        const areas = await fetchAPI('/areas/');
+        select.innerHTML = '<option value="">Sin despacho (se ejecuta al confirmar)</option>' +
+            (areas || []).filter(a => a.activo).map(a => `<option value="${a.id}">${escapeHtml(a.nombre)}</option>`).join('');
+        if (group) group.hidden = false;
+    } catch (_) {
+        if (group) group.hidden = true;
+    }
+}
+
+function toggleCategoriaNueva() {
+    const nueva = document.getElementById('catalogoCategoriaNueva');
+    const esNueva = document.getElementById('catalogoCategoria')?.value === '__nueva__';
+    if (nueva) {
+        nueva.hidden = !esNueva;
+        nueva.required = esNueva;
+        if (esNueva) nueva.focus();
+    }
+}
+
 export async function abrirModalServicio(id = null) {
     document.getElementById('catalogoServicioId').value = '';
     document.getElementById('formCatalogoServicio').reset();
+    await Promise.all([cargarCategoriasModal(), cargarAreasModal()]);
+    toggleCategoriaNueva();
     document.getElementById('modalCatalogoTitle').textContent = id ? 'Editar Servicio' : 'Nuevo Servicio';
 
     const precioInput = document.getElementById('catalogoPrecioRef');
@@ -394,6 +457,8 @@ export async function abrirModalServicio(id = null) {
             document.getElementById('catalogoPrecioRef').value = s.precio_ref;
             document.getElementById('catalogoUnidad').value = s.unidad || '';
             document.getElementById('catalogoPrecioVariable').checked = s.precio_variable;
+            document.getElementById('catalogoArea').value = s.area_id ? String(s.area_id) : '';
+            document.getElementById('catalogoAdjunto').value = s.requiere_adjunto === true ? 'si' : (s.requiere_adjunto === false ? 'no' : '');
             gatePrecioInput({ inputId: 'catalogoPrecioRef', hintId: 'catalogoPrecioRefHint', motivoGroupId: 'catalogoMotivoGroup' });
         } catch (err) {
             showNotification('Error cargando servicio: ' + err.message, 'error');
@@ -406,14 +471,30 @@ export async function abrirModalServicio(id = null) {
 export async function guardarServicio(e) {
     e.preventDefault();
     const id = document.getElementById('catalogoServicioId').value;
+    const categoriaSel = document.getElementById('catalogoCategoria').value;
+    const categoria = categoriaSel === '__nueva__'
+        ? document.getElementById('catalogoCategoriaNueva').value.trim().toUpperCase()
+        : categoriaSel;
+    if (!categoria) {
+        showNotification('Elegí o escribí la categoría del servicio.', 'warning');
+        return;
+    }
+    const adjunto = document.getElementById('catalogoAdjunto').value;
+    const areaGroup = document.getElementById('catalogoAreaGroup');
     const payload = {
         nombre: document.getElementById('catalogoNombre').value.trim(),
-        categoria: document.getElementById('catalogoCategoria').value,
+        categoria,
         precio_ref: parseFloat(document.getElementById('catalogoPrecioRef').value) || 0,
         unidad: document.getElementById('catalogoUnidad').value.trim() || null,
         precio_variable: document.getElementById('catalogoPrecioVariable').checked,
         activo: true,
+        requiere_adjunto: adjunto === 'si' ? true : (adjunto === 'no' ? false : null),
     };
+    // El área solo se manda si el usuario la pudo ver (admin/recepción/vet).
+    if (!areaGroup?.hidden) {
+        const area = document.getElementById('catalogoArea').value;
+        payload.area_id = area ? Number(area) : null;
+    }
     try {
         if (id) {
             const motivo = document.getElementById('catalogoMotivo')?.value.trim();
@@ -426,6 +507,7 @@ export async function guardarServicio(e) {
         }
         closeModal('modalCatalogoServicio');
         if (id) selectedId = Number(id);
+        cargarCategoriasSelect();
         cargarCatalogo();
     } catch (err) {
         showNotification('Error: ' + err.message, 'error');
@@ -445,7 +527,13 @@ export async function desactivarServicio(id) {
 
 // El router del shell 1A (etapa 2b) llama a init(); la nav actual llama a
 // cargarCategoriasSelect()+cargarCatalogo() directamente (ver legacy-nav.js).
+let _modalWired = false;
+
 export function init() {
+    if (!_modalWired) {
+        _modalWired = true;
+        document.getElementById('catalogoCategoria')?.addEventListener('change', toggleCategoriaNueva);
+    }
     cargarCategoriasSelect();
     cargarCatalogo();
 }

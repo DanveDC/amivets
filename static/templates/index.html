@@ -774,6 +774,8 @@
                         <select id="userRole" required>
                             <option value="user">Usuario Estándar</option>
                             <option value="veterinario">Veterinario</option>
+                            <option value="recepcionista">Recepcionista</option>
+                            <option value="gestor">Gestor de área</option>
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
@@ -807,6 +809,8 @@
                         <select id="editRole" required>
                             <option value="user">Usuario Estándar</option>
                             <option value="veterinario">Veterinario</option>
+                            <option value="recepcionista">Recepcionista</option>
+                            <option value="gestor">Gestor de área</option>
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
@@ -877,6 +881,32 @@
             </div>
         </div>
 
+        <!-- Modal: abrir orden (orden-veterinario-y-tutores): elegido el
+             paciente, se asigna el veterinario y el motivo antes de crearla. -->
+        <div id="modalAbrirOrden" class="modal">
+            <div class="modal-content" style="max-width: 480px;">
+                <div class="modal-header">
+                    <h2>Abrir orden</h2>
+                    <span class="close" data-modal="modalAbrirOrden" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+                </div>
+                <p class="text-muted" id="abrirOrdenPaciente" style="margin: 0 0 1rem;"></p>
+                <div class="form-group">
+                    <label for="abrirOrdenVeterinario">Veterinario asignado *</label>
+                    <select id="abrirOrdenVeterinario">
+                        <option value="">Seleccioná un veterinario...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="abrirOrdenMotivo">Motivo de la visita</label>
+                    <input type="text" id="abrirOrdenMotivo" maxlength="255" placeholder="Ej.: control, vacunación, baño…">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalAbrirOrden">Cancelar</button>
+                    <button type="button" class="av-btn av-btn--primary" id="btnConfirmarAbrirOrden">Abrir orden</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal: servicio directo (Tarea 09, etapa 4) -->
         <div id="modalServicioDirecto" class="modal">
             <div class="modal-content">
@@ -942,6 +972,14 @@
                  Ver docs/diseno/navegacion-v2.md, Decisión 2. -->
             <section id="sec-inicio" class="spa-section" hidden>
                 <div class="av-launcher-canvas">
+                    <!-- inicio-marca-cabecera: identidad del sistema arriba del saludo. -->
+                    <div class="av-launcher-brand" id="inicioMarca">
+                        <img src="/static/img/logo-amivets.png" alt="Logo de AmiVets" width="56" height="56">
+                        <div>
+                            <strong class="ser">AMIVETS</strong>
+                            <span>Sistema integral de gestión</span>
+                        </div>
+                    </div>
                     <div class="av-launcher-head">
                         <div>
                             <h1 id="inicioSaludo">Bienvenida</h1>
@@ -1011,7 +1049,7 @@
                                 </div>
                                 <table class="pd-table">
                                     <thead>
-                                        <tr><th>Orden</th><th>Paciente</th><th>Tutor</th><th>Servicios</th><th>Total</th><th>Estado</th></tr>
+                                        <tr><th>Orden</th><th>Paciente</th><th>Tutor</th><th>Veterinario</th><th>Servicios</th><th>Total</th><th>Estado</th></tr>
                                     </thead>
                                     <tbody id="pdOrdersBody">
                                         <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
@@ -1044,10 +1082,10 @@
                                 </div>
                                 <table class="oa-table">
                                     <thead>
-                                        <tr><th>Servicio / insumos que consume</th><th>Categoría</th><th>Cant.</th><th>Precio</th><th>Estado</th><th></th></tr>
+                                        <tr><th>Servicio / insumos que consume</th><th>Categoría</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>Estado</th><th></th></tr>
                                     </thead>
                                     <tbody id="oaServiciosBody">
-                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                        <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
                                     </tbody>
                                 </table>
                                 <button type="button" class="oa-anexar-row" id="btnOaAnexar">
@@ -1119,36 +1157,92 @@
             <!-- sec-bandeja-gestor — Módulo 2 · Mi bandeja (Tarea 06, etapa 7). -->
             <section id="sec-bandeja-gestor" class="spa-section" hidden>
                 <div class="bg-canvas">
-                    <div class="bg-filters">
-                        <div class="av-row-actions" id="bgFilters"></div>
-                        <input type="text" id="bgFiltroLocal" class="av-search av-search--local" placeholder="Filtrar en mi bandeja" autocomplete="off" style="cursor:text;">
-                        <div class="av-spacer"></div>
-                        <span style="font-size:12.5px;color:var(--text-secondary);">Ordenadas por tiempo de espera</span>
+                    <!-- pantalla-encargado: rubro + pestañas Bandeja / Realizados / Mis comisiones. -->
+                    <div class="bg-tabs-row">
+                        <div id="bgRubro" class="bg-rubro" aria-live="polite"></div>
+                        <div class="pd-orders-filters" role="tablist">
+                            <button type="button" id="bgTabBandeja" class="pd-filter" data-bg-vista="bandeja" aria-pressed="true">Bandeja</button>
+                            <button type="button" id="bgTabRealizados" class="pd-filter" data-bg-vista="realizados" aria-pressed="false">Realizados</button>
+                            <button type="button" id="bgTabComisiones" class="pd-filter" data-bg-vista="comisiones" aria-pressed="false">Mis comisiones</button>
+                        </div>
                     </div>
-                    <div class="bg-columns">
+
+                    <div id="bgViewBandeja" class="bg-view">
+                        <div class="bg-filters">
+                            <div class="av-row-actions" id="bgFilters"></div>
+                            <input type="text" id="bgFiltroLocal" class="av-search av-search--local" placeholder="Filtrar en mi bandeja" autocomplete="off" style="cursor:text;">
+                            <div class="av-spacer"></div>
+                            <span style="font-size:12.5px;color:var(--text-secondary);">Ordenadas por tiempo de espera</span>
+                        </div>
+                        <div class="bg-columns">
+                            <section class="bg-queue">
+                                <div class="bg-queue-head">
+                                    <strong class="ser">Servicios asignados a mí</strong>
+                                    <span id="bgEsperaAviso"></span>
+                                </div>
+                                <table class="bg-table">
+                                    <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
+                                    <tbody id="bgQueueBody">
+                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="bg-queue-note">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                                    <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
+                                </div>
+                            </section>
+
+                            <section class="bg-detail" id="bgDetail">
+                                <div class="bg-empty">
+                                    <svg class="bg-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                    <strong>Nada en proceso</strong>
+                                    <span>Tomá un servicio de tu bandeja para verlo acá y cargar su resultado.</span>
+                                </div>
+                            </section>
+                        </div>
+
+                    </div>
+
+                    <!-- Realizados: lo que el usuario tomó y ejecutó (GET /api/servicios/realizados). -->
+                    <div id="bgViewRealizados" class="bg-view" hidden>
+                        <div class="bg-filters">
+                            <button type="button" class="av-btn bg-real-rango" data-bg-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                            <button type="button" class="av-btn bg-real-rango" data-bg-rango="semana" style="height:30px; padding:0 10px; font-size:12.5px;">Esta semana</button>
+                            <button type="button" class="av-btn bg-real-rango" data-bg-rango="mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                            <input type="date" id="bgRealDesde" aria-label="Desde" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <span style="color: var(--text-secondary); font-size:12.5px;">a</span>
+                            <input type="date" id="bgRealHasta" aria-label="Hasta" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <button type="button" id="btnBgRealVer" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver</button>
+                            <div class="av-row-actions" id="bgRealAreas"></div>
+                        </div>
                         <section class="bg-queue">
                             <div class="bg-queue-head">
-                                <strong class="ser">Servicios asignados a mí</strong>
-                                <span id="bgEsperaAviso"></span>
+                                <strong class="ser">Servicios que realicé</strong>
+                                <span id="bgRealAviso"></span>
                             </div>
                             <table class="bg-table">
-                                <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
-                                <tbody id="bgQueueBody">
-                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Ejecutado</th><th>Adjuntos</th><th></th></tr></thead>
+                                <tbody id="bgRealBody">
+                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Elegí un rango para ver lo que realizaste.</td></tr>
                                 </tbody>
                             </table>
-                            <div class="bg-queue-note">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
-                                <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
-                            </div>
                         </section>
+                    </div>
 
-                        <section class="bg-detail" id="bgDetail">
-                            <div class="bg-empty">
-                                <svg class="bg-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                                <strong>Nada en proceso</strong>
-                                <span>Tomá un servicio de tu bandeja para verlo acá y cargar su resultado.</span>
-                            </div>
+                    <!-- Mis comisiones: GET /api/comisiones/mias + /mias/liquidaciones. -->
+                    <div id="bgViewComisiones" class="bg-view" hidden>
+                        <div class="bg-filters">
+                            <input type="date" id="bgComDesde" aria-label="Desde" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <span style="color: var(--text-secondary); font-size:12.5px;">a</span>
+                            <input type="date" id="bgComHasta" aria-label="Hasta" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <button type="button" id="btnBgComVer" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver</button>
+                        </div>
+                        <section class="bg-queue" style="padding: 16px;">
+                            <div id="bgComWrap" style="overflow-x:auto;"></div>
+                        </section>
+                        <section class="bg-queue" style="padding: 16px;">
+                            <strong class="ser">Mis liquidaciones</strong>
+                            <div id="bgComLiquidaciones" style="margin-top: 10px;"></div>
                         </section>
                     </div>
                 </div>
@@ -1167,7 +1261,7 @@
                     </div>
                     <div class="av-row-actions">
                         <button type="button" class="btn-secondary" id="btnConsultaGuardarSalir">Guardar y salir</button>
-                        <button type="button" class="btn-primary" id="btnConsultaCerrarFacturar">Cerrar y facturar</button>
+                        <button type="button" class="btn-primary" id="btnConsultaIrAOrden">Ir a la orden</button>
                     </div>
                 </div>
 
@@ -1725,42 +1819,168 @@
 
 
             <!-- Content Area: Facturación -->
+            <!-- orden-servicio-carrito, decisión 8: la vista por defecto es
+                 "Órdenes por cobrar" (#facViewOrdenes) -- el Historial de
+                 facturas emitidas queda como pestaña secundaria
+                 (#facViewHistorial). initFacturacion() (facturacion.js) abre
+                 en "ordenes"; el toggle no usa un sub-router, son dos <div>
+                 hermanos con `hidden` (mismo criterio que bandeja-gestor.js). -->
             <section id="sec-facturacion" class="content-area spa-section">
-                <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 2rem;">
+                <div class="content-header" style="justify-content: space-between; align-items: center; display: flex; margin-bottom: 1.25rem;">
                     <div>
-                        <h2 style="margin:0;">Historial de Facturación</h2>
-                        <p style="color: var(--text-secondary); font-size: 0.9rem;">Gestione y consulte los comprobantes de pago emitidos.</p>
+                        <h2 style="margin:0;">Facturación</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">Cobrá las órdenes cerradas y consultá el historial de comprobantes.</p>
                     </div>
-                    <div style="display: flex; gap: 0.75rem; align-items: center;">
-                        <input type="text" id="searchFactura" placeholder="Buscar por # o cliente..." class="search-input" style="width: 280px; margin: 0;">
-                        <select id="filterEstadoFactura" class="search-input" style="width: 150px; margin: 0; padding-left: 1rem;">
-                            <option value="">Todos los estados</option>
-                            <option value="PAGADA">Pagada</option>
-                            <option value="PENDIENTE">Pendiente</option>
-                            <option value="PARCIAL">Parcial</option>
-                            <option value="ANULADA">Anulada</option>
-                        </select>
+                    <div class="pd-orders-filters">
+                        <button type="button" id="facTabOrdenes" class="pd-filter" aria-pressed="true">Órdenes por cobrar</button>
+                        <button type="button" id="facTabHistorial" class="pd-filter" aria-pressed="false">Historial</button>
                     </div>
                 </div>
 
-                <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
-                    <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
-                        <thead>
-                            <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Estado</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Pagado</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Saldo Pendiente</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Método</th>
-                                <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="facturacionTableBody">
-                            <!-- Loaded via JS -->
-                        </tbody>
-                    </table>
+                <!-- Vista: Órdenes por cobrar (órdenes CERRADA a la espera de cobro) -->
+                <div id="facViewOrdenes">
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                        <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Orden #</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Tutor</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Paciente</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facOrdenesBody">
+                                <!-- Loaded via JS: cargarOrdenesPorCobrar() -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Vista: Historial de facturas emitidas (secundaria) -->
+                <div id="facViewHistorial" hidden>
+                    <div class="content-header" style="justify-content: flex-end; align-items: center; display: flex; margin-bottom: 1rem;">
+                        <div style="display: flex; gap: 0.75rem; align-items: center;">
+                            <input type="text" id="searchFactura" placeholder="Buscar por # o cliente..." class="search-input" style="width: 280px; margin: 0;">
+                            <select id="filterEstadoFactura" class="search-input" style="width: 150px; margin: 0; padding-left: 1rem;">
+                                <option value="">Todos los estados</option>
+                                <option value="PAGADA">Pagada</option>
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="PARCIAL">Parcial</option>
+                                <option value="ANULADA">Anulada</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                        <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Estado</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Pagado</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Saldo Pendiente</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Método</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facturacionTableBody">
+                                <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Content Area: Caja rápida (caja-rapida) — venta de mostrador
+                 sin registrar cliente: buscar productos/servicios, carrito,
+                 forma de pago y "Cobrar y emitir" (POST /api/caja-rapida/ventas).
+                 La lógica vive en sections/caja-rapida.js. -->
+            <section id="sec-caja-rapida" class="content-area spa-section">
+                <div class="content-header" style="margin-bottom: 1.25rem;">
+                    <div>
+                        <h2 style="margin:0;">Caja rápida</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem;">Vendé productos y servicios en el mostrador sin registrar al cliente. La factura sale cobrada a nombre de Consumidor final.</p>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; align-items:start;">
+                    <!-- Buscador y resultados -->
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); padding: 1rem; min-width: 0; overflow-x: auto;">
+                        <label for="cajaBuscar" style="font-size:13px; font-weight:600; color:var(--text-primary);">Buscar producto o servicio</label>
+                        <input type="search" id="cajaBuscar" class="search-input" placeholder="Nombre o código…" autocomplete="off" style="width:100%; margin: 0.5rem 0 0.75rem;">
+                        <table class="consultas-table" style="width:100%; border-collapse:collapse; margin-top:0; box-shadow:none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding:0.6rem 0.75rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Ítem</th>
+                                    <th style="padding:0.6rem 0.75rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Precio</th>
+                                    <th style="padding:0.6rem 0.75rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Stock</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cajaResultadosBody">
+                                <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Escribí para buscar.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Carrito y cobro -->
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); padding: 1rem; min-width: 0; overflow-x: auto;">
+                        <div id="cajaVenta">
+                            <span style="font-size:14px; font-weight:600; color:var(--text-primary);">Venta</span>
+                            <table class="consultas-table" style="width:100%; border-collapse:collapse; margin-top:0.5rem; box-shadow:none;">
+                                <thead>
+                                    <tr style="border-bottom: 1.5px solid var(--border);">
+                                        <th style="padding:0.5rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Ítem</th>
+                                        <th style="padding:0.5rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Cant.</th>
+                                        <th style="padding:0.5rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Precio</th>
+                                        <th style="padding:0.5rem; text-align:right; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Subtotal</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cajaCarritoBody">
+                                    <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1.25rem;">El carrito está vacío.</td></tr>
+                                </tbody>
+                            </table>
+
+                            <div class="cat-hr" style="margin:0.75rem 0;"></div>
+                            <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1rem;">
+                                <strong style="font-size:14px;">Total</strong>
+                                <span id="cajaTotal" class="rp-num" style="font-size:24px; font-weight:500; letter-spacing:-0.02em;">$0.00</span>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Forma de pago</label>
+                                <div style="display:flex; flex-direction:column; gap:6px;">
+                                    <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                                        <input type="radio" name="cajaMetodo" value="EFECTIVO" checked style="width:auto;"> Efectivo
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                                        <input type="radio" name="cajaMetodo" value="TARJETA" style="width:auto;"> Punto de venta / Tarjeta
+                                    </label>
+                                    <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
+                                        <input type="radio" name="cajaMetodo" value="TRANSFERENCIA" style="width:auto;"> Transferencia / Zelle
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button type="button" class="av-btn av-btn--primary" id="btnCajaCobrar" style="width:100%;" disabled>Cobrar y emitir</button>
+                        </div>
+
+                        <!-- Confirmación de la venta emitida -->
+                        <div id="cajaConfirmacion" hidden style="text-align:center; padding:1rem 0;">
+                            <p style="font-size:14px; color:var(--text-secondary); margin:0 0 0.25rem;">Factura emitida y cobrada</p>
+                            <p id="cajaFacturaNumero" style="font-size:22px; font-weight:600; margin:0 0 0.25rem;"></p>
+                            <p id="cajaFacturaTotal" class="rp-num" style="font-size:14px; color:var(--text-secondary); margin:0 0 1rem;"></p>
+                            <div style="display:flex; gap:0.5rem; justify-content:center;">
+                                <button type="button" class="btn-secondary" id="btnCajaPdf">Descargar PDF</button>
+                                <button type="button" class="av-btn av-btn--primary" id="btnCajaNueva">Nueva venta</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -1938,55 +2158,74 @@
                         </div>
                     </div>
 
-                    <!-- Liquidación a Veterinarios (Unidad E) -->
+                    <!-- Comisiones por servicio (comisiones-por-servicio). Reemplaza la
+                         tarifa fija por consulta de la Unidad E; su historial queda
+                         abajo, de solo lectura. Lógica: sections/comisiones.js. -->
                     <div id="liqSeccion" class="admin-only" style="display:none; flex-direction:column; gap:1.5rem; margin-top:1.5rem;">
                         <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
-                            <h3 style="margin-top:0; color: var(--text-primary);">Tarifa por Consulta</h3>
-                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Monto fijo que cobra cada veterinario por consulta liquidada. Sin tarifa configurada, ese veterinario queda excluido del cálculo.</p>
-                            <div style="overflow-x:auto;">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Comisiones: porcentajes</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Qué parte de cada servicio cobrado le toca al encargado que lo realizó. El resto queda para AmiVets. Cada encargado usa el porcentaje por defecto salvo que tenga uno propio.</p>
+
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:1rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                                <label for="comDefectoInput" style="font-size:0.85rem; font-weight:600; margin:0;">Porcentaje por defecto</label>
+                                <input type="number" id="comDefectoInput" min="0" max="100" step="0.01" style="width:100px; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px; margin:0;">
+                                <span style="color: var(--text-secondary); font-size:0.85rem;">%</span>
+                                <button type="button" id="btnComGuardarDefecto" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Guardar</button>
+                            </div>
+
+                            <div style="overflow:auto; max-height:360px;">
                                 <table class="consultas-table" style="width:100%; border-collapse:collapse;">
                                     <thead>
                                         <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
-                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Veterinario</th>
-                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Tarifa ($)</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Encargado</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Rol</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Porcentaje propio</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Aplica</th>
                                             <th style="padding: 0.6rem 0.75rem; text-align:right; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Acción</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="liqTarifasBody">
-                                        <tr><td colspan="3" style="text-align:center; color: var(--text-secondary); padding: 1rem;">Cargando…</td></tr>
+                                    <tbody id="comEncargadosBody">
+                                        <tr><td colspan="5" style="text-align:center; color: var(--text-secondary); padding: 1rem;">Cargando…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
 
                         <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
-                            <h3 style="margin-top:0; color: var(--text-primary);">Calcular Liquidación</h3>
-                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Elegí veterinario y rango para ver qué se le pagaría antes de confirmar el cálculo.</p>
+                            <h3 style="margin-top:0; color: var(--text-primary);">Comisiones: control y liquidación</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Elegí un encargado y un rango (por fecha de cobro) para ver lo pendiente y lo ya liquidado. Al liquidar, el porcentaje y los montos quedan fijos.</p>
 
-                            <div id="liqCalcFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
-                                <select id="liqVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                                    <option value="">Seleccioná un veterinario...</option>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                                <select id="comEncargadoSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                    <option value="">Seleccioná un encargado...</option>
                                 </select>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
+                                <button type="button" class="av-btn com-rango-btn" data-com-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                                <button type="button" class="av-btn com-rango-btn" data-com-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                                <button type="button" class="av-btn com-rango-btn" data-com-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                                <input type="date" id="liqFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <input type="date" id="comDesde" aria-label="Desde" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                                 <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
-                                <input type="date" id="liqFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                                <button type="button" id="btnLiqPreview" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver desglose</button>
+                                <input type="date" id="comHasta" aria-label="Hasta" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <button type="button" id="btnComVer" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver comisiones</button>
                             </div>
 
-                            <div id="liqPreviewWrap" style="overflow-x:auto;">
-                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná veterinario y rango, y hacé clic en "Ver desglose".</p>
+                            <div id="comControlWrap" style="overflow-x:auto;">
+                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná encargado y rango, y hacé clic en "Ver comisiones".</p>
                             </div>
                         </div>
 
                         <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
-                            <h3 style="margin-top:0; color: var(--text-primary);">Historial de Liquidaciones</h3>
-                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Liquidaciones ya calculadas, con el detalle de las consultas que las componen.</p>
+                            <h3 style="margin-top:0; color: var(--text-primary);">Liquidaciones de comisiones</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Liquidaciones del encargado elegido arriba, con su comprobante en PDF.</p>
+                            <div id="comLiquidacionesLista">
+                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná un encargado.</p>
+                            </div>
+                        </div>
+
+                        <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Liquidaciones anteriores (tarifa fija)</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Historial de solo lectura de las liquidaciones hechas con la tarifa fija por consulta, antes de pasar a comisiones.</p>
 
                             <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.75rem;">
                                 <select id="liqHistVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
@@ -2183,6 +2422,58 @@
                  historial de precios por servicio (Tarea 07/08) -- vivían
                  dentro del modal de edición, acá quedan siempre visibles
                  para el servicio seleccionado, igual que dibuja el boceto. -->
+            <!-- areas-y-gestores: el admin crea áreas de despacho, les asigna gestores y servicios. -->
+            <section id="sec-areas" class="content-area spa-section">
+                <div class="content-header">
+                    <h2>Áreas y gestores</h2>
+                </div>
+
+                <div class="cat-grid">
+                    <section class="cat-master">
+                        <div class="cat-master-head">
+                            <span class="rp-panel-title">Áreas</span>
+                            <button type="button" id="btnAreaNueva" class="av-btn av-btn--primary">+ Nueva área</button>
+                        </div>
+                        <div class="cat-list" id="areasLista">
+                            <p class="rp-empty-text">Cargando…</p>
+                        </div>
+                    </section>
+
+                    <section class="cat-detail" id="areaDetalle">
+                        <form id="formArea" class="ar-form">
+                            <input type="hidden" id="areaId">
+                            <div class="form-group">
+                                <label for="areaNombre">Nombre *</label>
+                                <input type="text" id="areaNombre" required maxlength="100" placeholder="Ej: Hospitalización">
+                            </div>
+                            <div class="form-group">
+                                <label for="areaCodigo">Código *</label>
+                                <input type="text" id="areaCodigo" required maxlength="50" placeholder="Ej: HOSPITALIZACION">
+                            </div>
+                            <label class="ar-check"><input type="checkbox" id="areaRequiereAdjunto"> Exige cargar un adjunto (resultado, informe, foto) al realizar el servicio</label>
+                            <label class="ar-check"><input type="checkbox" id="areaActiva" checked> Activa</label>
+                            <button type="submit" id="btnGuardarArea" class="av-btn av-btn--primary">Guardar área</button>
+                        </form>
+
+                        <div id="areaAsignaciones" hidden>
+                            <h3 class="ar-subtitle">Gestores que atienden esta área</h3>
+                            <ul id="areaGestoresLista" class="ar-lista"></ul>
+                            <div class="ar-add-row">
+                                <select id="areaGestorSelect" aria-label="Usuario para sumar como gestor"></select>
+                                <button type="button" id="btnAreaAgregarGestor" class="av-btn">Agregar gestor</button>
+                            </div>
+
+                            <h3 class="ar-subtitle">Servicios que despacha</h3>
+                            <ul id="areaServiciosLista" class="ar-lista"></ul>
+                            <div class="ar-add-row">
+                                <select id="areaServicioSelect" aria-label="Servicio del catálogo para asignar"></select>
+                                <button type="button" id="btnAreaAgregarServicio" class="av-btn">Asignar servicio</button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
             <section id="sec-catalogo" class="content-area spa-section">
                 <div class="content-header">
                     <h2>Catálogo de Servicios</h2>
@@ -2329,6 +2620,24 @@
                         <option value="PELUQUERIA">PELUQUERIA</option>
                         <option value="QUIROFANO">QUIROFANO</option>
                         <option value="SERVICIOS">SERVICIOS</option>
+                        <option value="__nueva__">Otra (nueva categoría)…</option>
+                    </select>
+                    <input type="text" id="catalogoCategoriaNueva" maxlength="100" placeholder="Nombre de la nueva categoría" hidden style="width:100%; margin-top:0.5rem;">
+                </div>
+                <!-- catalogo-servicios-configurable: área que ejecuta el servicio y
+                     exigencia de adjunto al cargar el resultado. -->
+                <div class="form-group" id="catalogoAreaGroup">
+                    <label for="catalogoArea">Área que lo ejecuta</label>
+                    <select id="catalogoArea" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md);">
+                        <option value="">Sin despacho (se ejecuta al confirmar)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="catalogoAdjuntoGroup">
+                    <label for="catalogoAdjunto">Adjunto al cargar el resultado</label>
+                    <select id="catalogoAdjunto" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md);">
+                        <option value="">Como diga el área</option>
+                        <option value="si">Obligatorio</option>
+                        <option value="no">No hace falta</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -2363,70 +2672,10 @@
         </div>
     </div>
 
-    <!-- Modal Facturación -->
-    <div id="modalFactura" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
-            <span class="close" data-modal="modalFactura" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
-            <div class="modal-header">
-                <h2>Generar Factura <span id="facturaConsultaIdTxt" style="color: var(--text-secondary); font-size:1rem;"></span></h2>
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">Revise los ítems consumidos y genere el comprobante de pago.</p>
-            </div>
-            
-            <div style="padding: 0 2.5rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
-                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">TUTOR</label>
-                        <div id="facturaPropietarioNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
-                    </div>
-                    <div style="background: var(--surface-hover); padding: 1.25rem; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm);">
-                        <label style="font-weight: bold; font-size:0.75rem; color:var(--primary); letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">PACIENTE</label>
-                        <div id="facturaMascotaNombre" style="font-size: 1.25rem; color:var(--text-primary); font-weight:700; letter-spacing: -0.02em;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <form id="formFactura">
-                <input type="hidden" id="facturaConsultaId">
-                <input type="hidden" id="facturaPropietarioId">
-                
-                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="form-group" style="flex: 1;">
-                        <label>Metodo de Pago</label>
-                        <select id="facturaMetodoPago" required>
-                            <option value="EFECTIVO">Efectivo ($)</option>
-                            <option value="TARJETA">Punto de Venta / Tarjeta</option>
-                            <option value="TRANSFERENCIA">Transferencia / Zelle</option>
-                            <option value="MULTIPLE">Múltiple / Otros</option>
-                        </select>
-                    </div>
-                </div>
-
-                <h3 style="margin-bottom: 1rem; color:var(--text-primary); font-size: 1rem; font-weight: 700;">Detalle de Cargos a Facturar</h3>
-                <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1.5rem; background: var(--surface); box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);" id="facturaItemsList">
-                    <p style="text-align: center; color: var(--text-muted); padding: 1rem;">Buscando cargos aplicados...</p>
-                </div>
-                
-                <div style="display: flex; justify-content: flex-end; margin-bottom: 1.5rem;">
-                    <div style="text-align: right; background: var(--warning-subtle); padding: 1.5rem 2.5rem; border-radius: var(--radius-lg); border: 1px solid rgba(245, 158, 11, 0.3); box-shadow: var(--shadow-sm);">
-                        <span style="font-size: 0.85rem; color: var(--warning-dark); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em; display: block; margin-bottom: 0.25rem;">Monto a Cobrar</span>
-                        <div style="font-size: 2.5rem; font-weight: 800; color: var(--warning-dark); letter-spacing: -0.04em;">$ <span id="facturaTotalCalculado">0.00</span></div>
-                    </div>
-                </div>
-
-                <div class="form-group" style="margin-bottom: 1.5rem;">
-                    <label>Monto a Pagar Ahora</label>
-                    <input type="number" id="facturaMontoPagar" min="0" step="0.01" required>
-                    <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">Dejá el total para pago completo, o ingresá un monto menor para abonar.</small>
-                    <div style="margin-top: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Saldo pendiente: $<span id="facturaSaldoPendienteCalculado">0.00</span></div>
-                </div>
-
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" data-close="modalFactura">Cancelar</button>
-                    <button type="submit" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);"><svg class="inline-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Emitir y Guardar</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- El viejo "Modal Facturación" (pendientes por consulta, POST /facturas/
+         con detalles[] armados en el cliente) se quitó acá: orden-servicio-
+         carrito, decisión 8 -- facturar es por orden (#modalFacturarOrden,
+         POST /ordenes/{id}/facturar), no por consulta. -->
 
             <!-- Modal: Nuevo Horario -->
             <div id="modalNuevoHorario" class="modal">

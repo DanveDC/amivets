@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.models import AreaServicio, GestorArea, Usuario
-from app.routers.usuarios import require_roles
+from app.routers.usuarios import get_current_user, require_roles
 from app.schemas.schemas import (
     AreaServicioCreate,
     AreaServicioResponse,
@@ -63,6 +63,23 @@ def listar_areas(
     return db.query(AreaServicio).order_by(AreaServicio.nombre).all()
 
 
+@router.get("/mias", response_model=List[AreaServicioResponse])
+def mis_areas(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Las áreas activas que atiende el usuario logueado (pantalla-encargado,
+    decisión 2). Abierto a cualquier usuario autenticado porque solo devuelve
+    lo propio: el gestor no puede leer GET / (todas las áreas)."""
+    return (
+        db.query(AreaServicio)
+        .join(GestorArea, GestorArea.area_id == AreaServicio.id)
+        .filter(GestorArea.usuario_id == current_user.id, AreaServicio.activo == True)  # noqa: E712
+        .order_by(AreaServicio.nombre)
+        .all()
+    )
+
+
 @router.put("/{area_id}", response_model=AreaServicioResponse)
 def actualizar_area(
     area_id: int,
@@ -78,6 +95,26 @@ def actualizar_area(
     db.commit()
     db.refresh(area)
     return area
+
+
+@router.get("/{area_id}/gestores")
+def listar_gestores(area_id: int, db: Session = Depends(get_db), _: Usuario = Depends(require_roles("admin"))):
+    """Gestores de un área (areas-y-gestores): para la pantalla "Áreas y
+    gestores". Solo usuarios; los inactivos se marcan para poder quitarlos."""
+    area = db.query(AreaServicio).filter(AreaServicio.id == area_id).first()
+    if not area:
+        raise HTTPException(status_code=404, detail="Área no encontrada")
+    filas = (
+        db.query(GestorArea, Usuario)
+        .join(Usuario, Usuario.id == GestorArea.usuario_id)
+        .filter(GestorArea.area_id == area_id)
+        .order_by(Usuario.username)
+        .all()
+    )
+    return [
+        {"usuario_id": u.id, "username": u.username, "role": u.role, "activo": bool(u.is_active)}
+        for _, u in filas
+    ]
 
 
 @router.post(

@@ -24,6 +24,11 @@ import { abrirServicioDirectoParaMascota } from './hoy.js';
 // este módulo). showSection es una función exportada hoisted; sólo se usa dentro
 // de handlers, nunca en la evaluación del módulo.
 import { showSection } from '../core/router.js';
+// orden-servicio-carrito, decisión 10: "Ir a la orden" navega a la pantalla
+// de la orden en vez de facturar la consulta acá. abrirOrden es una función
+// hoisted, usada solo dentro de handlers -- no hay relación cíclica
+// (orden-abierta.js no importa de este módulo).
+import { abrirOrden } from './orden-abierta.js';
 
 // Estados de ServicioConsulta que ya descontaron insumos del stock (Tarea 06,
 // decisión 4 — espejo de consumo_service.ESTADOS_CONSUMIDOS en el backend).
@@ -136,7 +141,9 @@ const abrirTransferirMascota = async (id, nombre) => {
         document.getElementById('transferNuevoPropietarioId').value = '';
         document.getElementById('transferMotivo').value = '';
 
-        const propietarios = await fetchAPI('/propietarios/');
+        // limit explícito: sin él el API corta en 100 y la mayoría de los
+        // tutores no aparecían (orden-veterinario-y-tutores).
+        const propietarios = await fetchAPI('/propietarios/?activo=true&limit=1000');
         const activePropietarios = propietarios.filter(p => p.activo !== false);
         const ownerOptions = activePropietarios.map(p => ({
             value: p.id,
@@ -189,6 +196,36 @@ export const handleTransferirSubmit = async (e) => {
 let _customSelectsReadyPromise = null;
 export const whenCustomSelectsReady = () => _customSelectsReadyPromise || Promise.resolve();
 
+// Opciones del selector de propietario del alta de mascota, con TODOS los
+// propietarios activos (limit explícito: sin él el API corta en 100). Lo usan
+// el alta desde el listado, el botón del menú y el alta encadenada después de
+// crear un propietario (orden-veterinario-y-tutores, propietario-a-mascota).
+export const refrescarPropietariosSelect = async () => {
+    await whenCustomSelectsReady();
+    const propietarios = await fetchAPI('/propietarios/?activo=true&limit=1000');
+    ownerSelectInstance?.setOptions(propietarios.map(p => ({
+        value: p.id,
+        label: `${p.nombre} ${p.apellido}`,
+        subtext: `Cédula: ${p.cedula}`,
+    })));
+    return propietarios;
+};
+
+// Alta de mascota con el propietario ya elegido: se usa al terminar de crear
+// un propietario, para seguir de corrido con su mascota (propietario-a-mascota).
+export const abrirNuevaMascotaParaPropietario = async (propietario) => {
+    document.getElementById('formMascota')?.reset();
+    try {
+        await refrescarPropietariosSelect();
+    } catch (_) { /* el combo queda con lo que tenía; igual se preselecciona */ }
+    const label = `${propietario.nombre} ${propietario.apellido}`;
+    ownerSelectInstance?.setValue(propietario.id, label);
+    const hidden = document.getElementById('mascotaPropietarioId');
+    if (hidden) hidden.value = propietario.id;
+    openModal('modalMascota');
+    document.getElementById('mascotaNombre')?.focus();
+};
+
 export const initCustomSelects = () => {
     _customSelectsReadyPromise = _doInitCustomSelects();
     return _customSelectsReadyPromise;
@@ -204,7 +241,8 @@ const _doInitCustomSelects = async () => {
 
     // 2. Owner Select for Registration
     try {
-        const propietarios = await fetchAPI('/propietarios/');
+        // limit explícito: sin él el API corta en 100 (orden-veterinario-y-tutores).
+        const propietarios = await fetchAPI('/propietarios/?activo=true&limit=1000');
         const ownerOptions = propietarios.map(p => ({
             value: p.id,
             label: `${p.nombre} ${p.apellido}`,
@@ -595,9 +633,11 @@ export const verConsultaCompleta = async (consultaId, mascotaId) => {
         _cargarRecetasConsultaAbierta(c.id);
         _cargarNotasConsultaAbierta(c.mascota_id);
 
-        // El botón "Cerrar y facturar" no aplica a una consulta ya cerrada.
-        const btnFact = document.getElementById('btnConsultaCerrarFacturar');
-        if (btnFact) btnFact.hidden = (c.estado || 'ABIERTA').toUpperCase() !== 'ABIERTA';
+        // "Ir a la orden" (orden-servicio-carrito, decisión 10) solo tiene
+        // sentido si la consulta resolvió su orden -- siempre debería, pero
+        // se guarda igual contra una respuesta vieja en caché.
+        const btnOrden = document.getElementById('btnConsultaIrAOrden');
+        if (btnOrden) btnOrden.hidden = !c.orden_id;
     } catch (e) {
         showNotification('Error cargando la consulta: ' + e.message, 'error');
     }
@@ -845,20 +885,66 @@ export const guardarNotaConsultaAbierta = async (e) => {
     }
 };
 
-export const cerrarYFacturarConsulta = async () => {
-    if (!currentViewedConsultaId) return;
-    if (!confirm('¿Emitir la factura de esta consulta y cerrarla?')) return;
-    const id = currentViewedConsultaId;
+// orden-servicio-carrito, decisión 10: la consulta ya no factura por fuera de
+// su orden -- "Ir a la orden" navega a sec-orden-abierta con el orden_id
+// derivado (ver ConsultaResponse.orden_id, orden_de_consulta). El endpoint de
+// facturar por consulta queda en el backend por compatibilidad, pero el front
+// ya no lo usa.
+// Única excepción a "la consulta no factura por fuera de la orden": una
+// consulta SIN orden -- anterior a las órdenes y sin servicios, porque si
+// tuviera alguno su orden se deriva de él -- no tiene otro camino de cobro.
+// Se cobra SOLO su honorario (POST /facturas/ con consulta_id, para que la
+// liquidación del veterinario la vea); no se usa from-consulta, que arrastra
+// todo lo que cuelga de la consulta (fix de revisión).
+export const facturarConsultaSinOrden = async (consultaId) => {
     try {
-        // Un paso (Tarea 09, decisión 8): el servidor arma los detalles desde
-        // consulta.servicios + honorario y deja la consulta CERRADA.
-        await fetchAPI(`/facturas/from-consulta/${id}`, { method: 'POST', body: JSON.stringify({}) });
-        showNotification('Factura emitida. Consulta cerrada.', 'success');
-        showSection('sec-consultorio');
-        if (currentMascotaId) actualizarCountsPet(currentMascotaId);
+        const c = await fetchAPI(`/consultas/${consultaId}`);
+        const honorario = Number(c.precio_consulta || 0);
+        if (!(honorario > 0)) {
+            showNotification('Esta consulta no tiene honorario para facturar.', 'warning');
+            return;
+        }
+        if (!confirm(`Esta consulta no tiene una orden asociada. ¿Emitir la factura de su honorario ($${honorario.toFixed(2)})?`)) return;
+        const m = await fetchAPI(`/mascotas/${c.mascota_id}`);
+        const factura = await fetchAPI('/facturas/', {
+            method: 'POST',
+            body: JSON.stringify({
+                propietario_id: m.propietario_id,
+                consulta_id: c.id,
+                total_pagado: 0,
+                detalles: [{ descripcion: `Consulta veterinaria - ${c.motivo || ''}`.trim().slice(0, 255), cantidad: 1, precio_unitario: honorario }],
+            }),
+        });
+        showNotification(`Factura #${factura.numero_factura || factura.id} emitida.`, 'success');
+        if (currentMascotaId) {
+            actualizarCountsPet(currentMascotaId);
+            cargarConsultas(currentMascotaId);
+        }
     } catch (err) {
         showNotification('No se pudo facturar: ' + err.message, 'error');
     }
+};
+
+// Suma la línea del honorario a la orden de una consulta que no la tiene
+// (POST /consultas/{id}/honorario-en-orden); después se cobra con la orden.
+export const agregarHonorarioAOrden = async (consultaId) => {
+    if (!confirm('¿Agregar el honorario de esta consulta a su orden para cobrarlo con ella?')) return;
+    try {
+        const r = await fetchAPI(`/consultas/${consultaId}/honorario-en-orden`, { method: 'POST', body: JSON.stringify({}) });
+        showNotification(`Honorario agregado a la orden ${r.orden_numero}.`, 'success');
+        if (currentMascotaId) cargarConsultas(currentMascotaId);
+    } catch (err) {
+        showNotification('No se pudo agregar el honorario: ' + err.message, 'error');
+    }
+};
+
+export const irALaOrdenDesdeConsulta = () => {
+    const ordenId = currentConsultaAbierta?.orden_id;
+    if (!ordenId) {
+        showNotification('Esta consulta no tiene una orden asociada.', 'error');
+        return;
+    }
+    abrirOrden(ordenId);
 };
 
 // Enlaza los controles estáticos de la pantalla (una sola vez).
@@ -866,7 +952,7 @@ export const initConsultaAbierta = () => {
     document.getElementById('formVitalesConsulta')?.addEventListener('submit', guardarVitalesConsulta);
     document.getElementById('formDiagnosticoConsulta')?.addEventListener('submit', guardarDiagnosticoConsulta);
     document.getElementById('formNotaConsultaAbierta')?.addEventListener('submit', guardarNotaConsultaAbierta);
-    document.getElementById('btnConsultaCerrarFacturar')?.addEventListener('click', cerrarYFacturarConsulta);
+    document.getElementById('btnConsultaIrAOrden')?.addEventListener('click', irALaOrdenDesdeConsulta);
     document.getElementById('btnConsultaGuardarSalir')?.addEventListener('click', () => showSection('sec-consultorio'));
     document.getElementById('btnNuevaRecetaCA')?.addEventListener('click', () => {
         if (currentViewedConsultaId) abrirModalReceta(currentViewedConsultaId);
@@ -1209,9 +1295,14 @@ document.getElementById('formAgregarServicio')?.addEventListener('submit', async
     const catalogoId = document.getElementById('addServicioCatalogoId').value;
     if (catalogoId) {
         body.catalogo_servicio_id = Number(catalogoId);
-        const consumos = [...document.querySelectorAll('#addServicioRecetaLista .consumo-cantidad')]
-            .filter(el => el.value.trim() !== '' && Number(el.value) > 0)
-            .map(el => ({ inventario_id: Number(el.dataset.inventarioId), cantidad: Number(el.value) }));
+        const inputs = [...document.querySelectorAll('#addServicioRecetaLista .consumo-cantidad')];
+        // Vacío o negativo no se adivina: se pide corregir. 0 es válido y
+        // significa "no se usó" (antes se descartaba y se consumía la receta).
+        if (inputs.some(el => el.value.trim() === '' || !(Number(el.value) >= 0))) {
+            showNotification('Completá la cantidad de cada material (0 si no se usó).', 'warning');
+            return;
+        }
+        const consumos = inputs.map(el => ({ inventario_id: Number(el.dataset.inventarioId), cantidad: Number(el.value) }));
         if (consumos.length) body.consumos = consumos;
     }
 
@@ -1329,7 +1420,18 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
                     <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--secondary-subtle); color: var(--secondary-dark); border-color: var(--secondary);">${ICONS.pill} Recetar</button>
                     ${c.factura_id ?
                         `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--info); border-color: var(--info-dark); margin-top: 4px;">${ICONS.fileText} Facturado</button>` :
-                        `<button class="btn-secondary btn-sm" onclick="facturarConsulta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`
+                        (c.orden_id
+                            ? `<button class="btn-secondary btn-sm" onclick="abrirOrden(${c.orden_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.clipboard} Ir a la orden</button>`
+                              // Orden sin la línea del honorario (consulta vieja o línea
+                              // borrada): sin esto el honorario no se podía cobrar.
+                              + (!c.honorario_en_orden && Number(c.precio_consulta) > 0
+                                  ? `<button class="btn-secondary btn-sm" onclick="agregarHonorarioAOrden(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Agregar honorario a la orden</button>`
+                                  : '')
+                            // Consulta sin NINGUNA orden (ni por su línea CONSULTA ni por
+                            // sus servicios): no tiene "Ir a la orden", así que se
+                            // ofrece facturar su honorario directo -- si no, no había
+                            // forma de cobrarlo desde la app (fix de revisión).
+                            : `<button class="btn-secondary btn-sm" onclick="facturarConsultaSinOrden(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`)
                     }
                     <button class="btn-secondary btn-sm" onclick="switchPetTab('servicios'); setTimeout(()=>abrirRegistroClinico('hospitalizacion'), 300);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>
                 </td>

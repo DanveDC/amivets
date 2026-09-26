@@ -88,14 +88,12 @@ def crear_factura_desde_consulta(
     detalles = []
     for it in items:
         es_servicio = it.get("tipo") == "SERVICIO"
-        detalles.append(DetalleFacturaCreate(
-            producto_id=it.get("producto_id"),
+        # linea_factura: una cantidad fraccionaria de servicio se factura por
+        # su subtotal exacto, no redondeada (fix de revisión).
+        detalles.append(FacturacionService.linea_factura(
+            it.get("descripcion"), it.get("cantidad"), it.get("precio_unitario"),
             servicio_id=it["id_interno"] if es_servicio else None,
-            # DetalleFactura.cantidad es Integer (deuda preexistente); se
-            # redondea una eventual cantidad fraccionada de servicio.
-            cantidad=int(round(float(it.get("cantidad") or 1))),
-            precio_unitario=it.get("precio_unitario") or 0.0,
-            descripcion=it.get("descripcion"),
+            producto_id=it.get("producto_id"),
         ))
 
     factura_create = FacturaCreate(
@@ -166,7 +164,7 @@ def anular_factura(
     # Fila 20 de la matriz (decision 9): anular es exclusivo de admin --
     # a diferencia del resto del router, acá NO se suma recepcionista ni
     # veterinario.
-    _: Usuario = Depends(require_roles("admin")),
+    current_user: Usuario = Depends(require_roles("admin")),
 ):
     """
     Anula una factura y devuelve el stock al inventario.
@@ -174,7 +172,7 @@ def anular_factura(
     - Cambia el estado a ANULADA
     - Devuelve productos al inventario
     """
-    factura_anulada = FacturacionService.anular_factura(db, factura_id)
+    factura_anulada = FacturacionService.anular_factura(db, factura_id, usuario_id=current_user.id)
     if not factura_anulada:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

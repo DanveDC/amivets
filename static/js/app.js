@@ -26,7 +26,6 @@ import * as agenda from './sections/agenda.js';
 import * as propietarios from './sections/propietarios.js';
 import * as inventario from './sections/inventario.js';
 import * as facturacion from './sections/facturacion.js';
-import * as reportes from './sections/reportes.js';
 import * as ordenes from './sections/citas-pendientes.js';
 import * as citasWeb from './sections/citas-web.js';
 import * as catalogo from './sections/catalogo.js';
@@ -54,6 +53,8 @@ Object.assign(window, {
     seleccionarMascota: consultorio.seleccionarMascota,
     switchPetTab: consultorio.switchPetTab,
     verConsultaCompleta: consultorio.verConsultaCompleta,
+    facturarConsultaSinOrden: consultorio.facturarConsultaSinOrden,
+    agregarHonorarioAOrden: consultorio.agregarHonorarioAOrden,
     cambiarEstadoServicio: consultorio.cambiarEstadoServicio,
     eliminarServicioConsulta: consultorio.eliminarServicioConsulta,
     editarServicioConsulta: consultorio.editarServicioConsulta,
@@ -82,11 +83,10 @@ Object.assign(window, {
     confirmarEliminarProducto: inventario.confirmarEliminarProducto,
     abrirHistorialProducto: inventario.abrirHistorialProducto,
     // reportes
-    guardarTarifaVeterinario: reportes.guardarTarifaVeterinario,
     // ordenes
     atenderOrden: ordenes.atenderOrden,
+    abrirOrden: ordenAbierta.abrirOrden,
     // facturacion
-    facturarConsulta: facturacion.facturarConsulta,
     exportarFacturaPDF: facturacion.exportarFacturaPDF,
     exportarAbonoPDF: facturacion.exportarAbonoPDF,
     abrirModalAbono: facturacion.abrirModalAbono,
@@ -143,13 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await consultorio.whenCustomSelectsReady();
         // Refresh owners list when opening pet registration
         try {
-            const propietariosList = await fetchAPI('/propietarios/');
-            const ownerOptions = propietariosList.map(p => ({
-                value: p.id,
-                label: `${p.nombre} ${p.apellido}`,
-                subtext: `Cédula: ${p.cedula}`
-            }));
-            consultorio.ownerSelectInstance?.setOptions(ownerOptions);
+            await consultorio.refrescarPropietariosSelect();
         } catch (e) { }
         openModal('modalMascota');
     });

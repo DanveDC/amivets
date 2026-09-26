@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.models import AreaServicio, CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
 from app.routers.usuarios import require_roles
 from app.schemas.schemas import (
+    CostoServicioResponse,
     CatalogoServicioCreate,
     CatalogoServicioUpdate,
     CatalogoServicioResponse,
@@ -275,6 +276,48 @@ def listar_recetas_servicio(
         .order_by(RecetaServicio.id)
         .all()
     )
+
+
+@router.get("/{servicio_id}/costo", response_model=CostoServicioResponse)
+def costo_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
+    """Costo de los insumos de la receta (catalogo-servicios-configurable):
+    cantidad × precio por unidad base de cada material. El precio por unidad
+    base es el precio del envase dividido su contenido (1000 ml, 500 g...);
+    sin contenido cargado, una unidad es un envase. No hay costo de compra
+    aparte en el sistema: se usa el precio de lista del material."""
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    lineas = []
+    total = 0.0
+    recetas = (
+        db.query(RecetaServicio)
+        .options(joinedload(RecetaServicio.inventario))
+        .filter(RecetaServicio.catalogo_servicio_id == servicio_id)
+        .order_by(RecetaServicio.id)
+        .all()
+    )
+    for r in recetas:
+        inv = r.inventario
+        if inv is None:
+            continue
+        contenido = float(inv.contenido_por_envase or 0)
+        costo_unitario = float(inv.precio_unitario or 0) / contenido if contenido > 0 else float(inv.precio_unitario or 0)
+        subtotal = round(float(r.cantidad) * costo_unitario, 2)
+        total += subtotal
+        lineas.append({
+            "inventario_id": inv.id,
+            "nombre": inv.nombre,
+            "cantidad": float(r.cantidad),
+            "unidad": inv.unidad_medida or "unidad",
+            "costo_unitario": round(costo_unitario, 4),
+            "subtotal": subtotal,
+        })
+    return {"servicio_id": servicio_id, "total": round(total, 2), "lineas": lineas}
 
 
 @router.post(

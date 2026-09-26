@@ -28,15 +28,17 @@ import { loadAgenda } from '../sections/agenda.js';
 import { loadPropietarios } from '../sections/propietarios.js';
 import { initMascotas } from '../sections/mascotas.js';
 import { loadInventario } from '../sections/inventario.js';
-import { cargarHistorialFacturas } from '../sections/facturacion.js';
+import { initFacturacion } from '../sections/facturacion.js';
+import { initCajaRapida } from '../sections/caja-rapida.js';
 import { loadReportes } from '../sections/reportes.js';
 import { loadUsuarios } from '../sections/usuarios.js';
 import { loadPerfil } from '../sections/perfil.js';
-import { cargarCategoriasSelect, cargarCatalogo } from '../sections/catalogo.js';
+import { init as initCatalogo } from '../sections/catalogo.js';
 import { init as initCitasWeb } from '../sections/citas-web.js';
 import { loadHoy } from '../sections/hoy.js';
 import { initInicio } from '../sections/inicio.js';
 import { loadBandejaGestor, refrescarBadgeBandeja } from '../sections/bandeja-gestor.js';
+import { loadAreas } from '../sections/areas.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Section registry
@@ -56,8 +58,9 @@ const SECTIONS = [
     { id: 'sec-hoy',             label: 'Panel del día',       tab: true,  init: loadHoy,             roles: ADMISION_ROLES },
     { id: 'sec-agenda',          label: 'Agenda',              tab: true,  init: loadAgenda,           roles: ADMISION_ROLES },
     { id: 'sec-orden-abierta',   label: 'Orden abierta',       tab: false, init: null },
-    { id: 'sec-catalogo',        label: 'Catálogo',            tab: true,  init: () => { cargarCategoriasSelect(); cargarCatalogo(); }, roles: ['admin', 'veterinario'] },
+    { id: 'sec-catalogo',        label: 'Catálogo',            tab: true,  init: initCatalogo, roles: ['admin', 'veterinario'] },
     { id: 'sec-bandeja-gestor',  label: 'Mi bandeja',          tab: true,  init: loadBandejaGestor,    roles: SERVICIOS_ROLES },
+    { id: 'sec-areas',           label: 'Áreas y gestores',    tab: true,  init: loadAreas,            roles: ['admin'] },
     // sec-mascotas es la entrada nueva del módulo 3 (etapa 8); sec-propietarios
     // sigue registrada -- tab:false porque MODULES ya no la lista en
     // sectionIds, ver abajo. Se llega por el botón "Tutores" de sec-mascotas
@@ -67,11 +70,12 @@ const SECTIONS = [
     // pero esa función navega a sec-consultorio, no acá -- era falso; el
     // botón "Tutores" es el fix real, no solo la corrección del comentario.
     { id: 'sec-mascotas',        label: 'Mascotas',            tab: true,  init: initMascotas,         roles: MASCOTAS_ROLES },
-    { id: 'sec-propietarios',    label: 'Propietarios',        tab: false, init: loadPropietarios,     roles: MASCOTAS_ROLES },
+    { id: 'sec-propietarios',    label: 'Propietarios',        tab: true,  init: loadPropietarios,     roles: MASCOTAS_ROLES },
     { id: 'sec-consultorio',     label: 'Historia clínica',    tab: true,  init: initConsultorio,      roles: MASCOTAS_ROLES },
     { id: 'sec-consulta-abierta', label: 'Consulta abierta',   tab: false, init: null },
     { id: 'sec-inventario',      label: 'Inventario',          tab: true,  init: loadInventario,       roles: ['admin'] },
-    { id: 'sec-facturacion',     label: 'Facturación',         tab: true,  init: cargarHistorialFacturas, roles: ['admin', 'recepcionista'] },
+    { id: 'sec-facturacion',     label: 'Facturación',         tab: true,  init: initFacturacion, roles: ['admin', 'recepcionista'] },
+    { id: 'sec-caja-rapida',     label: 'Caja rápida',         tab: true,  init: initCajaRapida,  roles: ['admin', 'recepcionista'] },
     { id: 'sec-reportes',        label: 'Informes',            tab: true,  init: loadReportes,         roles: ['admin'] },
     // Reachable via the user menu and the command palette — no sidebar entry.
     { id: 'sec-citas-web',       label: 'Citas web / QR',      tab: false, init: initCitasWeb },
@@ -101,15 +105,15 @@ const MODULES = [
         icon: iconSvg('<path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 13h6M9 17h4"/>'),
     },
     {
-        num: 2, label: 'Servicios', sectionIds: ['sec-catalogo', 'sec-bandeja-gestor'],
+        num: 2, label: 'Servicios', sectionIds: ['sec-catalogo', 'sec-bandeja-gestor', 'sec-areas'],
         descripcion: 'El catálogo y la ejecución: consultas, laboratorio, cirugía, hospitalización, estética e insumos médicos.',
-        cta: { 'sec-catalogo': 'Abre el catálogo de servicios', 'sec-bandeja-gestor': 'Abre tu bandeja de trabajo' },
+        cta: { 'sec-catalogo': 'Abre el catálogo de servicios', 'sec-bandeja-gestor': 'Abre tu bandeja de trabajo', 'sec-areas': 'Configura áreas, gestores y servicios' },
         icon: iconSvg('<path d="M4.8 2.3A.3.3 0 1 0 5 2H4a2 2 0 0 0-2 2v5a6 6 0 0 0 6 6 6 6 0 0 0 6-6V4a2 2 0 0 0-2-2h-1a.2.2 0 1 0 .2.3"/><path d="M8 15v1a6 6 0 0 0 6 6 6 6 0 0 0 6-6v-4"/><circle cx="20" cy="10" r="2"/>'),
     },
     {
-        num: 3, label: 'Mascotas / Tutores', sectionIds: ['sec-mascotas', 'sec-consultorio'],
+        num: 3, label: 'Mascotas / Tutores', sectionIds: ['sec-mascotas', 'sec-propietarios', 'sec-consultorio'],
         descripcion: 'Pacientes por especie, tutores naturales y jurídicos, y la historia clínica completa de cada uno.',
-        cta: { 'sec-mascotas': 'Abre el listado de mascotas', 'sec-consultorio': 'Abre la historia clínica' },
+        cta: { 'sec-mascotas': 'Abre el listado de mascotas', 'sec-propietarios': 'Abre el listado de propietarios', 'sec-consultorio': 'Abre la historia clínica' },
         icon: iconSvg('<circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="6.5" cy="15" r="2"/><path d="M14.5 15c1.6 1.2 2.5 2.6 2.5 4a2.6 2.6 0 0 1-2.6 2.6c-1 0-1.8-.4-2.9-.4s-1.9.4-2.9.4A2.6 2.6 0 0 1 6 19c0-2.6 3-5.4 5.5-5.4 1.1 0 2.1.5 3 1.4z"/>'),
     },
     {
@@ -119,9 +123,9 @@ const MODULES = [
         icon: iconSvg('<path d="m7.5 4.3 9 5.1"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>'),
     },
     {
-        num: 5, label: 'Facturación', sectionIds: ['sec-facturacion'],
+        num: 5, label: 'Facturación', sectionIds: ['sec-facturacion', 'sec-caja-rapida'],
         descripcion: 'Facturar una orden completa o por partes, cobros y abonos, y el resumen por método de pago.',
-        cta: { 'sec-facturacion': 'Abre las órdenes por cobrar' },
+        cta: { 'sec-facturacion': 'Abre las órdenes por cobrar', 'sec-caja-rapida': 'Vende en el mostrador sin registrar al cliente' },
         icon: iconSvg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>'),
     },
     {
@@ -286,9 +290,15 @@ export function showSection(id) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function syncHeaderTitle(entry) {
-    if (entry.id === 'sec-inicio') return; // el lanzador pinta su propio encabezado
     const title = document.getElementById('avHeaderTitleText');
     const sub = document.getElementById('avHeaderSubtitleText');
+    // El inicio escribe su propia cabecera: antes salía sin tocarla y quedaba
+    // el título/fecha de la sección anterior (inicio-marca-cabecera).
+    if (entry.id === 'sec-inicio') {
+        if (title) title.textContent = 'AMIVETS';
+        if (sub) sub.textContent = 'Sistema integral de gestión';
+        return;
+    }
     if (title) title.textContent = entry.label;
     if (sub && entry.id !== 'sec-orden-abierta' && entry.id !== 'sec-bandeja-gestor' && entry.id !== 'sec-mascotas') sub.textContent = '';
 }
@@ -318,7 +328,7 @@ function renderSidebar(role, activeId) {
         '<span class="av-sidebar-logo" aria-hidden="true">' +
         '<svg width="22" height="22" viewBox="0 0 24 24" fill="#FFFFFF"><circle cx="11" cy="4.6" r="2.1"/><circle cx="17.8" cy="8.2" r="2.1"/><circle cx="4.2" cy="8.2" r="2.1"/><circle cx="6.8" cy="14.6" r="2.1"/><path d="M14.4 14.6c1.6 1.2 2.6 2.7 2.6 4.2a2.7 2.7 0 0 1-2.7 2.7c-1 0-1.9-.4-3-.4s-2 .4-3 .4A2.7 2.7 0 0 1 5.6 18.8c0-2.7 3.1-5.6 5.7-5.6 1.1 0 2.2.5 3.1 1.4Z"/></svg>' +
         '</span>' +
-        '<span class="av-sidebar-brandtext"><strong class="ser">AmiVets</strong><span>Sistema de gestión</span></span>';
+        '<span class="av-sidebar-brandtext"><strong class="ser">AmiVets</strong><span>Sistema integral de gestión</span></span>';
     brand.addEventListener('click', (e) => { e.preventDefault(); navigate(DEFAULT_SECTION); });
     frag.appendChild(brand);
 

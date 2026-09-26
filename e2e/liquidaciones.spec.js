@@ -206,43 +206,28 @@ test.describe.serial('Liquidaciones a veterinarios — /api/liquidaciones', () =
     expect(body.consultas).toEqual([]);
   });
 
-  test('UI: recorrer la Liquidación de la cadena B (tarifa, preview y confirmar) como admin', async ({ page, request }) => {
+  test('UI: el historial de tarifa fija sigue visible y ya no hay controles para calcularla (comisiones-por-servicio)', async ({ page, request }) => {
     const hoy = todayUTC();
+
+    // La tarifa fija ya no se calcula desde el front: se liquida B por la API
+    // (endpoint de compatibilidad) y se verifica que el historial la muestre.
+    const calc = await request.post('/api/liquidaciones/calcular', {
+      headers: authHeaders(S.token),
+      data: { veterinario_id: S.B.vet.id, fecha_inicio: hoy, fecha_fin: hoy },
+    });
+    expect(calc.status(), await calc.text()).toBe(201);
+    const liq = await calc.json();
+    expect(Number(liq.total)).toBeCloseTo(TARIFA_B, 2);
+    expect(liq.detalles.some((d) => d.consulta_id === S.B.consulta.id)).toBe(true);
 
     await loginAsAdmin(page);
     await gotoSection(page, 'sec-reportes');
-    // liqSeccion es admin-only: checkAdminAccess la muestra e initLiquidaciones la puebla.
     await expect(page.locator('#liqSeccion')).toBeVisible();
 
-    // Tarifa configurada de B reflejada en su input.
-    await expect(page.locator(`#liqTarifaInput${S.B.vet.id}`)).toHaveValue(/^7000(\.0+)?$/);
-
-    // Preview por UI.
-    await page.selectOption('#liqVetSelect', String(S.B.vet.id));
-    await page.fill('#liqFechaInicio', hoy);
-    await page.fill('#liqFechaFin', hoy);
-    await page.click('#btnLiqPreview');
-
-    const previewWrap = page.locator('#liqPreviewWrap');
-    await expect(previewWrap).toContainText('consulta(s) elegibles');
-    await expect(previewWrap).toContainText(`#${S.B.consulta.id}`);
-    await expect(previewWrap).toContainText('Total:');
-
-    // Confirmar cálculo (confirmarLiquidacion pide confirm()).
-    page.once('dialog', (dialog) => dialog.accept());
-    await page.click('#btnLiqConfirmar');
-
-    // El historial se refresca y muestra la nueva liquidación.
-    await expect(page.locator('#liqHistLista')).toContainText('Liquidación #');
-
-    // Contraste API: existe una liquidación para el veterinario B con la
-    // consulta sembrada y el total = tarifa × 1.
-    const histRes = await request.get(`/api/liquidaciones/?veterinario_id=${S.B.vet.id}`, {
-      headers: authHeaders(S.token),
-    });
-    const historial = await histRes.json();
-    expect(historial.length).toBe(1);
-    expect(Number(historial[0].total)).toBeCloseTo(TARIFA_B, 2);
-    expect(historial[0].detalles.some((d) => d.consulta_id === S.B.consulta.id)).toBe(true);
+    // Los controles de tarifa fija ya no existen; el historial sí.
+    await expect(page.locator('#liqTarifasBody')).toHaveCount(0);
+    await expect(page.locator('#btnLiqPreview')).toHaveCount(0);
+    await page.selectOption('#liqHistVetSelect', String(S.B.vet.id));
+    await expect(page.locator('#liqHistLista')).toContainText(`Liquidación #${liq.id}`);
   });
 });
