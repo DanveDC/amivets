@@ -892,6 +892,19 @@ export const facturarConsultaSinOrden = async (consultaId) => {
     }
 };
 
+// Suma la línea del honorario a la orden de una consulta que no la tiene
+// (POST /consultas/{id}/honorario-en-orden); después se cobra con la orden.
+export const agregarHonorarioAOrden = async (consultaId) => {
+    if (!confirm('¿Agregar el honorario de esta consulta a su orden para cobrarlo con ella?')) return;
+    try {
+        const r = await fetchAPI(`/consultas/${consultaId}/honorario-en-orden`, { method: 'POST', body: JSON.stringify({}) });
+        showNotification(`Honorario agregado a la orden ${r.orden_numero}.`, 'success');
+        if (currentMascotaId) cargarConsultas(currentMascotaId);
+    } catch (err) {
+        showNotification('No se pudo agregar el honorario: ' + err.message, 'error');
+    }
+};
+
 export const irALaOrdenDesdeConsulta = () => {
     const ordenId = currentConsultaAbierta?.orden_id;
     if (!ordenId) {
@@ -1376,10 +1389,15 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
                         `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--info); border-color: var(--info-dark); margin-top: 4px;">${ICONS.fileText} Facturado</button>` :
                         (c.orden_id
                             ? `<button class="btn-secondary btn-sm" onclick="abrirOrden(${c.orden_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.clipboard} Ir a la orden</button>`
-                            // Consulta sin orden (anterior a las órdenes, o con su línea
-                            // CONSULTA borrada): no tiene "Ir a la orden", así que se
-                            // ofrece facturarla directo -- si no, no había forma de
-                            // cobrarla desde la app (fix de revisión).
+                              // Orden sin la línea del honorario (consulta vieja o línea
+                              // borrada): sin esto el honorario no se podía cobrar.
+                              + (!c.honorario_en_orden && Number(c.precio_consulta) > 0
+                                  ? `<button class="btn-secondary btn-sm" onclick="agregarHonorarioAOrden(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Agregar honorario a la orden</button>`
+                                  : '')
+                            // Consulta sin NINGUNA orden (ni por su línea CONSULTA ni por
+                            // sus servicios): no tiene "Ir a la orden", así que se
+                            // ofrece facturar su honorario directo -- si no, no había
+                            // forma de cobrarlo desde la app (fix de revisión).
                             : `<button class="btn-secondary btn-sm" onclick="facturarConsultaSinOrden(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`)
                     }
                     <button class="btn-secondary btn-sm" onclick="switchPetTab('servicios'); setTimeout(()=>abrirRegistroClinico('hospitalizacion'), 300);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>

@@ -247,6 +247,10 @@ class ConsultaResponse(ConsultaBase):
     # `servicios[]`. No agrega una query nueva: `servicios` ya se carga para
     # este mismo response.
     orden_id: Optional[int] = None
+    # True si la orden ya tiene la línea CONSULTA (el honorario). False con
+    # orden_id presente = consulta vieja o con la línea borrada: Historia
+    # clínica ofrece "Agregar honorario a la orden" (fix de revisión).
+    honorario_en_orden: bool = False
 
     @model_validator(mode='before')
     def _derivar_orden_id(cls, data):
@@ -261,6 +265,7 @@ class ConsultaResponse(ConsultaBase):
                 )
                 if linea is not None:
                     data.orden_id = linea.orden_id
+                    data.honorario_en_orden = True
                 else:
                     # Consulta anterior a las órdenes (sin línea CONSULTA): el
                     # backfill enganchó sus servicios a una orden, así que se

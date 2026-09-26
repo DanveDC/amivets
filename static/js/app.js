@@ -54,6 +54,7 @@ Object.assign(window, {
     switchPetTab: consultorio.switchPetTab,
     verConsultaCompleta: consultorio.verConsultaCompleta,
     facturarConsultaSinOrden: consultorio.facturarConsultaSinOrden,
+    agregarHonorarioAOrden: consultorio.agregarHonorarioAOrden,
     cambiarEstadoServicio: consultorio.cambiarEstadoServicio,
     eliminarServicioConsulta: consultorio.eliminarServicioConsulta,
     editarServicioConsulta: consultorio.editarServicioConsulta,

@@ -10,7 +10,7 @@ from app.schemas.schemas import (
     RecetaCreate, RecetaResponse,
     ServicioConsultaCreate, ServicioConsultaUpdate, ServicioConsultaResponse
 )
-from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion, Usuario
+from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion, Usuario, Factura
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
 from app.services import consumo_service, orden_service
@@ -328,3 +328,60 @@ def eliminar_servicio_consulta(
     routers/servicios.py; este path se mantiene para no romper contratos
     existentes."""
     return eliminar_servicio_impl(servicio_id, db, current_user)
+
+
+@router.post("/{consulta_id}/honorario-en-orden")
+def agregar_honorario_a_orden(
+    consulta_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
+):
+    """Suma el honorario de una consulta a su orden cuando le falta la línea
+    CONSULTA (fix de revisión): consultas anteriores a las órdenes, cuyos
+    servicios el backfill enganchó a una orden sin crear esa línea, o una
+    línea CONSULTA borrada. Sin esto el honorario quedaba imposible de cobrar:
+    la orden no lo lista y cobrarlo aparte con consulta_id marcaría como
+    facturados todos los servicios de la consulta.
+
+    La orden se llega por cualquiera de los servicios vivos de la consulta.
+    """
+    consulta = db.query(Consulta).filter(Consulta.id == consulta_id).first()
+    if not consulta:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consulta no encontrada")
+    if orden_service.orden_de_consulta(db, consulta_id) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La consulta ya tiene su honorario en la orden.")
+    if not (consulta.precio_consulta or 0) > 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La consulta no tiene honorario para cobrar.")
+    ya_facturada = db.query(Factura.id).filter(Factura.consulta_id == consulta_id, Factura.estado != "ANULADA").first()
+    if ya_facturada:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="El honorario de esta consulta ya está facturado.")
+
+    servicio = (
+        db.query(ServicioConsulta)
+        .filter(
+            ServicioConsulta.consulta_id == consulta_id,
+            ServicioConsulta.orden_id.isnot(None),
+            ServicioConsulta.is_deleted == False,  # noqa: E712
+        )
+        .first()
+    )
+    if servicio is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="La consulta no tiene orden; facturá su honorario directamente.",
+        )
+    orden = orden_service.obtener_orden(db, servicio.orden_id)
+    if orden.estado in orden_service.ESTADOS_TERMINALES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"La orden {orden.numero} está {orden.estado}; no se le puede sumar el honorario.",
+        )
+    if orden_service.consulta_viva_en_orden(db, orden.id) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"La orden {orden.numero} ya tiene el honorario de otra consulta.",
+        )
+
+    orden_service.crear_linea_consulta(db, orden, consulta)
+    db.commit()
+    return {"orden_id": orden.id, "orden_numero": orden.numero}
