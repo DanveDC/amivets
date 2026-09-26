@@ -131,11 +131,15 @@ The open-order screen SHALL show every service with its state and subtotal (`can
 
 ### Requirement: La consulta no factura por fuera de la orden
 
-The Historia clínica screen MUST NOT offer billing a consultation directly ("Facturar" or "Cerrar y facturar"). Every consultation linked to an order SHALL offer "Ir a la orden", which opens the order screen.
+The Historia clínica screen MUST NOT offer billing a consultation linked to an order directly ("Facturar" or "Cerrar y facturar"). Every consultation linked to an order SHALL offer "Ir a la orden", which opens the order screen. A consultation with no order (created before orders existed, or whose consultation line was deleted) has no order to bill through, so it SHALL offer "Facturar", which issues its invoice through the consultation billing endpoint.
 
 #### Scenario: Sin atajo de facturación en la consulta
-- **WHEN** un usuario ve una consulta sin facturar en Historia clínica
+- **WHEN** un usuario ve una consulta sin facturar, vinculada a una orden, en Historia clínica
 - **THEN** no hay botón para facturar la consulta, y sí hay uno "Ir a la orden"
+
+#### Scenario: Consulta sin orden
+- **WHEN** un usuario ve una consulta sin facturar que no tiene orden
+- **THEN** hay un botón "Facturar" que emite su factura
 
 #### Scenario: Navegar a la orden
 - **WHEN** el usuario pulsa "Ir a la orden" en una consulta

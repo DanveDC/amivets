@@ -857,6 +857,24 @@ export const guardarNotaConsultaAbierta = async (e) => {
 // derivado (ver ConsultaResponse.orden_id, orden_de_consulta). El endpoint de
 // facturar por consulta queda en el backend por compatibilidad, pero el front
 // ya no lo usa.
+// Única excepción a "la consulta no factura por fuera de la orden": una
+// consulta SIN orden asociada no tiene otro camino de cobro. Usa el endpoint
+// de compatibilidad POST /facturas/from-consulta/{id}, que arma la factura en
+// el servidor (queda PENDIENTE; se cobra desde Facturación).
+export const facturarConsultaSinOrden = async (consultaId) => {
+    if (!confirm('Esta consulta no tiene una orden asociada. ¿Emitir su factura?')) return;
+    try {
+        const factura = await fetchAPI(`/facturas/from-consulta/${consultaId}`, { method: 'POST', body: JSON.stringify({}) });
+        showNotification(`Factura #${factura.numero_factura || factura.id} emitida.`, 'success');
+        if (currentMascotaId) {
+            actualizarCountsPet(currentMascotaId);
+            cargarConsultas(currentMascotaId);
+        }
+    } catch (err) {
+        showNotification('No se pudo facturar: ' + err.message, 'error');
+    }
+};
+
 export const irALaOrdenDesdeConsulta = () => {
     const ordenId = currentConsultaAbierta?.orden_id;
     if (!ordenId) {
@@ -1334,7 +1352,13 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
                     <button class="btn-secondary btn-sm" onclick="abrirModalReceta(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--secondary-subtle); color: var(--secondary-dark); border-color: var(--secondary);">${ICONS.pill} Recetar</button>
                     ${c.factura_id ?
                         `<button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${c.factura_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; background: var(--info); border-color: var(--info-dark); margin-top: 4px;">${ICONS.fileText} Facturado</button>` :
-                        (c.orden_id ? `<button class="btn-secondary btn-sm" onclick="abrirOrden(${c.orden_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.clipboard} Ir a la orden</button>` : '')
+                        (c.orden_id
+                            ? `<button class="btn-secondary btn-sm" onclick="abrirOrden(${c.orden_id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.clipboard} Ir a la orden</button>`
+                            // Consulta sin orden (anterior a las órdenes, o con su línea
+                            // CONSULTA borrada): no tiene "Ir a la orden", así que se
+                            // ofrece facturarla directo -- si no, no había forma de
+                            // cobrarla desde la app (fix de revisión).
+                            : `<button class="btn-secondary btn-sm" onclick="facturarConsultaSinOrden(${c.id})" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--warning-subtle); color: var(--warning-dark); border-color: var(--warning);">${ICONS.dollar} Facturar</button>`)
                     }
                     <button class="btn-secondary btn-sm" onclick="switchPetTab('servicios'); setTimeout(()=>abrirRegistroClinico('hospitalizacion'), 300);" style="padding: 0.2rem 0.5rem; font-size: 0.8rem; margin-top: 4px; background: var(--accent-subtle); color: var(--accent-dark); border-color: var(--accent);">${ICONS.hospital} Internar</button>
                 </td>

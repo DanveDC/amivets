@@ -53,6 +53,7 @@ Object.assign(window, {
     seleccionarMascota: consultorio.seleccionarMascota,
     switchPetTab: consultorio.switchPetTab,
     verConsultaCompleta: consultorio.verConsultaCompleta,
+    facturarConsultaSinOrden: consultorio.facturarConsultaSinOrden,
     cambiarEstadoServicio: consultorio.cambiarEstadoServicio,
     eliminarServicioConsulta: consultorio.eliminarServicioConsulta,
     editarServicioConsulta: consultorio.editarServicioConsulta,
