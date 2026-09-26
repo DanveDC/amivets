@@ -332,6 +332,28 @@ def anular_orden(
             detail=f"La orden {orden.numero} está {orden.estado} y no se puede anular.",
         )
 
+    cancelar_servicios_y_anular(db, orden, current_user.id, motivo)
+    db.commit()
+    db.refresh(orden)
+    return orden
+
+
+def cancelar_servicios_y_anular(
+    db: Session,
+    orden: OrdenServicio,
+    usuario_id: Optional[int],
+    motivo: str,
+    saltear_facturados: bool = True,
+) -> None:
+    """Revierte el consumo de los servicios ejecutados de la orden, los deja
+    CANCELADO y pasa la orden a ANULADA. No commitea: la usan anular_orden y la
+    anulación de la factura de una venta de caja rápida
+    (facturacion_service), cada una dentro de su propia transacción.
+
+    Con `saltear_facturados` (anular_orden) los servicios ya cobrados no se
+    tocan: su reversa es anular la factura. Al anular esa factura se pasa
+    False, porque ahí justamente se está deshaciendo el cobro.
+    """
     servicios = (
         db.query(ServicioConsulta)
         .filter(
@@ -341,22 +363,19 @@ def anular_orden(
         .all()
     )
     for servicio in servicios:
-        if servicio.estado == "FACTURADO" or servicio.facturado:
+        if saltear_facturados and (servicio.estado == "FACTURADO" or servicio.facturado):
             # Ya cobrado: la reversa de dinero es anular la factura, no anular
             # la orden. Se deja como esta para no descuadrar el ledger.
             continue
         if servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
-            consumo_service.revertir_para_servicio(db, servicio, usuario_id=current_user.id)
+            consumo_service.revertir_para_servicio(db, servicio, usuario_id=usuario_id)
         # Una orden anulada no puede dejar trabajo vivo colgando: sus lineas
         # quedan CANCELADO, que es el terminal del ciclo de servicio (decision 4).
         servicio.estado = "CANCELADO"
 
     orden.estado = "ANULADA"
-    orden.anulada_por_id = current_user.id
+    orden.anulada_por_id = usuario_id
     orden.motivo_anulacion = motivo
-    db.commit()
-    db.refresh(orden)
-    return orden
 
 
 # ---------------------------------------------------------------------------

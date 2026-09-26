@@ -1213,6 +1213,22 @@ class ConsumoMaterial(Base):
         return f"<ConsumoMaterial svc_consulta={self.servicio_consulta_id} inv={self.inventario_id}>"
 
 
+class FacturaOrden(Base):
+    """Vínculo explícito factura -> orden de servicio que la originó (fix de
+    revisión). Antes la orden de una factura se deducía por sus líneas de
+    servicio, y una venta de caja rápida solo con productos no tiene ninguna.
+
+    Tabla aparte a propósito (y no una columna facturas.orden_id): el dev
+    corre create_all, que no agrega columnas a tablas existentes. Una factura
+    tiene como mucho una orden.
+    """
+    __tablename__ = "facturas_ordenes"
+
+    id = Column(Integer, primary_key=True)
+    factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False, unique=True, index=True)
+    orden_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=False, index=True)
+
+
 class ConsumoPrevisto(Base):
     """Consumo real de un material que se indica al AGREGAR un servicio a una
     orden, antes de que se ejecute (orden-servicio-carrito: todo servicio

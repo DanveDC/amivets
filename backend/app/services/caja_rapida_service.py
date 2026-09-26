@@ -224,11 +224,11 @@ def _registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> 
             descuento=0.0,
             impuesto=0.0,
             detalles=detalles,
-            # Referencia a la orden: anular la factura la encuentra por acá
-            # aunque la venta sea solo de productos (sin líneas de servicio).
-            observaciones=f"Venta de caja rápida · orden {orden.numero}",
         ),
         usuario_id=usuario.id,
+        # Vínculo factura -> orden (FacturaOrden): anular la factura encuentra
+        # la orden aunque la venta sea solo de productos.
+        orden_id=orden.id,
     )
 
 

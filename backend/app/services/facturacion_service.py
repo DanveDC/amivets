@@ -1,4 +1,3 @@
-import re
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
@@ -9,9 +8,9 @@ from app.models.models import (
     Factura, DetalleFactura, Inventario, MovimientoInventario,
     Consulta, PruebaComplementaria, Vacunacion, Desparasitacion,
     Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento,
-    OrdenServicio, Usuario
+    OrdenServicio, Usuario, FacturaOrden, ConsumoMaterial
 )
-from app.services import consumo_service
+from app.services import consumo_service, orden_service
 
 
 def _consumo_en_ledger(db: Session, servicio_id) -> bool:
@@ -69,7 +68,8 @@ class FacturacionService:
         return f"FAC-{nuevo_numero:06d}"
     
     @staticmethod
-    def crear_factura(db: Session, factura_data: FacturaCreate, usuario_id: Optional[int] = None) -> Factura:
+    def crear_factura(db: Session, factura_data: FacturaCreate, usuario_id: Optional[int] = None,
+                      orden_id: Optional[int] = None) -> Factura:
         """
         Crea una nueva factura con integridad atómica:
         1. Bloquea filas de inventario (SELECT FOR UPDATE)
@@ -258,6 +258,11 @@ class FacturacionService:
             db.add(nueva_factura)
             for mov in movimientos:
                 db.add(mov)
+            if orden_id:
+                # Vínculo explícito con la orden que se factura (FacturaOrden):
+                # en el mismo commit que la factura.
+                db.flush()
+                db.add(FacturaOrden(factura_id=nueva_factura.id, orden_id=orden_id))
 
             # Marcar como facturado CUALQUIER ServicioConsulta referenciado por
             # una línea de esta factura, tenga o no consulta. Esto cubre la
@@ -409,7 +414,17 @@ class FacturacionService:
         # deadlockear con una facturación de orden concurrente. Se resuelve
         # antes de bloquear nada más, con una lectura simple (sin lock).
         orden_a_revertir = None
-        if servicio_ids:
+        vinculo = db.query(FacturaOrden).filter(FacturaOrden.factura_id == factura.id).first()
+        if vinculo is not None:
+            orden_a_revertir = (
+                db.query(OrdenServicio)
+                .filter(OrdenServicio.id == vinculo.orden_id)
+                .with_for_update()
+                .first()
+            )
+        elif servicio_ids:
+            # Facturas sin vínculo (anteriores a FacturaOrden): la orden se
+            # deduce de sus líneas de servicio.
             orden_ids = {
                 row[0]
                 for row in db.query(ServicioConsulta.orden_id)
@@ -425,19 +440,6 @@ class FacturacionService:
                 orden_a_revertir = (
                     db.query(OrdenServicio)
                     .filter(OrdenServicio.id == orden_ids.pop())
-                    .with_for_update()
-                    .first()
-                )
-
-        # Venta de caja rápida solo con productos: la factura no tiene líneas
-        # de servicio, así que la orden se encuentra por la referencia que
-        # caja_rapida_service deja en las observaciones (fix de revisión).
-        if orden_a_revertir is None and factura.observaciones:
-            m = re.search(r"orden (OS-\d+)", factura.observaciones)
-            if m:
-                orden_a_revertir = (
-                    db.query(OrdenServicio)
-                    .filter(OrdenServicio.numero == m.group(1), OrdenServicio.origen == "CAJA_RAPIDA")
                     .with_for_update()
                     .first()
                 )
@@ -461,12 +463,29 @@ class FacturacionService:
             if d.producto_id and not _consumo_en_ledger(db, d.servicio_id)
         ]
         producto_ids = {d.producto_id for d in detalles_a_devolver}
+        # Venta de caja rápida: también se van a devolver los materiales que
+        # consumieron sus servicios. Se bloquean JUNTO con los productos, en la
+        # misma consulta ordenada por id: bloquearlos después rompía el orden
+        # global ascendente y podía deadlockear (fix de revisión).
+        es_caja = (
+            orden_a_revertir is not None
+            and orden_a_revertir.origen == "CAJA_RAPIDA"
+            and orden_a_revertir.estado == "FACTURADA"
+        )
+        material_ids = set()
+        if es_caja:
+            material_ids = {
+                r[0] for r in db.query(ConsumoMaterial.inventario_id)
+                .join(ServicioConsulta, ServicioConsulta.id == ConsumoMaterial.servicio_consulta_id)
+                .filter(ServicioConsulta.orden_id == orden_a_revertir.id)
+                .all()
+            }
         productos_bloqueados = {}
-        if producto_ids:
+        if producto_ids or material_ids:
             productos_bloqueados = {
                 p.id: p
                 for p in db.query(Inventario)
-                .filter(Inventario.id.in_(producto_ids))
+                .filter(Inventario.id.in_(producto_ids | material_ids))
                 .order_by(Inventario.id)
                 .with_for_update()
                 .all()
@@ -482,7 +501,7 @@ class FacturacionService:
                     cantidad=detalle.cantidad,
                     costo_unitario=producto.precio_unitario,
                     origen_destino=f"Anulación factura {factura.numero_factura}",
-                    usuario_responsable_id=None,
+                    usuario_responsable_id=usuario_id,
                 ))
 
         factura.estado = "ANULADA"
@@ -730,27 +749,19 @@ class FacturacionService:
         # ANULADA. Si crear_factura falla, su rollback deshace también esto.
         orden.estado = "FACTURADA"
         factura = FacturacionService.crear_factura(
-            db, factura_create, usuario_id=usuario.id if usuario else None
+            db, factura_create, usuario_id=usuario.id if usuario else None, orden_id=orden.id
         )
         return factura
 
     @staticmethod
     def _anular_orden_caja(db: Session, orden: OrdenServicio, factura: Factura, usuario_id: Optional[int]) -> None:
-        """Deshace una venta de caja rápida: igual que orden_service.anular_orden,
-        devuelve el material consumido por sus servicios y los deja CANCELADO,
-        y la orden queda ANULADA. No commitea: lo hace anular_factura."""
-        servicios = (
-            db.query(ServicioConsulta)
-            .filter(ServicioConsulta.orden_id == orden.id, ServicioConsulta.is_deleted == False)  # noqa: E712
-            .all()
+        """Deshace una venta de caja rápida con la misma lógica que anular una
+        orden: devuelve el material de sus servicios, los deja CANCELADO y la
+        orden queda ANULADA. Sus servicios ya se desmarcaron como facturados
+        arriba, así que no se saltean. No commitea: lo hace anular_factura."""
+        orden_service.cancelar_servicios_y_anular(
+            db, orden, usuario_id, f"Factura {factura.numero_factura} anulada", saltear_facturados=False,
         )
-        for servicio in servicios:
-            if servicio.estado in consumo_service.ESTADOS_CONSUMIDOS:
-                consumo_service.revertir_para_servicio(db, servicio, usuario_id=usuario_id)
-            servicio.estado = "CANCELADO"
-        orden.estado = "ANULADA"
-        orden.anulada_por_id = usuario_id
-        orden.motivo_anulacion = f"Factura {factura.numero_factura} anulada"
 
     @staticmethod
     def _detalle_de_item_orden(it: dict) -> DetalleFacturaCreate:
@@ -768,18 +779,23 @@ class FacturacionService:
         0, 2.5 -> 2 con el redondeo bancario de Python) y la línea quedaba
         igual marcada como facturada. Una cantidad fraccionaria se factura como
         1 unidad por el subtotal exacto, con la cantidad real en la descripción.
-        Las líneas de PRODUCTO mantienen el redondeo: ahí la cantidad mueve
-        stock en unidades enteras.
+        Un servicio con producto asociado (vacuna, desparasitación) y cantidad
+        fraccionaria se factura igual por su subtotal exacto, pero SIN
+        producto_id: su stock lo mueve el consumo del servicio, y con
+        producto_id crear_factura descontaría una unidad entera de más. Solo
+        una línea de producto suelta (sin servicio) conserva el redondeo: ahí
+        la cantidad mueve stock en unidades enteras y ningún flujo la genera
+        fraccionaria.
         """
         cantidad = float(cantidad or 1)
         precio = float(precio or 0.0)
-        if cantidad.is_integer() or producto_id:
+        if cantidad.is_integer() or (producto_id and not servicio_id):
             return DetalleFacturaCreate(
                 producto_id=producto_id, servicio_id=servicio_id,
                 cantidad=int(round(cantidad)), precio_unitario=precio, descripcion=descripcion,
             )
         return DetalleFacturaCreate(
-            producto_id=producto_id, servicio_id=servicio_id,
+            producto_id=None, servicio_id=servicio_id,
             cantidad=1, precio_unitario=round(cantidad * precio, 2),
             descripcion=f"{descripcion} ({cantidad:g} × {precio:.2f})"[:255],
         )
