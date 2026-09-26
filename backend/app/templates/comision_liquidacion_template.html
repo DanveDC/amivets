@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: letter portrait;
+            margin: 1.8cm 1.6cm 2cm 1.6cm;
+            @frame footer {
+                -pdf-frame-content: pie;
+                bottom: 0.8cm;
+                margin-left: 1.6cm;
+                margin-right: 1.6cm;
+                height: 1cm;
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #1F2A2E;
+            font-size: 9.5pt;
+            line-height: 1.45;
+        }
+        .brand { color: #0E6E78; }
+        .muted { color: #6B7A80; }
+        table { border-collapse: collapse; width: 100%; }
+
+        .header td { vertical-align: middle; }
+        .clinic-name { font-size: 18pt; font-weight: bold; color: #0E6E78; }
+        .clinic-sub { font-size: 8.5pt; color: #6B7A80; }
+        .doc-title { font-size: 15pt; font-weight: bold; color: #0B4F56; text-align: right; }
+        .doc-num { font-size: 11pt; font-weight: bold; color: #0E6E78; text-align: right; }
+        .doc-date { font-size: 8.5pt; color: #6B7A80; text-align: right; }
+        .rule { border-bottom: 2pt solid #0E6E78; margin: 8pt 0 14pt 0; }
+
+        .info td {
+            padding: 8pt 10pt;
+            background-color: #EEF7F8;
+            border: 1pt solid #CFE6E9;
+            vertical-align: top;
+            width: 50%;
+        }
+        .info .label { font-size: 7.5pt; text-transform: uppercase; color: #0E6E78; font-weight: bold; letter-spacing: 0.5pt; }
+        .info .value { font-size: 11pt; font-weight: bold; color: #1F2A2E; }
+        .info .sub { font-size: 8.5pt; color: #6B7A80; }
+
+        .detalle { margin-top: 16pt; }
+        .detalle th {
+            background-color: #0E6E78;
+            color: #FFFFFF;
+            font-size: 7.5pt;
+            text-transform: uppercase;
+            padding: 6pt 5pt;
+            text-align: left;
+        }
+        .detalle th.num, .detalle td.num { text-align: right; }
+        .detalle td {
+            padding: 5pt;
+            border-bottom: 0.6pt solid #DDE7E9;
+            font-size: 8.5pt;
+            vertical-align: top;
+        }
+        .detalle tr.par td { background-color: #F7FBFB; }
+        .detalle tr.ajuste td { background-color: #FDF1EC; color: #9A3B14; }
+        .tag-ajuste { font-size: 7pt; font-weight: bold; color: #9A3B14; }
+
+        .totales { width: 55%; margin-left: 45%; margin-top: 14pt; }
+        .totales td { padding: 5pt 8pt; font-size: 9.5pt; }
+        .totales .lbl { color: #4A5A60; }
+        .totales .val { text-align: right; }
+        .totales .grand td {
+            background-color: #0E6E78;
+            color: #FFFFFF;
+            font-size: 11.5pt;
+            font-weight: bold;
+        }
+
+        .firmas { margin-top: 48pt; }
+        .firmas td { width: 50%; text-align: center; padding: 0 18pt; font-size: 8.5pt; color: #4A5A60; }
+        .linea-firma { border-top: 0.8pt solid #1F2A2E; padding-top: 4pt; }
+
+        .nota { margin-top: 18pt; font-size: 7.5pt; color: #6B7A80; }
+        #pie { font-size: 7.5pt; color: #8A979C; text-align: center; }
+    </style>
+</head>
+<body>
+    <table class="header">
+        <tr>
+            <td style="width: 60%;">
+                <table>
+                    <tr>
+                        {% if logo_path %}
+                        <td style="width: 58pt;"><img src="{{ logo_path }}" width="50" height="50"></td>
+                        {% endif %}
+                        <td>
+                            <div class="clinic-name">AmiVets</div>
+                            <div class="clinic-sub">Clínica veterinaria · Liquidación de comisiones por servicio</div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+            <td style="width: 40%;">
+                <div class="doc-title">Liquidación de comisiones</div>
+                <div class="doc-num">{{ liq.numero }}</div>
+                <div class="doc-date">Emitida el {{ fecha_calculo }}</div>
+            </td>
+        </tr>
+    </table>
+    <div class="rule"></div>
+
+    <table class="info">
+        <tr>
+            <td>
+                <div class="label">Encargado</div>
+                <div class="value">{{ encargado.username }}</div>
+                <div class="sub">{{ rol }}</div>
+            </td>
+            <td>
+                <div class="label">Período</div>
+                <div class="value">{{ liq.desde.strftime('%d/%m/%Y') }} al {{ liq.hasta.strftime('%d/%m/%Y') }}</div>
+                <div class="sub">{{ liq.detalles|length }} línea(s) liquidada(s)</div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="detalle">
+        <thead>
+            <tr>
+                <th style="width: 11%;">Cobro</th>
+                <th style="width: 12%;">Orden</th>
+                <th style="width: 27%;">Servicio</th>
+                <th class="num" style="width: 14%;">Subtotal</th>
+                <th class="num" style="width: 8%;">%</th>
+                <th class="num" style="width: 14%;">Encargado</th>
+                <th class="num" style="width: 14%;">AmiVets</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in liq.detalles %}
+            <tr class="{% if d.es_ajuste %}ajuste{% elif loop.index is even %}par{% endif %}">
+                <td>{{ d.fecha_cobro.strftime('%d/%m/%Y') if d.fecha_cobro else '—' }}</td>
+                <td>{{ d.orden_numero or '—' }}</td>
+                <td>
+                    {{ d.descripcion or '—' }}
+                    {% if d.es_ajuste %}<br><span class="tag-ajuste">Ajuste por anulación · Factura {{ d.numero_factura }}</span>{% endif %}
+                </td>
+                <td class="num">{{ money(d.subtotal) }}</td>
+                <td class="num">{{ '{:g}'.format(d.porcentaje|float) }}%</td>
+                <td class="num"><b>{{ money(d.monto_encargado) }}</b></td>
+                <td class="num">{{ money(d.monto_amivets) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <table class="totales">
+        <tr>
+            <td class="lbl">Total para AmiVets</td>
+            <td class="val">{{ money(liq.total_amivets) }}</td>
+        </tr>
+        <tr class="grand">
+            <td>Total a pagar al encargado</td>
+            <td class="val">{{ money(liq.total_encargado) }}</td>
+        </tr>
+    </table>
+
+    <table class="firmas">
+        <tr>
+            <td><div class="linea-firma">Por AmiVets</div></td>
+            <td><div class="linea-firma">Recibí conforme — {{ encargado.username }}</div></td>
+        </tr>
+    </table>
+
+    <div class="nota">
+        Los porcentajes y montos quedan fijos al momento de liquidar. Las líneas marcadas como ajuste
+        descuentan comisiones ya liquidadas cuya factura fue anulada.
+    </div>
+
+    <div id="pie">AmiVets · {{ liq.numero }} · Impreso el {{ fecha_impresion }}</div>
+</body>
+</html>

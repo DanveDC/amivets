@@ -2064,55 +2064,74 @@
                         </div>
                     </div>
 
-                    <!-- Liquidación a Veterinarios (Unidad E) -->
+                    <!-- Comisiones por servicio (comisiones-por-servicio). Reemplaza la
+                         tarifa fija por consulta de la Unidad E; su historial queda
+                         abajo, de solo lectura. Lógica: sections/comisiones.js. -->
                     <div id="liqSeccion" class="admin-only" style="display:none; flex-direction:column; gap:1.5rem; margin-top:1.5rem;">
                         <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
-                            <h3 style="margin-top:0; color: var(--text-primary);">Tarifa por Consulta</h3>
-                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Monto fijo que cobra cada veterinario por consulta liquidada. Sin tarifa configurada, ese veterinario queda excluido del cálculo.</p>
-                            <div style="overflow-x:auto;">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Comisiones: porcentajes</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Qué parte de cada servicio cobrado le toca al encargado que lo realizó. El resto queda para AmiVets. Cada encargado usa el porcentaje por defecto salvo que tenga uno propio.</p>
+
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:1rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                                <label for="comDefectoInput" style="font-size:0.85rem; font-weight:600; margin:0;">Porcentaje por defecto</label>
+                                <input type="number" id="comDefectoInput" min="0" max="100" step="0.01" style="width:100px; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px; margin:0;">
+                                <span style="color: var(--text-secondary); font-size:0.85rem;">%</span>
+                                <button type="button" id="btnComGuardarDefecto" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Guardar</button>
+                            </div>
+
+                            <div style="overflow:auto; max-height:360px;">
                                 <table class="consultas-table" style="width:100%; border-collapse:collapse;">
                                     <thead>
                                         <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
-                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Veterinario</th>
-                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Tarifa ($)</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Encargado</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Rol</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Porcentaje propio</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Aplica</th>
                                             <th style="padding: 0.6rem 0.75rem; text-align:right; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Acción</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="liqTarifasBody">
-                                        <tr><td colspan="3" style="text-align:center; color: var(--text-secondary); padding: 1rem;">Cargando…</td></tr>
+                                    <tbody id="comEncargadosBody">
+                                        <tr><td colspan="5" style="text-align:center; color: var(--text-secondary); padding: 1rem;">Cargando…</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
 
                         <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
-                            <h3 style="margin-top:0; color: var(--text-primary);">Calcular Liquidación</h3>
-                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Elegí veterinario y rango para ver qué se le pagaría antes de confirmar el cálculo.</p>
+                            <h3 style="margin-top:0; color: var(--text-primary);">Comisiones: control y liquidación</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Elegí un encargado y un rango (por fecha de cobro) para ver lo pendiente y lo ya liquidado. Al liquidar, el porcentaje y los montos quedan fijos.</p>
 
-                            <div id="liqCalcFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
-                                <select id="liqVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                                    <option value="">Seleccioná un veterinario...</option>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
+                                <select id="comEncargadoSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                    <option value="">Seleccioná un encargado...</option>
                                 </select>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
-                                <button type="button" class="av-btn liq-rango-btn" data-liq-rango="este_anio" style="height:30px; padding:0 10px; font-size:12.5px;">Este año</button>
+                                <button type="button" class="av-btn com-rango-btn" data-com-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                                <button type="button" class="av-btn com-rango-btn" data-com-rango="este_mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                                <button type="button" class="av-btn com-rango-btn" data-com-rango="mes_anterior" style="height:30px; padding:0 10px; font-size:12.5px;">Mes anterior</button>
                                 <span style="width:1px; align-self:stretch; background:var(--border);"></span>
-                                <input type="date" id="liqFechaInicio" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <input type="date" id="comDesde" aria-label="Desde" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
                                 <span style="color: var(--text-secondary); font-size:0.82rem;">a</span>
-                                <input type="date" id="liqFechaFin" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
-                                <button type="button" id="btnLiqPreview" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver desglose</button>
+                                <input type="date" id="comHasta" aria-label="Hasta" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                                <button type="button" id="btnComVer" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver comisiones</button>
                             </div>
 
-                            <div id="liqPreviewWrap" style="overflow-x:auto;">
-                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná veterinario y rango, y hacé clic en "Ver desglose".</p>
+                            <div id="comControlWrap" style="overflow-x:auto;">
+                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná encargado y rango, y hacé clic en "Ver comisiones".</p>
                             </div>
                         </div>
 
                         <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
-                            <h3 style="margin-top:0; color: var(--text-primary);">Historial de Liquidaciones</h3>
-                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Liquidaciones ya calculadas, con el detalle de las consultas que las componen.</p>
+                            <h3 style="margin-top:0; color: var(--text-primary);">Liquidaciones de comisiones</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Liquidaciones del encargado elegido arriba, con su comprobante en PDF.</p>
+                            <div id="comLiquidacionesLista">
+                                <p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná un encargado.</p>
+                            </div>
+                        </div>
+
+                        <div class="card" style="padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+                            <h3 style="margin-top:0; color: var(--text-primary);">Liquidaciones anteriores (tarifa fija)</h3>
+                            <p style="font-size:0.8rem; color: var(--text-secondary); margin: 0 0 1rem 0;">Historial de solo lectura de las liquidaciones hechas con la tarifa fija por consulta, antes de pasar a comisiones.</p>
 
                             <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.75rem;">
                                 <select id="liqHistVetSelect" style="padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">

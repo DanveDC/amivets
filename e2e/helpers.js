@@ -562,6 +562,43 @@ async function ventaRapida(request, body, token = null) {
   });
 }
 
+// ===========================================================================
+// Comisiones por servicio (/api/comisiones) — comisiones-por-servicio.
+// All return the raw response: specs assert 200/403/409/422 themselves.
+// ===========================================================================
+
+/** PUT /api/comisiones/configuracion { porcentaje_defecto }. */
+async function setPorcentajeDefecto(request, token, porcentaje) {
+  return request.put('/api/comisiones/configuracion', {
+    headers: authHeaders(token),
+    data: { porcentaje_defecto: porcentaje },
+  });
+}
+
+/** PUT /api/comisiones/encargados/{id} { porcentaje } (null = volver al defecto). */
+async function setPorcentajeEncargado(request, token, usuarioId, porcentaje) {
+  return request.put(`/api/comisiones/encargados/${usuarioId}`, {
+    headers: authHeaders(token),
+    data: { porcentaje },
+  });
+}
+
+/** GET /api/comisiones/?encargado_id=&desde=&hasta=. */
+async function controlComisiones(request, token, encargadoId, desde = null, hasta = null) {
+  const params = { encargado_id: encargadoId };
+  if (desde) params.desde = desde;
+  if (hasta) params.hasta = hasta;
+  return request.get('/api/comisiones/', { headers: authHeaders(token), params });
+}
+
+/** POST /api/comisiones/liquidaciones { encargado_id, desde, hasta }. */
+async function liquidarComisiones(request, token, encargadoId, desde, hasta) {
+  return request.post('/api/comisiones/liquidaciones', {
+    headers: authHeaders(token),
+    data: { encargado_id: encargadoId, desde, hasta },
+  });
+}
+
 /** GET /api/caja-rapida/items?q= (caja-rapida). Returns the raw response. */
 async function buscarItemsCaja(request, q, token = null) {
   return request.get(`/api/caja-rapida/items?q=${encodeURIComponent(q || '')}&limit=100`, {
@@ -1132,6 +1169,10 @@ module.exports = {
   facturarOrden,
   ventaRapida,
   buscarItemsCaja,
+  setPorcentajeDefecto,
+  setPorcentajeEncargado,
+  controlComisiones,
+  liquidarComisiones,
   facturarDesdeConsulta,
   createTestFactura,
   anularTestFactura,

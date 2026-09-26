@@ -968,6 +968,88 @@ class LiquidacionResponse(BaseModel):
     detalles: List[LiquidacionDetalleResponse] = []
 
 
+# ========== COMISIONES POR SERVICIO (comisiones-por-servicio) ==========
+class ConfiguracionComisionUpdate(BaseModel):
+    porcentaje_defecto: Decimal = Field(..., ge=0, le=100)
+
+
+class ConfiguracionComisionResponse(BaseModel):
+    porcentaje_defecto: Decimal
+    updated_at: Optional[datetime] = None
+
+
+class PorcentajeEncargadoUpdate(BaseModel):
+    """`porcentaje` null quita el porcentaje propio: el encargado vuelve al
+    de defecto. Es obligatorio mandarlo (aunque sea null)."""
+    porcentaje: Optional[Decimal] = Field(..., ge=0, le=100)
+
+
+class EncargadoComisionResponse(BaseModel):
+    usuario_id: int
+    username: str
+    role: Optional[str] = None
+    porcentaje_propio: Optional[Decimal] = None
+    porcentaje_efectivo: Decimal
+
+
+class ComisionLineaResponse(BaseModel):
+    """Una línea del control de comisiones: pendiente (calculada con el
+    porcentaje actual) o liquidada (con el porcentaje congelado)."""
+    servicio_id: int
+    factura_id: int
+    orden_id: Optional[int] = None
+    orden_numero: Optional[str] = None
+    numero_factura: Optional[str] = None
+    descripcion: Optional[str] = None
+    fecha_cobro: Optional[datetime] = None
+    subtotal: Decimal
+    porcentaje: Decimal
+    monto_encargado: Decimal
+    monto_amivets: Decimal
+    es_ajuste: bool = False
+    liquidacion_id: Optional[int] = None
+
+
+class ComisionTotales(BaseModel):
+    encargado: Decimal
+    amivets: Decimal
+
+
+class ComisionControlResponse(BaseModel):
+    encargado_id: int
+    username: str
+    porcentaje_efectivo: Decimal
+    pendientes: List[ComisionLineaResponse] = []
+    liquidadas: List[ComisionLineaResponse] = []
+    totales_pendientes: ComisionTotales
+    totales_liquidadas: ComisionTotales
+
+
+class LiquidacionComisionCreate(BaseModel):
+    encargado_id: int = Field(..., gt=0)
+    desde: date
+    hasta: date
+
+    @model_validator(mode='after')
+    def validar_rango(self):
+        if self.hasta < self.desde:
+            raise ValueError("'hasta' no puede ser anterior a 'desde'")
+        return self
+
+
+class LiquidacionComisionResponse(BaseModel):
+    id: int
+    numero: str
+    encargado_id: int
+    encargado_username: Optional[str] = None
+    desde: date
+    hasta: date
+    fecha_calculo: Optional[datetime] = None
+    total_encargado: Decimal
+    total_amivets: Decimal
+    detalles: List[ComisionLineaResponse] = []
+
+
 # ========== ORDEN DE SERVICIO SCHEMAS (Tarea 06, decisiones 1 y 9) ==========
 class OrdenServicioCreate(BaseModel):
     """Abrir una orden (fila 1 de la matriz: admin / recepción / veterinario).

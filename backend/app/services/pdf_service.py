@@ -97,3 +97,23 @@ class PDFService:
         }
 
         return PDFService.render_to_pdf('abono_template.html', context)
+
+    @staticmethod
+    def generar_liquidacion_comision_pdf(liquidacion: dict, encargado):
+        """Comprobante de una liquidación de comisiones (comisiones-por-servicio,
+        decisión 9). `liquidacion` es el dict de comision_service.liquidacion_a_dict.
+        El logo va por ruta local: xhtml2pdf no resuelve rutas web del front."""
+        logo = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'static', 'img', 'logo-amivets.png'))
+        roles = {"veterinario": "Veterinario/a", "gestor": "Encargado/a de área"}
+        context = {
+            "liq": liquidacion,
+            "encargado": encargado,
+            "rol": roles.get(getattr(encargado, "role", None), getattr(encargado, "role", "") or ""),
+            "logo_path": logo if os.path.exists(logo) else None,
+            "fecha_calculo": liquidacion["fecha_calculo"].strftime("%d/%m/%Y") if liquidacion.get("fecha_calculo") else "",
+            "fecha_impresion": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            # "-$ 1,000.00" en vez de "$ -1,000.00": xhtml2pdf parte la celda
+            # en el espacio y el signo quedaba en otra línea.
+            "money": lambda v: f"{'-' if v < 0 else ''}$ {abs(v):,.2f}",
+        }
+        return PDFService.render_to_pdf('comision_liquidacion_template.html', context)

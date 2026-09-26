@@ -26,7 +26,6 @@ import * as agenda from './sections/agenda.js';
 import * as propietarios from './sections/propietarios.js';
 import * as inventario from './sections/inventario.js';
 import * as facturacion from './sections/facturacion.js';
-import * as reportes from './sections/reportes.js';
 import * as ordenes from './sections/citas-pendientes.js';
 import * as citasWeb from './sections/citas-web.js';
 import * as catalogo from './sections/catalogo.js';
@@ -82,7 +81,6 @@ Object.assign(window, {
     confirmarEliminarProducto: inventario.confirmarEliminarProducto,
     abrirHistorialProducto: inventario.abrirHistorialProducto,
     // reportes
-    guardarTarifaVeterinario: reportes.guardarTarifaVeterinario,
     // ordenes
     atenderOrden: ordenes.atenderOrden,
     abrirOrden: ordenAbierta.abrirOrden,

@@ -1,11 +1,13 @@
 // sections/reportes.js — Informes: KPIs básicos, KPIs por período (Unidad C),
-// consultas por veterinario (Unidad D) y liquidación a veterinarios (Unidad E).
+// consultas por veterinario (Unidad D), comisiones por servicio y el historial
+// de liquidaciones de tarifa fija (Unidad E).
 // Movido verbatim desde app.js (etapa 2a). Sin cambio de comportamiento.
 // Nota: `verConsultaCompleta` (usada en un onclick generado) vive en window,
 // expuesta por el bootstrap desde sections/consultorio.js.
 
 import { fetchAPI } from '../core/api.js';
-import { showNotification, escapeHtml } from '../core/ui.js';
+import { escapeHtml } from '../core/ui.js';
+import { initComisiones } from './comisiones.js';
 
 // ============ REPORTES MODULE ============
 export const loadReportes = async () => {
@@ -574,161 +576,24 @@ const initConsultasPorVeterinario = () => {
     }
 };
 
-// ============ LIQUIDACIÓN A VETERINARIOS (Unidad E) ============
+// ============ LIQUIDACIONES (Unidad E -> comisiones-por-servicio) ============
+// La tarifa fija por consulta se reemplazó por comisiones por porcentaje
+// (sections/comisiones.js). De la Unidad E queda solo el historial, de
+// lectura: las liquidaciones de tarifa fija ya hechas siguen visibles.
 let liqListenersBound = false;
-let liqUltimoPreview = null;
-
-const cargarTarifas = async () => {
-    const body = document.getElementById('liqTarifasBody');
-    if (!body) return;
-    try {
-        const vets = await fetchAPI('/liquidaciones/tarifas');
-        const lista = Array.isArray(vets) ? vets : [];
-        if (lista.length === 0) {
-            body.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-secondary); padding: 1rem;">No hay veterinarios registrados.</td></tr>';
-            return;
-        }
-        body.innerHTML = lista.map(v => `
-            <tr>
-                <td style="padding: 0.6rem 0.75rem;">${escapeHtml(v.username)}</td>
-                <td style="padding: 0.6rem 0.75rem;">
-                    <input type="number" min="0" step="0.01" id="liqTarifaInput${v.id}" value="${v.tarifa_consulta ?? ''}" placeholder="Sin configurar" style="width:120px; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px;">
-                </td>
-                <td style="padding: 0.6rem 0.75rem; text-align:right;">
-                    <button class="av-btn" onclick="guardarTarifaVeterinario(${v.id})" style="height:30px; padding:0 10px; font-size:12.5px;">Guardar</button>
-                </td>
-            </tr>
-        `).join('');
-    } catch (error) {
-        console.error('Error cargando tarifas', error);
-        body.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--accent); padding: 1rem;">Error al cargar tarifas.</td></tr>';
-    }
-};
-
-const guardarTarifaVeterinario = async (vetId) => {
-    const input = document.getElementById(`liqTarifaInput${vetId}`);
-    if (!input) return;
-    const valor = input.value.trim();
-    const tarifa = valor === '' ? null : Number(valor);
-    if (tarifa !== null && (isNaN(tarifa) || tarifa < 0)) {
-        alert('La tarifa debe ser un número mayor o igual a 0.');
-        return;
-    }
-    try {
-        await fetchAPI(`/liquidaciones/tarifa/${vetId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ tarifa_consulta: tarifa })
-        });
-        showNotification('Tarifa actualizada.', 'success');
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-};
 
 const cargarSelectoresVeterinariosLiq = async () => {
-    const selects = [document.getElementById('liqVetSelect'), document.getElementById('liqHistVetSelect')];
+    const select = document.getElementById('liqHistVetSelect');
+    if (!select) return;
     try {
         const vets = await fetchAPI('/usuarios/veterinarios');
         const lista = Array.isArray(vets) ? vets : [];
-        selects.forEach(select => {
-            if (!select) return;
-            const previo = select.value;
-            const placeholder = select.id === 'liqHistVetSelect' ? 'Todos los veterinarios' : 'Seleccioná un veterinario...';
-            select.innerHTML = `<option value="">${placeholder}</option>` +
-                lista.map(v => `<option value="${v.id}">${escapeHtml(v.username)}</option>`).join('');
-            if (previo) select.value = previo;
-        });
+        const previo = select.value;
+        select.innerHTML = '<option value="">Todos los veterinarios</option>' +
+            lista.map(v => `<option value="${v.id}">${escapeHtml(v.username)}</option>`).join('');
+        if (previo) select.value = previo;
     } catch (error) {
         console.error('Error cargando veterinarios para liquidación', error);
-    }
-};
-
-const renderLiqPreview = (data) => {
-    const wrap = document.getElementById('liqPreviewWrap');
-    if (!wrap) return;
-
-    const consultas = data?.consultas || [];
-    if (consultas.length === 0) {
-        wrap.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 1rem;">No hay consultas nuevas para liquidar en este rango (ya liquidadas, sin factura PAGADA, o sin consultas).</p>';
-        return;
-    }
-
-    const filas = consultas.map(c => `
-        <tr>
-            <td style="padding: 0.6rem 0.75rem;">${new Date(c.fecha_consulta).toLocaleDateString()}</td>
-            <td style="padding: 0.6rem 0.75rem;">#${c.consulta_id}</td>
-            <td style="padding: 0.6rem 0.75rem;">#${c.factura_id}</td>
-            <td style="padding: 0.6rem 0.75rem; text-align:right;">${kpiFormatMoney(c.tarifa_aplicada)}</td>
-        </tr>
-    `).join('');
-
-    wrap.innerHTML = `
-        <p style="font-weight:600; color: var(--text-primary); margin-bottom:0.75rem;">
-            ${data.total_consultas} consulta(s) elegibles · Tarifa: ${kpiFormatMoney(data.tarifa_consulta)} c/u
-        </p>
-        <table class="consultas-table" style="width:100%; border-collapse:collapse;">
-            <thead>
-                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
-                    <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Fecha</th>
-                    <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Consulta</th>
-                    <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Factura</th>
-                    <th style="padding: 0.6rem 0.75rem; text-align:right; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Tarifa Aplicada</th>
-                </tr>
-            </thead>
-            <tbody>${filas}</tbody>
-        </table>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--border);">
-            <div style="font-size:1.1rem; font-weight:700; color: var(--text-primary);">Total: ${kpiFormatMoney(data.total)}</div>
-            <button type="button" id="btnLiqConfirmar" class="av-btn av-btn--primary" style="height:34px; padding:0 14px;">Confirmar cálculo</button>
-        </div>
-    `;
-
-    document.getElementById('btnLiqConfirmar')?.addEventListener('click', confirmarLiquidacion);
-};
-
-const previewLiquidacion = async () => {
-    const vetId = document.getElementById('liqVetSelect')?.value;
-    const fechaInicio = document.getElementById('liqFechaInicio')?.value;
-    const fechaFin = document.getElementById('liqFechaFin')?.value;
-    const wrap = document.getElementById('liqPreviewWrap');
-    if (!wrap) return;
-
-    if (!vetId) {
-        alert('Seleccioná un veterinario.');
-        return;
-    }
-    if (!fechaInicio || !fechaFin) {
-        alert('Seleccioná una fecha de inicio y una fecha de fin.');
-        return;
-    }
-
-    liqUltimoPreview = { veterinario_id: Number(vetId), fecha_inicio: fechaInicio, fecha_fin: fechaFin };
-
-    wrap.innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Calculando desglose…</p>';
-    try {
-        const params = new URLSearchParams({ veterinario_id: vetId, fecha_inicio: fechaInicio, fecha_fin: fechaFin }).toString();
-        const data = await fetchAPI(`/liquidaciones/preview?${params}`);
-        renderLiqPreview(data);
-    } catch (error) {
-        wrap.innerHTML = `<p style="text-align:center; color:var(--accent); padding: 1rem;">Error: ${error.message}</p>`;
-    }
-};
-
-const confirmarLiquidacion = async () => {
-    if (!liqUltimoPreview) return;
-    if (!confirm('¿Confirmar el cálculo? Las consultas incluidas quedarán liquidadas y no podrán volver a liquidarse.')) return;
-
-    try {
-        await fetchAPI('/liquidaciones/calcular', {
-            method: 'POST',
-            body: JSON.stringify(liqUltimoPreview)
-        });
-        showNotification('Liquidación calculada y guardada.', 'success');
-        document.getElementById('liqPreviewWrap').innerHTML = '<p style="text-align:center; color: var(--text-secondary); padding: 1rem;">Seleccioná veterinario y rango, y hacé clic en "Ver desglose".</p>';
-        liqUltimoPreview = null;
-        cargarHistorialLiquidaciones();
-    } catch (error) {
-        alert('Error: ' + error.message);
     }
 };
 
@@ -792,26 +657,15 @@ const initLiquidaciones = () => {
     const seccion = document.getElementById('liqSeccion');
     if (!seccion) return;
 
-    cargarTarifas();
+    initComisiones({ calcularRango: kpiCalcularRango });
     cargarSelectoresVeterinariosLiq();
     cargarHistorialLiquidaciones();
 
     if (!liqListenersBound) {
-        document.getElementById('btnLiqPreview')?.addEventListener('click', previewLiquidacion);
         document.getElementById('btnLiqHistRefrescar')?.addEventListener('click', cargarHistorialLiquidaciones);
         document.getElementById('liqHistVetSelect')?.addEventListener('change', cargarHistorialLiquidaciones);
-
-        document.querySelectorAll('.liq-rango-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const { inicio, fin } = kpiCalcularRango(btn.dataset.liqRango);
-                document.getElementById('liqFechaInicio').value = inicio;
-                document.getElementById('liqFechaFin').value = fin;
-            });
-        });
-
         liqListenersBound = true;
     }
 };
 
-export { guardarTarifaVeterinario };
 export { loadReportes as init };

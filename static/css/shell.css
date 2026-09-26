@@ -183,6 +183,9 @@
 .av-btn:hover { background: var(--surface-hover); }
 .av-btn--primary { background: var(--primary); color: #fff; border-color: var(--primary-dark); }
 .av-btn--primary:hover { background: var(--primary-dark); }
+/* Sin esto un botón deshabilitado se veía igual que uno activo. */
+.av-btn:disabled, .av-btn:disabled:hover { opacity: 0.5; cursor: not-allowed; }
+.av-btn--primary:disabled:hover { background: var(--primary); }
 
 .av-iconbutton {
   width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 6px;
