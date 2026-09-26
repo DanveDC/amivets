@@ -1249,9 +1249,14 @@ document.getElementById('formAgregarServicio')?.addEventListener('submit', async
     const catalogoId = document.getElementById('addServicioCatalogoId').value;
     if (catalogoId) {
         body.catalogo_servicio_id = Number(catalogoId);
-        const consumos = [...document.querySelectorAll('#addServicioRecetaLista .consumo-cantidad')]
-            .filter(el => el.value.trim() !== '' && Number(el.value) > 0)
-            .map(el => ({ inventario_id: Number(el.dataset.inventarioId), cantidad: Number(el.value) }));
+        const inputs = [...document.querySelectorAll('#addServicioRecetaLista .consumo-cantidad')];
+        // Vacío o negativo no se adivina: se pide corregir. 0 es válido y
+        // significa "no se usó" (antes se descartaba y se consumía la receta).
+        if (inputs.some(el => el.value.trim() === '' || !(Number(el.value) >= 0))) {
+            showNotification('Completá la cantidad de cada material (0 si no se usó).', 'warning');
+            return;
+        }
+        const consumos = inputs.map(el => ({ inventario_id: Number(el.dataset.inventarioId), cantidad: Number(el.value) }));
         if (consumos.length) body.consumos = consumos;
     }
 

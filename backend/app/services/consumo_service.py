@@ -201,9 +201,6 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
             continue
 
         necesita = _q(necesita)
-        if necesita <= 0:
-            # Override en 0 = "no se usó": no hay nada que descontar.
-            continue
         unidad = inv.unidad_medida or UNIDAD_DEFAULT
 
         if inv.stock_actual < necesita:

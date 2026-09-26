@@ -406,7 +406,8 @@ async function seleccionarServicio(id) {
         list.querySelectorAll('input[data-idx]').forEach(inp => {
             inp.addEventListener('change', () => {
                 const idx = Number(inp.dataset.idx);
-                _consumos[idx].cantidad = parseFloat(inp.value) || 0;
+                // Vacío queda como null (no como 0): confirmarAnexo lo rechaza.
+                _consumos[idx].cantidad = inp.value.trim() === '' ? null : Number(inp.value);
             });
         });
     } catch (_) {
@@ -429,9 +430,14 @@ async function confirmarAnexo() {
         precio_unitario: _svcSeleccionado.precio_ref,
     };
     if (_consumos.length) {
-        // Se mandan también los 0 ("no se usó"): si se omitían, al ejecutar
-        // se descontaba la cantidad de la receta (fix de revisión).
-        body.consumos = _consumos.filter(c => c.cantidad >= 0).map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
+        // Vacío o negativo no se adivina: se pide corregir. Se mandan también
+        // los 0 ("no se usó"): si se omitían, al ejecutar se descontaba la
+        // cantidad de la receta (fix de revisión).
+        if (_consumos.some(c => c.cantidad === null || !(c.cantidad >= 0))) {
+            showNotification('Completá la cantidad de cada material (0 si no se usó).', 'warning');
+            return;
+        }
+        body.consumos = _consumos.map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
     }
     try {
         const resp = await fetchAPI(`/ordenes/${_ordenId}/servicios`, { method: 'POST', body: JSON.stringify(body) });
