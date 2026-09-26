@@ -240,9 +240,13 @@ def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[
         .all()
     )
     candidatas = {s.id for s, _ in por_consulta}
+    # Solo cuentan detalles de facturas NO anuladas: si la línea se cobró por
+    # detalle y esa factura se anuló, el honorario re-cobrado por consulta_id
+    # tiene que seguir generando comisión (fix de revisión).
     con_detalle_alguna_vez = {
         r[0] for r in db.query(DetalleFactura.servicio_id)
-        .filter(DetalleFactura.servicio_id.in_(candidatas or {0}))
+        .join(Factura, Factura.id == DetalleFactura.factura_id)
+        .filter(DetalleFactura.servicio_id.in_(candidatas or {0}), Factura.estado != "ANULADA")
         .distinct()
         .all()
     }
