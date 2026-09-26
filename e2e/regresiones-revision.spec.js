@@ -24,6 +24,7 @@ const {
   createTestCatalogoServicio,
   createTestArea,
   agregarGestorArea,
+  anexarServicioConsulta,
   createTestGestor,
   anexarServicioOrden,
   confirmarServiciosOrden,
@@ -149,6 +150,58 @@ test.describe('Revisión — consumo y comisiones', () => {
     expect(await stockOf(request, admin, material.id)).toBe(993); // 7, no los 50 de la receta
   });
 
+  test('4b. editar el consumo antes de ejecutar lo actualiza, y 0 significa "no se usó"', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const material = await createTestProduct(request, {
+      categoria: 'Insumo', tipo_item: 'MATERIAL', unidad_medida: 'ml', contenido_por_envase: 1000, stock_actual: 1000, precio_unitario: 1,
+    }, admin);
+    const cat = await createTestCatalogoServicio(request, { categoria: 'PELUQUERIA', precio_ref: 100 });
+    await request.post(`/api/catalogo/${cat.id}/recetas`, { headers: authHeaders(admin), data: { inventario_id: material.id, cantidad: 50, unidad_medida: 'ml' } });
+    const prop = await createTestPropietario(request, {}, admin);
+
+    // Editado en SOLICITADO: 50 al agregar -> 10 por PATCH -> se descuentan 10.
+    const o1 = await createTestOrden(request, { propietarioId: prop.id }, admin);
+    const s1 = await anexarServicioOrden(request, o1.id, {
+      catalogo_servicio_id: cat.id, tipo_servicio: 'ESTETICA', nombre_servicio: testTag('a'), precio_unitario: 100,
+      consumos: [{ inventario_id: material.id, cantidad: 50 }],
+    }, admin);
+    const pt = await request.patch(`/api/servicios/${s1.id}`, { headers: authHeaders(admin), data: { consumos: [{ inventario_id: material.id, cantidad: 10 }] } });
+    expect(pt.ok(), await pt.text()).toBeTruthy();
+    await confirmarServiciosOrden(request, o1.id, admin);
+    expect(await stockOf(request, admin, material.id)).toBe(990);
+
+    // Cero: no se descuenta nada.
+    const o2 = await createTestOrden(request, { propietarioId: prop.id }, admin);
+    await anexarServicioOrden(request, o2.id, {
+      catalogo_servicio_id: cat.id, tipo_servicio: 'ESTETICA', nombre_servicio: testTag('b'), precio_unitario: 100,
+      consumos: [{ inventario_id: material.id, cantidad: 0 }],
+    }, admin);
+    await confirmarServiciosOrden(request, o2.id, admin);
+    expect(await stockOf(request, admin, material.id)).toBe(990);
+  });
+
+  test('6. el honorario re-cobrado por consulta tras anular la factura de la orden genera comisión', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const vet = await createTestVeterinario(request, admin);
+    await setPorcentajeEncargado(request, admin, vet.id, 30);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id, orden_id: orden.id, precio_consulta: 25000 }, admin);
+    await cerrar(request, admin, orden.id);
+    const a = await facturarOrden(request, orden.id, { metodo_pago: 'EFECTIVO', total_pagado: 25000 }, admin);
+    expect(a.status(), await a.text()).toBe(201);
+    await request.post(`/api/facturas/${(await a.json()).id}/anular`, { headers: authHeaders(admin) });
+
+    const b = await request.post(`/api/facturas/from-consulta/${consulta.id}`, { headers: authHeaders(admin), data: { metodo_pago: 'EFECTIVO', total_pagado: 25000 } });
+    expect(b.status(), await b.text()).toBe(201);
+    expect((await b.json()).estado).toBe('PAGADA');
+
+    const c = await (await controlComisiones(request, admin, vet.id, hoy(), hoy())).json();
+    expect(c.pendientes).toHaveLength(1);
+    expect(Number(c.pendientes[0].monto_encargado)).toBe(7500);
+  });
+
   test('5. la comisión se calcula sobre lo cobrado, con el descuento de la factura', async ({ request }) => {
     const admin = await getAdminToken(request);
     const area = await createTestArea(request, admin);
@@ -219,6 +272,38 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     expect(porCobrar).toHaveLength(0);
   });
 
+  test('7b. anular una venta de caja rápida devuelve el material de sus servicios y los cancela', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const material = await createTestProduct(request, {
+      categoria: 'Insumo', tipo_item: 'MATERIAL', unidad_medida: 'ml', contenido_por_envase: 1000, stock_actual: 1000, precio_unitario: 1,
+    }, admin);
+    const cat = await createTestCatalogoServicio(request, { categoria: 'PELUQUERIA', precio_ref: 300 });
+    await request.post(`/api/catalogo/${cat.id}/recetas`, { headers: authHeaders(admin), data: { inventario_id: material.id, cantidad: 50, unidad_medida: 'ml' } });
+    const prop = await createTestPropietario(request, {}, admin);
+    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'SERVICIO', id: cat.id, cantidad: 1 }] }, admin);
+    expect(r.status()).toBe(201);
+    expect(await stockOf(request, admin, material.id)).toBe(950);
+    await request.post(`/api/facturas/${(await r.json()).id}/anular`, { headers: authHeaders(admin) });
+    expect(await stockOf(request, admin, material.id)).toBe(1000);
+    const [orden] = await (await request.get(`/api/ordenes/?propietario_id=${prop.id}`, { headers: authHeaders(admin) })).json();
+    const detalle = await (await request.get(`/api/ordenes/${orden.id}`, { headers: authHeaders(admin) })).json();
+    expect(detalle.estado).toBe('ANULADA');
+    expect(detalle.anulada_por_id).toBeTruthy();
+    expect(detalle.servicios.every((s) => s.estado === 'CANCELADO')).toBe(true);
+  });
+
+  test('7c. anular una venta de caja rápida solo de productos también anula su orden', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const p = await createTestProduct(request, { stock_actual: 5, precio_unitario: 100 }, admin);
+    const prop = await createTestPropietario(request, {}, admin);
+    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 2 }] }, admin);
+    expect(r.status()).toBe(201);
+    await request.post(`/api/facturas/${(await r.json()).id}/anular`, { headers: authHeaders(admin) });
+    expect(await stockOf(request, admin, p.id)).toBe(5);
+    const [orden] = await (await request.get(`/api/ordenes/?propietario_id=${prop.id}`, { headers: authHeaders(admin) })).json();
+    expect(orden.estado).toBe('ANULADA');
+  });
+
   test('9. una consulta sin orden muestra "Facturar" y se factura', async ({ page, request }) => {
     const admin = await getAdminToken(request);
     const prop = await createTestPropietario(request, {}, admin);
@@ -248,6 +333,40 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     const facturas = await (await request.get(`/api/facturas/?propietario_id=${prop.id}&limit=10`, { headers: authHeaders(admin) })).json();
     const f = facturas.find((x) => x.consulta_id === consulta.id);
     expect(f).toBeTruthy();
+    // Solo el honorario: una línea, sin servicio_id, por precio_consulta.
+    expect(f.detalles).toHaveLength(1);
+    expect(f.detalles[0].servicio_id ?? null).toBeNull();
+    expect(f.total).toBeCloseTo(c0.precio_consulta, 2);
+    await anularTestFactura(request, f.id, admin);
+  });
+
+  test('9b. una consulta sin línea CONSULTA pero con servicios llega a su orden por ellos', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    const srv = await anexarServicioConsulta(request, consulta.id, {}, admin);
+    const c0 = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(admin) })).json();
+    const linea = c0.servicios.find((s) => s.tipo_servicio === 'CONSULTA');
+    expect((await request.delete(`/api/servicios/${linea.id}`, { headers: authHeaders(admin) })).ok()).toBeTruthy();
+    const c1 = await (await request.get(`/api/consultas/${consulta.id}`, { headers: authHeaders(admin) })).json();
+    expect(c1.orden_id).toBe(srv.orden_id);
+  });
+
+  test('3. from-consulta factura una cantidad fraccionaria por su subtotal exacto', async ({ request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const consulta = await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    const srv = await anexarServicioConsulta(request, consulta.id, { nombre_servicio: testTag('medio'), cantidad: 0.5, precio_unitario: 40, estado: 'EJECUTADO' }, admin);
+    const res = await request.post(`/api/facturas/from-consulta/${consulta.id}`, { headers: authHeaders(admin), data: {} });
+    expect(res.status(), await res.text()).toBe(201);
+    const f = await res.json();
+    const linea = f.detalles.find((d) => d.servicio_id === srv.id);
+    expect(linea.cantidad).toBe(1);
+    expect(linea.precio_unitario).toBeCloseTo(20, 2);
     await anularTestFactura(request, f.id, admin);
   });
 });
