@@ -6,6 +6,17 @@
 // notificaciones.js vs `{texto, minutos}` en bandeja-gestor.js): un bug
 // latente, no sólo duplicación (hallazgo de revisión, etapa 7).
 
+/** Fecha para mostrar. Una fecha sola 'YYYY-MM-DD' (un `date` del backend)
+ * se toma como día LOCAL: `new Date('2026-09-01')` es medianoche UTC y en
+ * Venezuela (UTC-4) se mostraba el día anterior. Un datetime se muestra en
+ * hora local como siempre. */
+export const fechaCorta = (v) => {
+    if (!v) return '—';
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v));
+    const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(v);
+    return d.toLocaleDateString();
+};
+
 /** Formatea un monto como moneda con dos decimales, ej. `$120.00`. */
 export const money = (n) => `$${Number(n || 0).toFixed(2)}`;
 

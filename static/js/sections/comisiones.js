@@ -12,7 +12,7 @@
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { showNotification, escapeHtml, submitWithLoading } from '../core/ui.js';
-import { money } from '../core/format.js';
+import { money, fechaCorta } from '../core/format.js';
 
 let _wired = false;
 let _calcularRango = null;
@@ -20,7 +20,7 @@ let _ultimoControl = null; // { encargado_id, desde, hasta }
 
 const ROL_LABEL = { veterinario: 'Veterinario/a', gestor: 'Encargado/a de área' };
 export const pct = (v) => `${Number(v).toLocaleString('es', { maximumFractionDigits: 2 })}%`;
-const fecha = (v) => (v ? new Date(v).toLocaleDateString() : '—');
+const fecha = fechaCorta;
 
 // ── (a) Porcentajes ─────────────────────────────────────────────────────────
 

@@ -21,7 +21,7 @@
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { showNotification, escapeHtml } from '../core/ui.js';
-import { haceCuanto, fechaLargaEsVE } from '../core/format.js';
+import { haceCuanto, fechaLargaEsVE, fechaCorta } from '../core/format.js';
 import { tablaLineas, totales, descargarPdf, pct } from './comisiones.js';
 
 const ESTADO_PILL = { ASIGNADO: 'av-pill--warn', EN_PROCESO: 'av-pill--info' };
@@ -516,7 +516,7 @@ async function cargarMisComisiones() {
             liqWrap.innerHTML = liquidaciones.length
                 ? liquidaciones.map(l => `
                     <div data-bg-liquidacion="${l.id}" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:0.6rem 0.9rem; margin-bottom:0.5rem; border:1px solid var(--border); border-radius:8px;">
-                        <div><b>${escapeHtml(l.numero)}</b> · ${escapeHtml(new Date(l.desde).toLocaleDateString())} a ${escapeHtml(new Date(l.hasta).toLocaleDateString())} · ${totales({ encargado: l.total_encargado, amivets: l.total_amivets })}</div>
+                        <div><b>${escapeHtml(l.numero)}</b> · ${escapeHtml(fechaCorta(l.desde))} a ${escapeHtml(fechaCorta(l.hasta))} · ${totales({ encargado: l.total_encargado, amivets: l.total_amivets })}</div>
                         <button type="button" class="av-btn" data-bg-pdf="${l.id}" data-bg-numero="${escapeHtml(l.numero)}" style="height:30px; padding:0 10px; font-size:12.5px;">Descargar PDF</button>
                     </div>`).join('')
                 : '<p style="color: var(--text-secondary); margin:0;">Todavía no tenés liquidaciones.</p>';
