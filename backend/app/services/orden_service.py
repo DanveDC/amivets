@@ -275,6 +275,9 @@ def crear_servicio_en_orden(
 
     # Agregar al carrito NO consume inventario ni cambia el estado de la
     # orden (decision 3 de orden-servicio-carrito): eso pasa al confirmar.
+    # Pero el consumo real que indica el cliente se guarda YA, para que el
+    # descuento de stock al ejecutar use ese y no la receta estandar.
+    consumo_service.guardar_consumo_previsto(db, servicio, consumos_override)
     return servicio, []
 
 

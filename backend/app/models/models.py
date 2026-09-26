@@ -1213,6 +1213,28 @@ class ConsumoMaterial(Base):
         return f"<ConsumoMaterial svc_consulta={self.servicio_consulta_id} inv={self.inventario_id}>"
 
 
+class ConsumoPrevisto(Base):
+    """Consumo real de un material que se indica al AGREGAR un servicio a una
+    orden, antes de que se ejecute (orden-servicio-carrito: todo servicio
+    entra SOLICITADO y recién consume al confirmarse o ejecutarse).
+
+    Sin esto el ajuste que manda el cliente al agregar se perdía y al ejecutar
+    se descontaba la receta estándar. consumo_service lo usa como override
+    cuando no le llega uno explícito. Tabla nueva a propósito: el dev corre
+    create_all, que no agrega columnas a tablas existentes.
+    """
+    __tablename__ = "consumos_previstos"
+
+    id = Column(Integer, primary_key=True)
+    servicio_consulta_id = Column(Integer, ForeignKey("servicios_consulta.id"), nullable=False, index=True)
+    inventario_id = Column(Integer, ForeignKey("inventario.id"), nullable=False)
+    cantidad = Column(Numeric(12, 3), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("servicio_consulta_id", "inventario_id", name="uq_consumo_previsto_servicio_inventario"),
+    )
+
+
 class HistorialPrecioInventario(Base):
     """Un cambio del precio de lista (venta) de un material/producto (Tarea 08).
 

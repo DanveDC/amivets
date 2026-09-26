@@ -30,6 +30,7 @@ from app.models.models import (
     Inventario,
     MovimientoInventario,
     ConsumoMaterial,
+    ConsumoPrevisto,
     RecetaServicio,
     ServicioConsulta,
     Vacunacion,
@@ -75,6 +76,21 @@ def overrides_from_payload(consumos) -> dict:
         cant = c["cantidad"] if isinstance(c, dict) else c.cantidad
         out[int(iid)] = _q(cant)
     return out
+
+
+def guardar_consumo_previsto(db: Session, servicio: ServicioConsulta, consumos) -> None:
+    """Guarda el consumo real indicado al agregar el servicio a una orden
+    (ver ConsumoPrevisto). No descuenta stock: eso pasa al ejecutar."""
+    for inv_id, cantidad in overrides_from_payload(consumos).items():
+        db.add(ConsumoPrevisto(servicio_consulta_id=servicio.id, inventario_id=inv_id, cantidad=cantidad))
+
+
+def consumo_previsto(db: Session, servicio_id: int) -> dict:
+    """{inventario_id: cantidad} guardado al agregar el servicio, o {}."""
+    return {
+        c.inventario_id: _q(c.cantidad)
+        for c in db.query(ConsumoPrevisto).filter(ConsumoPrevisto.servicio_consulta_id == servicio_id).all()
+    }
 
 
 def _resolver_inventario_legacy(db: Session, servicio: ServicioConsulta):
@@ -165,7 +181,9 @@ def consumir_para_servicio(db: Session, servicio: ServicioConsulta, *, overrides
     if _ya_consumido(db, servicio.id):
         return []
 
-    overrides = overrides or {}
+    # Sin override explicito, se usa el consumo indicado al agregar el
+    # servicio a la orden (ConsumoPrevisto), si lo hay.
+    overrides = overrides or consumo_previsto(db, servicio.id)
     necesidades = _necesidades(db, servicio, overrides)
     if not necesidades:
         return []
