@@ -1,41 +1,40 @@
-// sections/bandeja-gestor.js — sec-bandeja-gestor (Tarea 06, etapa 7).
+// sections/bandeja-gestor.js — sec-bandeja-gestor (Tarea 06, etapa 7;
+// pantalla-encargado).
 //
-// La cola de trabajo del gestor: GET /api/servicios/bandeja, tomar
-// (POST .../tomar), ejecutar y cargar el resultado (PATCH .../{id}, con el
-// candado de adjunto), y subir el adjunto (POST .../{id}/adjuntos).
-// docs/diseno/pantallas/BandejaGestor.html.
+// La pantalla de trabajo del encargado de área, en tres pestañas:
+// - Bandeja: GET /api/servicios/bandeja, tomar (POST .../tomar), ejecutar y
+//   cargar el resultado (PATCH .../{id}, con el candado de adjunto) y subir
+//   el adjunto (POST .../{id}/adjuntos).
+// - Realizados: GET /api/servicios/realizados, con los adjuntos de cada uno.
+// - Mis comisiones: GET /api/comisiones/mias y /mias/liquidaciones.
+// El rubro (las áreas del usuario) sale de GET /api/areas/mias; cada servicio
+// trae su area_id. docs/diseno/pantallas/BandejaGestor.html.
 //
-// LÍMITES DOCUMENTADOS (backend real, no se puede resolver del lado del
-// frontend sin tocar la API — fuera de alcance de esta etapa):
-// - ServicioConsultaResponse no expone area_id/asignado_a_id/asignado_at, así
-//   que "área" se resuelve mirando el catálogo del ítem (GET /catalogo/{id},
-//   sin restricción de rol) y "esperando" usa created_at como aproximación
-//   de asignado_at (que sí existe en el modelo pero no en el schema).
-// - GET /api/areas es admin/recepción/veterinario — un gestor puro recibe 403
-//   al intentar resolver el NOMBRE del área; se degrada a "Área #N".
-// - GET /api/ordenes/{id} también excluye a `gestor` (fila 4 de la matriz,
-//   alcance recortado pendiente para una etapa futura): el número de orden
-//   se resuelve igual para admin/veterinario probando esta pantalla, y para
-//   un gestor puro se muestra "#<id>" sin enlace (abrir la orden le daría 403).
-// - No hay endpoint de "devolver: no me corresponde" en la lista de la etapa;
-//   ese botón de la maqueta no se implementa.
+// LÍMITES DOCUMENTADOS:
+// - GET /api/ordenes/{id} excluye a `gestor` (fila 4 de la matriz): para un
+//   gestor puro el número de orden se muestra "#<id>" sin enlace.
+// - No hay endpoint de "devolver: no me corresponde"; ese botón de la maqueta
+//   no se implementa.
+//
+// Todo texto que viene del servidor pasa por escapeHtml (pantalla-encargado,
+// decisión 7): antes el área, el servicio y el paciente se insertaban crudos.
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
-import { showNotification } from '../core/ui.js';
-// `money` no se importa: la copia local de este archivo nunca se usaba (dead
-// code) — se elimina en vez de consolidar contra un import sin uso.
+import { showNotification, escapeHtml } from '../core/ui.js';
 import { haceCuanto, fechaLargaEsVE } from '../core/format.js';
+import { tablaLineas, totales, descargarPdf, pct } from './comisiones.js';
 
 const ESTADO_PILL = { ASIGNADO: 'av-pill--warn', EN_PROCESO: 'av-pill--info' };
 const ESTADO_LABEL = { ASIGNADO: 'Asignado', EN_PROCESO: 'En proceso' };
 
 let _cache = [];
-let _areasCache = null;       // Map<area_id, nombre> | null si no se pudo resolver
-let _catalogoAreaCache = new Map(); // catalogo_servicio_id -> area_id
+let _misAreas = null;          // Map<area_id, nombre> — GET /areas/mias
 let _mascotasCache = null;
 let _ordenesCache = new Map(); // orden_id -> numero | null (403/404)
 let _filtroLocal = '';
 let _wired = false;
+
+const areaNombre = (areaId) => (areaId == null ? '—' : (_misAreas?.get(areaId) || `Área #${areaId}`));
 
 async function cargarMascotasMap() {
     if (_mascotasCache) return _mascotasCache;
@@ -48,28 +47,14 @@ async function cargarMascotasMap() {
     return _mascotasCache;
 }
 
-async function resolverAreas() {
-    if (_areasCache !== null) return _areasCache;
+async function cargarMisAreas() {
     try {
-        const areas = await fetchAPI('/areas/');
-        _areasCache = new Map((areas || []).map(a => [a.id, a.nombre]));
+        const areas = await fetchAPI('/areas/mias');
+        _misAreas = new Map((areas || []).map(a => [a.id, a.nombre]));
     } catch (_) {
-        _areasCache = new Map(); // 403 para gestor — se degrada a "Área #N"
+        _misAreas = new Map();
     }
-    return _areasCache;
-}
-
-async function resolverAreaDeServicio(s) {
-    if (!s.catalogo_servicio_id) return null;
-    if (!_catalogoAreaCache.has(s.catalogo_servicio_id)) {
-        try {
-            const item = await fetchAPI(`/catalogo/${s.catalogo_servicio_id}`);
-            _catalogoAreaCache.set(s.catalogo_servicio_id, item?.area_id ?? null);
-        } catch (_) {
-            _catalogoAreaCache.set(s.catalogo_servicio_id, null);
-        }
-    }
-    return _catalogoAreaCache.get(s.catalogo_servicio_id);
+    return _misAreas;
 }
 
 async function resolverOrdenNumero(ordenId) {
@@ -84,15 +69,23 @@ async function resolverOrdenNumero(ordenId) {
     return _ordenesCache.get(ordenId);
 }
 
+const ordenHtml = (numero, ordenId) => (numero
+    ? `<span class="num" style="font-weight:500;color:var(--primary);">${escapeHtml(numero)}</span>`
+    : (ordenId ? `<span class="num">#${Number(ordenId)}</span>` : '—'));
+
+// ── rubro (cabecera) ─────────────────────────────────────────────────────────
+function pintarRubro() {
+    const el = document.getElementById('bgRubro');
+    if (!el) return;
+    const nombres = Array.from(_misAreas?.values() || []);
+    el.innerHTML = nombres.length
+        ? `Tu rubro: <strong>${nombres.map(escapeHtml).join(' · ')}</strong>`
+        : 'Todavía no tenés un área asignada. Pedile al administrador que te sume a una.';
+}
+
 // ── badge del sidebar ("Mi bandeja") ─────────────────────────────────────────
-// El span existía en el markup del sidebar (router.js) desde que se armó pero
-// nada lo llenaba (hallazgo de revisión, etapa 7). Mínimo viable elegido: se
-// actualiza cuando esta pantalla carga/cambia su propia lista (no hace falta
-// un fetch aparte, ya se trajo `/servicios/bandeja`) y una vez cuando el rol
-// se resuelve en el boot (router.js llama refrescarBadgeBandeja), para que el
-// contador aparezca aunque el usuario entre por otra sección. Deliberadamente
-// SIN polling — cablear una actualización en vivo completa (websocket o poll
-// periódico) excede una corrección puntual de este hallazgo.
+// Se actualiza cuando esta pantalla carga su lista y una vez al resolver el
+// rol en el boot (router.js llama refrescarBadgeBandeja). Sin polling.
 function actualizarBadge(count) {
     const el = document.getElementById('avSidebarBandejaBadge');
     if (!el) return;
@@ -127,18 +120,16 @@ export const loadBandejaGestor = async () => {
         const [servicios, mascotas] = await Promise.all([
             fetchAPI('/servicios/bandeja'),
             cargarMascotasMap(),
+            cargarMisAreas(),
         ]);
-        await resolverAreas();
+        pintarRubro();
         const lista = (Array.isArray(servicios) ? servicios : []).filter(s => !s.is_deleted);
 
         const enriquecidas = await Promise.all(lista.map(async (s) => {
-            const areaId = await resolverAreaDeServicio(s);
-            const numero = await resolverOrdenNumero(s.orden_id);
             const m = mascotas.get(s.mascota_id);
             return {
                 ...s,
-                _areaNombre: areaId != null ? (_areasCache.get(areaId) || `Área #${areaId}`) : '—',
-                _ordenNumero: numero,
+                _ordenNumero: await resolverOrdenNumero(s.orden_id),
                 _mascotaNombre: m ? m.nombre : (s.mascota_id ? `Paciente #${s.mascota_id}` : '—'),
                 _mascotaEspecie: m ? m.especie : '',
                 _espera: haceCuanto(s.created_at),
@@ -152,35 +143,38 @@ export const loadBandejaGestor = async () => {
         pintarQueue();
         pintarDetalle();
     } catch (e) {
-        if (body) body.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent); padding:1.5rem;">Error cargando la bandeja: ${e.message}</td></tr>`;
+        if (body) body.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent); padding:1.5rem;">Error cargando la bandeja: ${escapeHtml(e.message)}</td></tr>`;
     }
 };
 
 // ── filtros por área (chips) ─────────────────────────────────────────────────
+// Un chip por cada área del usuario, aunque no tenga nada pendiente
+// (pantalla-encargado, requisito "Rubro del encargado"). Clave: area_id.
 let _filtroArea = 'todas';
+
+function chipsArea(conteo, activa, attr) {
+    const chip = (key, label, n) =>
+        `<span class="av-pill ${activa === key ? '' : 'av-pill--neutral'}" ${attr}="${key}" style="cursor:pointer;">${escapeHtml(label)} <span class="num">${n}</span></span>`;
+    const total = Array.from(conteo.values()).reduce((a, b) => a + b, 0);
+    return [chip('todas', 'Todas', total),
+        ...Array.from(_misAreas?.entries() || []).map(([id, nombre]) => chip(String(id), nombre, conteo.get(id) || 0))].join('');
+}
 
 function pintarFiltros() {
     const cont = document.getElementById('bgFilters');
     if (!cont) return;
-    const porArea = new Map();
-    _cache.forEach(s => porArea.set(s._areaNombre, (porArea.get(s._areaNombre) || 0) + 1));
-    const chips = [
-        `<span class="av-pill ${_filtroArea === 'todas' ? '' : 'av-pill--neutral'}" data-area="todas" style="cursor:pointer;">Todas <span class="num">${_cache.length}</span></span>`,
-        ...Array.from(porArea.entries()).map(([area, n]) =>
-            `<span class="av-pill ${_filtroArea === area ? '' : 'av-pill--neutral'}" data-area="${area}" style="cursor:pointer;">${area} <span class="num">${n}</span></span>`),
-    ];
-    cont.innerHTML = chips.join('');
-    cont.querySelectorAll('.av-pill').forEach(chip => {
-        chip.addEventListener('click', () => {
-            _filtroArea = chip.dataset.area;
-            pintarFiltros();
-            pintarQueue();
-        });
-    });
+    const conteo = new Map();
+    _cache.forEach(s => conteo.set(s.area_id, (conteo.get(s.area_id) || 0) + 1));
+    cont.innerHTML = chipsArea(conteo, _filtroArea, 'data-area');
+    cont.querySelectorAll('[data-area]').forEach(chip => chip.addEventListener('click', () => {
+        _filtroArea = chip.dataset.area;
+        pintarFiltros();
+        pintarQueue();
+    }));
 }
 
 function filaVisible(s) {
-    if (_filtroArea !== 'todas' && s._areaNombre !== _filtroArea) return false;
+    if (_filtroArea !== 'todas' && String(s.area_id) !== _filtroArea) return false;
     if (_filtroLocal) {
         const needle = _filtroLocal.toLowerCase();
         const hay = `${s.nombre_servicio || ''} ${s._mascotaNombre || ''} ${s._ordenNumero || ''}`.toLowerCase();
@@ -217,13 +211,13 @@ function pintarQueue() {
         return `
             <tr class="${activo && s.id === _servicioActivoId ? 'bg-row--active' : ''}">
                 <td>
-                    <span class="bg-svc-name">${s.nombre_servicio || '—'}</span>
-                    <span class="bg-svc-area">${s._areaNombre}</span>
+                    <span class="bg-svc-name">${escapeHtml(s.nombre_servicio || '—')}</span>
+                    <span class="bg-svc-area">${escapeHtml(areaNombre(s.area_id))}</span>
                 </td>
-                <td>${s._mascotaNombre} <span style="color:var(--text-muted); font-size:12.5px;">· ${s._mascotaEspecie || ''}</span></td>
-                <td>${s._ordenNumero ? `<span class="num" style="font-weight:500;color:var(--primary);">${s._ordenNumero}</span>` : (s.orden_id ? `<span class="num">#${s.orden_id}</span>` : '—')}</td>
-                <td class="num ${s._espera.minutos > 60 ? 'num--warn' : ''}">${s._espera.texto}</td>
-                <td><span class="av-pill ${ESTADO_PILL[s.estado] || 'av-pill--neutral'}">${ESTADO_LABEL[s.estado] || s.estado}</span></td>
+                <td>${escapeHtml(s._mascotaNombre)} <span style="color:var(--text-muted); font-size:12.5px;">· ${escapeHtml(s._mascotaEspecie || '')}</span></td>
+                <td>${ordenHtml(s._ordenNumero, s.orden_id)}</td>
+                <td class="num ${s._espera.minutos > 60 ? 'num--warn' : ''}">${escapeHtml(s._espera.texto)}</td>
+                <td><span class="av-pill ${ESTADO_PILL[s.estado] || 'av-pill--neutral'}">${escapeHtml(ESTADO_LABEL[s.estado] || s.estado)}</span></td>
                 <td style="text-align:right;">${accion}</td>
             </tr>`;
     }).join('');
@@ -271,20 +265,20 @@ function pintarDetalle() {
     cont.innerHTML = `
         <div class="bg-detail-head">
             <span class="av-eyebrow">En proceso</span>
-            <strong class="ser">${activo.nombre_servicio || '—'}</strong>
+            <strong class="ser">${escapeHtml(activo.nombre_servicio || '—')}</strong>
             <div class="bg-detail-meta">
-                <span class="av-pill av-pill--neutral">${activo._areaNombre}</span>
-                <span class="bg-detail-order">${activo._ordenNumero || (activo.orden_id ? '#' + activo.orden_id : '—')}</span>
+                <span class="av-pill av-pill--neutral">${escapeHtml(areaNombre(activo.area_id))}</span>
+                <span class="bg-detail-order">${ordenHtml(activo._ordenNumero, activo.orden_id)}</span>
             </div>
         </div>
         <div class="bg-detail-body">
             <div class="bg-detail-field">
                 <label>Paciente</label>
-                <span>${activo._mascotaNombre}</span>
+                <span>${escapeHtml(activo._mascotaNombre)}</span>
             </div>
             <div class="bg-detail-field">
                 <label>Notas / resultado</label>
-                <textarea id="bgDetalleTexto" rows="4" placeholder="Resultado, hallazgos, observaciones…">${activo.detalles_clinicos || ''}</textarea>
+                <textarea id="bgDetalleTexto" rows="4" placeholder="Resultado, hallazgos, observaciones…">${escapeHtml(activo.detalles_clinicos || '')}</textarea>
             </div>
             <div class="bg-detail-field">
                 <label>Adjunto</label>
@@ -329,10 +323,8 @@ async function ejecutarServicio(servicioId) {
     try {
         if (_adjuntoPendiente) {
             await subirAdjunto(servicioId, _adjuntoPendiente);
-            // El archivo YA se subió al servidor acá — se limpia de inmediato
-            // (no sólo en pintarDetalle(), que no corre en este camino de
-            // error) para que un reintento tras un PATCH fallido no vuelva a
-            // subirlo y duplique el adjunto (hallazgo de revisión, etapa 7).
+            // El archivo YA se subió: se limpia ya para que un reintento tras
+            // un PATCH fallido no lo vuelva a subir (hallazgo de revisión, etapa 7).
             _adjuntoPendiente = null;
             const label = document.getElementById('bgDropzoneLabel');
             if (label) label.textContent = 'Archivo subido — confirmando…';
@@ -350,6 +342,190 @@ async function ejecutarServicio(servicioId) {
     }
 }
 
+// ── pestañas ──────────────────────────────────────────────────────────────────
+const VISTAS = { bandeja: 'bgViewBandeja', realizados: 'bgViewRealizados', comisiones: 'bgViewComisiones' };
+
+function mostrarVista(vista) {
+    Object.entries(VISTAS).forEach(([k, id]) => {
+        const el = document.getElementById(id);
+        if (el) el.hidden = k !== vista;
+    });
+    document.querySelectorAll('[data-bg-vista]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bgVista === vista)));
+    if (vista === 'realizados') cargarRealizados();
+    if (vista === 'comisiones') cargarMisComisiones();
+}
+
+// ── rangos de fecha ───────────────────────────────────────────────────────────
+// En UTC, igual que kpiCalcularRango (reportes.js) y que los filtros del
+// backend: si se armaran con la fecha local, después de las 20:00 (UTC-4) el
+// "Hoy" del navegador y el del servidor no coincidirían.
+const iso = (d) => d.toISOString().slice(0, 10);
+
+function rango(tipo) {
+    const hoy = new Date();
+    if (tipo === 'semana') {
+        const lunes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate() - ((hoy.getUTCDay() + 6) % 7)));
+        return { desde: iso(lunes), hasta: iso(hoy) };
+    }
+    if (tipo === 'mes') return { desde: iso(new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 1))), hasta: iso(hoy) };
+    return { desde: iso(hoy), hasta: iso(hoy) };
+}
+
+function fijarRango(idDesde, idHasta, tipo) {
+    const r = rango(tipo);
+    const d = document.getElementById(idDesde);
+    const h = document.getElementById(idHasta);
+    if (d) d.value = r.desde;
+    if (h) h.value = r.hasta;
+}
+
+// ── Realizados ────────────────────────────────────────────────────────────────
+let _filtroAreaReal = 'todas';
+const LIMITE_REALIZADOS = 200;
+
+async function cargarRealizados() {
+    const body = document.getElementById('bgRealBody');
+    const aviso = document.getElementById('bgRealAviso');
+    if (!body) return;
+    if (!document.getElementById('bgRealDesde').value) fijarRango('bgRealDesde', 'bgRealHasta', 'hoy');
+    if (!_misAreas) await cargarMisAreas();
+
+    const params = new URLSearchParams({
+        desde: document.getElementById('bgRealDesde').value,
+        hasta: document.getElementById('bgRealHasta').value,
+    });
+    if (_filtroAreaReal !== 'todas') params.set('area_id', _filtroAreaReal);
+
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
+    try {
+        const lista = await fetchAPI(`/servicios/realizados?${params}`);
+        pintarChipsRealizados(lista);
+        if (aviso) {
+            aviso.textContent = lista.length >= LIMITE_REALIZADOS ? `Se muestran los ${LIMITE_REALIZADOS} más recientes: acotá el rango.` : '';
+            aviso.className = lista.length >= LIMITE_REALIZADOS ? 'av-pill av-pill--warn' : '';
+        }
+        if (!lista.length) {
+            body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No realizaste servicios en este rango.</td></tr>';
+            return;
+        }
+        body.innerHTML = lista.map(s => `
+            <tr data-real-id="${s.id}">
+                <td>
+                    <span class="bg-svc-name">${escapeHtml(s.nombre_servicio || '—')}</span>
+                    <span class="bg-svc-area">${escapeHtml(s.area_nombre || areaNombre(s.area_id))}</span>
+                </td>
+                <td>${escapeHtml(s.mascota_nombre || '—')}</td>
+                <td>${ordenHtml(s.orden_numero, s.orden_id)}</td>
+                <td class="num">${s.ejecutado_at ? escapeHtml(new Date(s.ejecutado_at).toLocaleString()) : '—'}</td>
+                <td class="num">${Number(s.adjuntos) || 0}</td>
+                <td style="text-align:right;">
+                    <button type="button" class="av-btn" data-real-ver="${s.id}" style="height:30px; padding:0 10px; font-size:12.5px;">Ver</button>
+                </td>
+            </tr>
+            <tr data-real-detalle="${s.id}" hidden><td colspan="6"></td></tr>`).join('');
+        _realizados = new Map(lista.map(s => [s.id, s]));
+    } catch (e) {
+        body.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent); padding:1.5rem;">Error: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+let _realizados = new Map();
+
+function pintarChipsRealizados(lista) {
+    const cont = document.getElementById('bgRealAreas');
+    if (!cont) return;
+    // Los conteos solo tienen sentido para "Todas": con un área elegida, la
+    // lista ya viene filtrada por el servidor.
+    const conteo = new Map();
+    lista.forEach(s => conteo.set(s.area_id, (conteo.get(s.area_id) || 0) + 1));
+    cont.innerHTML = chipsArea(conteo, _filtroAreaReal, 'data-real-area');
+    cont.querySelectorAll('[data-real-area]').forEach(chip => chip.addEventListener('click', () => {
+        _filtroAreaReal = chip.dataset.realArea;
+        cargarRealizados();
+    }));
+}
+
+async function verDetalleRealizado(id) {
+    const fila = document.querySelector(`[data-real-detalle="${id}"]`);
+    if (!fila) return;
+    if (!fila.hidden) { fila.hidden = true; return; }
+    const s = _realizados.get(id);
+    const celda = fila.querySelector('td');
+    fila.hidden = false;
+    celda.innerHTML = '<span style="color:var(--text-muted);">Cargando adjuntos…</span>';
+    try {
+        const adjuntos = await fetchAPI(`/servicios/${id}/adjuntos`);
+        const notas = s?.detalles_clinicos
+            ? `<p style="margin:0 0 0.5rem;"><b>Resultado:</b> ${escapeHtml(s.detalles_clinicos)}</p>` : '';
+        const lista = (adjuntos || []).length
+            ? adjuntos.map(a => `
+                <button type="button" class="av-btn" data-adjunto="${a.id}" data-adjunto-nombre="${escapeHtml(a.nombre_original)}" style="height:30px; padding:0 10px; font-size:12.5px; margin:0 6px 6px 0;">
+                    Descargar ${escapeHtml(a.nombre_original)}
+                </button>`).join('')
+            : '<span style="color:var(--text-muted);">Sin adjuntos.</span>';
+        celda.innerHTML = `<div style="padding:0.5rem 0.25rem;">${notas}${lista}</div>`;
+    } catch (e) {
+        celda.innerHTML = `<span style="color:var(--accent);">No se pudieron cargar los adjuntos: ${escapeHtml(e.message)}</span>`;
+    }
+}
+
+async function descargarAdjunto(id, nombre) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/adjuntos/${id}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const url = window.URL.createObjectURL(await resp.blob());
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombre || `adjunto_${id}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    } catch (e) {
+        showNotification('No se pudo descargar el adjunto: ' + e.message, 'error');
+    }
+}
+
+// ── Mis comisiones ────────────────────────────────────────────────────────────
+async function cargarMisComisiones() {
+    const wrap = document.getElementById('bgComWrap');
+    const liqWrap = document.getElementById('bgComLiquidaciones');
+    if (!wrap) return;
+    if (!document.getElementById('bgComDesde').value) fijarRango('bgComDesde', 'bgComHasta', 'mes');
+    const params = new URLSearchParams({
+        desde: document.getElementById('bgComDesde').value,
+        hasta: document.getElementById('bgComHasta').value,
+    });
+    wrap.innerHTML = '<p style="color: var(--text-secondary); margin:0;">Calculando…</p>';
+    try {
+        const [c, liquidaciones] = await Promise.all([
+            fetchAPI(`/comisiones/mias?${params}`),
+            fetchAPI('/comisiones/mias/liquidaciones'),
+        ]);
+        wrap.innerHTML = `
+            <p style="margin:0 0 0.75rem;">Tu porcentaje actual: <b>${pct(c.porcentaje_efectivo)}</b></p>
+            <h4 style="margin: 0.5rem 0;">Pendiente de liquidar</h4>
+            ${tablaLineas(c.pendientes, 'No tenés comisiones pendientes en este rango.')}
+            <div id="bgComTotalesPendientes" style="margin:0.75rem 0 1.25rem;">${totales(c.totales_pendientes)}</div>
+            <h4 style="margin: 0.5rem 0;">Ya liquidado</h4>
+            ${tablaLineas(c.liquidadas, 'Nada liquidado en este rango.')}
+            <div style="margin-top:0.75rem;">${totales(c.totales_liquidadas)}</div>`;
+        if (liqWrap) {
+            liqWrap.innerHTML = liquidaciones.length
+                ? liquidaciones.map(l => `
+                    <div data-bg-liquidacion="${l.id}" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem; padding:0.6rem 0.9rem; margin-bottom:0.5rem; border:1px solid var(--border); border-radius:8px;">
+                        <div><b>${escapeHtml(l.numero)}</b> · ${escapeHtml(new Date(l.desde).toLocaleDateString())} a ${escapeHtml(new Date(l.hasta).toLocaleDateString())} · ${totales({ encargado: l.total_encargado, amivets: l.total_amivets })}</div>
+                        <button type="button" class="av-btn" data-bg-pdf="${l.id}" data-bg-numero="${escapeHtml(l.numero)}" style="height:30px; padding:0 10px; font-size:12.5px;">Descargar PDF</button>
+                    </div>`).join('')
+                : '<p style="color: var(--text-secondary); margin:0;">Todavía no tenés liquidaciones.</p>';
+        }
+    } catch (e) {
+        wrap.innerHTML = `<p style="color: var(--accent); margin:0;">Error: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
 // ── wiring ────────────────────────────────────────────────────────────────────
 export const initBandejaGestor = () => {
     if (_wired) return;
@@ -357,5 +533,24 @@ export const initBandejaGestor = () => {
     document.getElementById('bgFiltroLocal')?.addEventListener('input', (e) => {
         _filtroLocal = e.target.value.trim();
         pintarQueue();
+    });
+    document.querySelectorAll('[data-bg-vista]').forEach(b => b.addEventListener('click', () => mostrarVista(b.dataset.bgVista)));
+
+    document.querySelectorAll('.bg-real-rango').forEach(b => b.addEventListener('click', () => {
+        fijarRango('bgRealDesde', 'bgRealHasta', b.dataset.bgRango);
+        cargarRealizados();
+    }));
+    document.getElementById('btnBgRealVer')?.addEventListener('click', cargarRealizados);
+    document.getElementById('bgRealBody')?.addEventListener('click', (e) => {
+        const ver = e.target.closest('[data-real-ver]');
+        if (ver) { verDetalleRealizado(Number(ver.dataset.realVer)); return; }
+        const adj = e.target.closest('[data-adjunto]');
+        if (adj) descargarAdjunto(Number(adj.dataset.adjunto), adj.dataset.adjuntoNombre);
+    });
+
+    document.getElementById('btnBgComVer')?.addEventListener('click', cargarMisComisiones);
+    document.getElementById('bgComLiquidaciones')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-bg-pdf]');
+        if (btn) descargarPdf(Number(btn.dataset.bgPdf), btn.dataset.bgNumero);
     });
 };

@@ -221,6 +221,10 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     # Ya facturado sí/no — para el timeline de la ficha (el endpoint ya filtra
     # por ?facturado=, faltaba exponerlo por fila).
     facturado: Optional[bool] = None
+    # Área que ejecuta el servicio (snapshot al anexar). La bandeja del
+    # encargado lo usa para agrupar por rubro sin adivinarlo por el catálogo
+    # (pantalla-encargado, decisión 3).
+    area_id: Optional[int] = None
     # Advertencias de stock al aplicar (Decision 4): faltantes que se
     # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
     # que dispara el consumo.
@@ -625,6 +629,21 @@ class VentaRapidaCreate(BaseModel):
     propietario_id: Optional[int] = Field(None, gt=0)
     metodo_pago: Literal["EFECTIVO", "TARJETA", "TRANSFERENCIA", "MULTIPLE"]
     items: List[VentaRapidaItem] = Field(..., min_length=1)
+
+
+class ServicioRealizadoResponse(BaseModel):
+    """Un servicio que el usuario tomó y ejecutó (pantalla-encargado,
+    decisión 4), con los nombres ya resueltos para la vista "Realizados"."""
+    id: int
+    nombre_servicio: Optional[str] = None
+    area_id: Optional[int] = None
+    area_nombre: Optional[str] = None
+    mascota_nombre: Optional[str] = None
+    orden_id: Optional[int] = None
+    orden_numero: Optional[str] = None
+    ejecutado_at: Optional[datetime] = None
+    detalles_clinicos: Optional[str] = None
+    adjuntos: int = 0
 
 
 class ItemCajaResponse(BaseModel):

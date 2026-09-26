@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.models import AreaServicio, GestorArea, Usuario
-from app.routers.usuarios import require_roles
+from app.routers.usuarios import get_current_user, require_roles
 from app.schemas.schemas import (
     AreaServicioCreate,
     AreaServicioResponse,
@@ -61,6 +61,23 @@ def listar_areas(
     """Todas las áreas (activas e inactivas): el admin también necesita ver
     las inactivas para poder reactivarlas."""
     return db.query(AreaServicio).order_by(AreaServicio.nombre).all()
+
+
+@router.get("/mias", response_model=List[AreaServicioResponse])
+def mis_areas(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Las áreas activas que atiende el usuario logueado (pantalla-encargado,
+    decisión 2). Abierto a cualquier usuario autenticado porque solo devuelve
+    lo propio: el gestor no puede leer GET / (todas las áreas)."""
+    return (
+        db.query(AreaServicio)
+        .join(GestorArea, GestorArea.area_id == AreaServicio.id)
+        .filter(GestorArea.usuario_id == current_user.id, AreaServicio.activo == True)  # noqa: E712
+        .order_by(AreaServicio.nombre)
+        .all()
+    )
 
 
 @router.put("/{area_id}", response_model=AreaServicioResponse)

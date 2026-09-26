@@ -68,6 +68,10 @@ export function init() {
 
 function open() {
     if (backdrop) return;
+    // El chequeo va acá y no solo en el atajo: cualquier camino que abra la
+    // paleta (botón, atajo, otro módulo) respeta la misma regla de rol
+    // (pantalla-encargado, decisión 1).
+    if (ROLES_SIN_BUSQUEDA_GLOBAL.includes(getRole())) return;
     lastFocused = document.activeElement;
 
     backdrop = document.createElement('div');

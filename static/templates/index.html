@@ -1119,36 +1119,92 @@
             <!-- sec-bandeja-gestor — Módulo 2 · Mi bandeja (Tarea 06, etapa 7). -->
             <section id="sec-bandeja-gestor" class="spa-section" hidden>
                 <div class="bg-canvas">
-                    <div class="bg-filters">
-                        <div class="av-row-actions" id="bgFilters"></div>
-                        <input type="text" id="bgFiltroLocal" class="av-search av-search--local" placeholder="Filtrar en mi bandeja" autocomplete="off" style="cursor:text;">
-                        <div class="av-spacer"></div>
-                        <span style="font-size:12.5px;color:var(--text-secondary);">Ordenadas por tiempo de espera</span>
+                    <!-- pantalla-encargado: rubro + pestañas Bandeja / Realizados / Mis comisiones. -->
+                    <div class="bg-tabs-row">
+                        <div id="bgRubro" class="bg-rubro" aria-live="polite"></div>
+                        <div class="pd-orders-filters" role="tablist">
+                            <button type="button" id="bgTabBandeja" class="pd-filter" data-bg-vista="bandeja" aria-pressed="true">Bandeja</button>
+                            <button type="button" id="bgTabRealizados" class="pd-filter" data-bg-vista="realizados" aria-pressed="false">Realizados</button>
+                            <button type="button" id="bgTabComisiones" class="pd-filter" data-bg-vista="comisiones" aria-pressed="false">Mis comisiones</button>
+                        </div>
                     </div>
-                    <div class="bg-columns">
+
+                    <div id="bgViewBandeja" class="bg-view">
+                        <div class="bg-filters">
+                            <div class="av-row-actions" id="bgFilters"></div>
+                            <input type="text" id="bgFiltroLocal" class="av-search av-search--local" placeholder="Filtrar en mi bandeja" autocomplete="off" style="cursor:text;">
+                            <div class="av-spacer"></div>
+                            <span style="font-size:12.5px;color:var(--text-secondary);">Ordenadas por tiempo de espera</span>
+                        </div>
+                        <div class="bg-columns">
+                            <section class="bg-queue">
+                                <div class="bg-queue-head">
+                                    <strong class="ser">Servicios asignados a mí</strong>
+                                    <span id="bgEsperaAviso"></span>
+                                </div>
+                                <table class="bg-table">
+                                    <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
+                                    <tbody id="bgQueueBody">
+                                        <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="bg-queue-note">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
+                                    <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
+                                </div>
+                            </section>
+
+                            <section class="bg-detail" id="bgDetail">
+                                <div class="bg-empty">
+                                    <svg class="bg-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                    <strong>Nada en proceso</strong>
+                                    <span>Tomá un servicio de tu bandeja para verlo acá y cargar su resultado.</span>
+                                </div>
+                            </section>
+                        </div>
+
+                    </div>
+
+                    <!-- Realizados: lo que el usuario tomó y ejecutó (GET /api/servicios/realizados). -->
+                    <div id="bgViewRealizados" class="bg-view" hidden>
+                        <div class="bg-filters">
+                            <button type="button" class="av-btn bg-real-rango" data-bg-rango="hoy" style="height:30px; padding:0 10px; font-size:12.5px;">Hoy</button>
+                            <button type="button" class="av-btn bg-real-rango" data-bg-rango="semana" style="height:30px; padding:0 10px; font-size:12.5px;">Esta semana</button>
+                            <button type="button" class="av-btn bg-real-rango" data-bg-rango="mes" style="height:30px; padding:0 10px; font-size:12.5px;">Este mes</button>
+                            <input type="date" id="bgRealDesde" aria-label="Desde" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <span style="color: var(--text-secondary); font-size:12.5px;">a</span>
+                            <input type="date" id="bgRealHasta" aria-label="Hasta" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <button type="button" id="btnBgRealVer" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver</button>
+                            <div class="av-row-actions" id="bgRealAreas"></div>
+                        </div>
                         <section class="bg-queue">
                             <div class="bg-queue-head">
-                                <strong class="ser">Servicios asignados a mí</strong>
-                                <span id="bgEsperaAviso"></span>
+                                <strong class="ser">Servicios que realicé</strong>
+                                <span id="bgRealAviso"></span>
                             </div>
                             <table class="bg-table">
-                                <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Esperando</th><th>Estado</th><th></th></tr></thead>
-                                <tbody id="bgQueueBody">
-                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>
+                                <thead><tr><th>Servicio</th><th>Paciente</th><th>Orden</th><th>Ejecutado</th><th>Adjuntos</th><th></th></tr></thead>
+                                <tbody id="bgRealBody">
+                                    <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Elegí un rango para ver lo que realizaste.</td></tr>
                                 </tbody>
                             </table>
-                            <div class="bg-queue-note">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.4 11.1 12.3 20a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>
-                                <span>El clip marca los servicios que exigen adjunto para pasar a Ejecutado.</span>
-                            </div>
                         </section>
+                    </div>
 
-                        <section class="bg-detail" id="bgDetail">
-                            <div class="bg-empty">
-                                <svg class="bg-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                                <strong>Nada en proceso</strong>
-                                <span>Tomá un servicio de tu bandeja para verlo acá y cargar su resultado.</span>
-                            </div>
+                    <!-- Mis comisiones: GET /api/comisiones/mias + /mias/liquidaciones. -->
+                    <div id="bgViewComisiones" class="bg-view" hidden>
+                        <div class="bg-filters">
+                            <input type="date" id="bgComDesde" aria-label="Desde" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <span style="color: var(--text-secondary); font-size:12.5px;">a</span>
+                            <input type="date" id="bgComHasta" aria-label="Hasta" style="height:30px; padding:0 8px; border:1px solid var(--border); border-radius:6px;">
+                            <button type="button" id="btnBgComVer" class="av-btn av-btn--primary" style="height:30px; padding:0 10px; font-size:12.5px;">Ver</button>
+                        </div>
+                        <section class="bg-queue" style="padding: 16px;">
+                            <div id="bgComWrap" style="overflow-x:auto;"></div>
+                        </section>
+                        <section class="bg-queue" style="padding: 16px;">
+                            <strong class="ser">Mis liquidaciones</strong>
+                            <div id="bgComLiquidaciones" style="margin-top: 10px;"></div>
                         </section>
                     </div>
                 </div>

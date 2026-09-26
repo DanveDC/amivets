@@ -11,6 +11,7 @@ funciones (para no romper e2e/flujo-clinico.spec.js).
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -29,8 +30,9 @@ from app.schemas.schemas import (
     ServicioConsultaCreate,
     ServicioConsultaUpdate,
     ServicioConsultaResponse,
+    ServicioRealizadoResponse,
 )
-from app.models.models import Adjunto, AreaServicio, GestorArea, ServicioConsulta, Mascota, Usuario
+from app.models.models import Adjunto, AreaServicio, GestorArea, OrdenServicio, ServicioConsulta, Mascota, Usuario
 from app.services import consumo_service, notificacion_service, orden_service
 from app.routers.usuarios import require_roles
 
@@ -521,6 +523,78 @@ def tomar_servicio(
 
     db.refresh(servicio)
     return ServicioConsultaResponse.model_validate(servicio)
+
+
+LIMITE_REALIZADOS = 200
+
+
+@router.get("/realizados", response_model=List[ServicioRealizadoResponse])
+def listar_realizados(
+    desde: Optional[date] = None,
+    hasta: Optional[date] = None,
+    area_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles("gestor", "veterinario")),
+):
+    """Lo que el usuario tomó y ejecutó (pantalla-encargado, decisión 4): sus
+    servicios EJECUTADO por fecha de ejecución, del más reciente al más viejo.
+    Sin fechas, devuelve los de hoy. Un servicio facturado sigue EJECUTADO (la
+    facturación es un flag), así que el filtro de estado alcanza."""
+    hoy = datetime.now(timezone.utc).date()
+    desde = desde or hoy
+    hasta = hasta or hoy
+    if hasta < desde:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="'hasta' no puede ser anterior a 'desde'")
+    dt_desde = datetime.combine(desde, datetime.min.time(), tzinfo=timezone.utc)
+    dt_hasta = datetime.combine(hasta, datetime.max.time(), tzinfo=timezone.utc)
+
+    q = db.query(ServicioConsulta).filter(
+        ServicioConsulta.asignado_a_id == current_user.id,
+        ServicioConsulta.estado == "EJECUTADO",
+        ServicioConsulta.is_deleted == False,  # noqa: E712
+        ServicioConsulta.ejecutado_at >= dt_desde,
+        ServicioConsulta.ejecutado_at <= dt_hasta,
+    )
+    if area_id is not None:
+        es_mia = db.query(GestorArea.id).filter(
+            GestorArea.usuario_id == current_user.id, GestorArea.area_id == area_id
+        ).first()
+        if not es_mia:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Esa área no es tuya")
+        q = q.filter(ServicioConsulta.area_id == area_id)
+    servicios = q.order_by(ServicioConsulta.ejecutado_at.desc()).limit(LIMITE_REALIZADOS).all()
+    if not servicios:
+        return []
+
+    # Nombres por lote, sin N+1.
+    area_ids = {s.area_id for s in servicios if s.area_id}
+    mascota_ids = {s.mascota_id for s in servicios if s.mascota_id}
+    orden_ids = {s.orden_id for s in servicios if s.orden_id}
+    ids = [s.id for s in servicios]
+    areas = dict(db.query(AreaServicio.id, AreaServicio.nombre).filter(AreaServicio.id.in_(area_ids)).all()) if area_ids else {}
+    mascotas = dict(db.query(Mascota.id, Mascota.nombre).filter(Mascota.id.in_(mascota_ids)).all()) if mascota_ids else {}
+    ordenes = dict(db.query(OrdenServicio.id, OrdenServicio.numero).filter(OrdenServicio.id.in_(orden_ids)).all()) if orden_ids else {}
+    adjuntos = dict(
+        db.query(Adjunto.servicio_id, func.count(Adjunto.id))
+        .filter(Adjunto.servicio_id.in_(ids), Adjunto.is_deleted == False)  # noqa: E712
+        .group_by(Adjunto.servicio_id)
+        .all()
+    )
+    return [
+        ServicioRealizadoResponse(
+            id=s.id,
+            nombre_servicio=s.nombre_servicio,
+            area_id=s.area_id,
+            area_nombre=areas.get(s.area_id),
+            mascota_nombre=mascotas.get(s.mascota_id),
+            orden_id=s.orden_id,
+            orden_numero=ordenes.get(s.orden_id),
+            ejecutado_at=s.ejecutado_at,
+            detalles_clinicos=s.detalles_clinicos,
+            adjuntos=adjuntos.get(s.id, 0),
+        )
+        for s in servicios
+    ]
 
 
 @router.get("/bandeja", response_model=List[ServicioConsultaResponse])

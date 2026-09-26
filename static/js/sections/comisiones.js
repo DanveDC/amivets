@@ -7,6 +7,8 @@
 //     el botón "Liquidar",
 // (c) liquidaciones del encargado con su comprobante PDF.
 // Sin onclick inline: los botones generados usan data-* y listeners.
+// tablaLineas / totales / descargarPdf / pct se reusan en la pestaña
+// "Mis comisiones" de la bandeja (pantalla-encargado).
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { showNotification, escapeHtml, submitWithLoading } from '../core/ui.js';
@@ -17,7 +19,7 @@ let _calcularRango = null;
 let _ultimoControl = null; // { encargado_id, desde, hasta }
 
 const ROL_LABEL = { veterinario: 'Veterinario/a', gestor: 'Encargado/a de área' };
-const pct = (v) => `${Number(v).toLocaleString('es', { maximumFractionDigits: 2 })}%`;
+export const pct = (v) => `${Number(v).toLocaleString('es', { maximumFractionDigits: 2 })}%`;
 const fecha = (v) => (v ? new Date(v).toLocaleDateString() : '—');
 
 // ── (a) Porcentajes ─────────────────────────────────────────────────────────
@@ -115,7 +117,7 @@ function filaLinea(l) {
         </tr>`;
 }
 
-function tablaLineas(lineas, vacio) {
+export function tablaLineas(lineas, vacio) {
     if (!lineas.length) return `<p style="color: var(--text-secondary); padding: 0.5rem 0; margin:0;">${vacio}</p>`;
     return `
         <table class="consultas-table" style="width:100%; border-collapse:collapse;">
@@ -134,7 +136,7 @@ function tablaLineas(lineas, vacio) {
         </table>`;
 }
 
-function totales(t) {
+export function totales(t) {
     return `<span>Encargado: <b>${money(t.encargado)}</b></span> · <span>AmiVets: <b>${money(t.amivets)}</b></span>`;
 }
 
@@ -208,7 +210,7 @@ async function cargarLiquidaciones(encargadoId) {
     }
 }
 
-async function descargarPdf(id, numero) {
+export async function descargarPdf(id, numero) {
     try {
         const response = await fetch(`${API_BASE_URL}/comisiones/liquidaciones/${id}/pdf`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },

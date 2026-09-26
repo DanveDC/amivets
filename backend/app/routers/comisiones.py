@@ -80,6 +80,16 @@ def mis_comisiones(
     return comision_service.control(db, current_user.id, desde, hasta)
 
 
+@router.get("/mias/liquidaciones", response_model=List[LiquidacionComisionResponse])
+def mis_liquidaciones(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles(*comision_service.ROLES_ENCARGADO)),
+):
+    """Solo las liquidaciones propias, de la más reciente a la más vieja
+    (pantalla-encargado, "Mis comisiones")."""
+    return comision_service.listar_liquidaciones(db, current_user.id)
+
+
 @router.post("/liquidaciones", response_model=LiquidacionComisionResponse, status_code=status.HTTP_201_CREATED)
 def liquidar(
     data: LiquidacionComisionCreate,
