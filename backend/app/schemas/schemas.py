@@ -249,6 +249,9 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     # model_validator que asignado_a_nombre, mismo criterio (username).
     asignado_directo_a_id: Optional[int] = None
     asignado_directo_a_nombre: Optional[str] = None
+    # Nombre del área resuelto desde la relación `area` si vino cargada
+    # (obtener_orden(con_asignados=True)). Interno: lo expone `area_nombre`.
+    area_nombre_resuelto: Optional[str] = Field(None, exclude=True)
     model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode='before')
@@ -267,6 +270,13 @@ class ServicioConsultaResponse(ServicioConsultaBase):
                 asignado_directo = getattr(data, 'asignado_directo_a', None)
                 if asignado_directo:
                     data.asignado_directo_a_nombre = asignado_directo.username
+            except Exception:
+                pass
+            try:
+                # Solo si ya está cargada: no dispara un lazy load por línea
+                # en los endpoints que no la piden.
+                if 'area' in data.__dict__ and data.area is not None:
+                    data.area_nombre_resuelto = data.area.nombre
             except Exception:
                 pass
         return data
@@ -294,6 +304,23 @@ class ServicioConsultaResponse(ServicioConsultaBase):
                 return "asignada"
             return "liberada" if self.liberado_at is not None else "disponible"
         return None
+
+    @computed_field
+    @property
+    def veterinario_nombre(self) -> Optional[str]:
+        """Alias semántico de asignado_a_nombre (consulta-directa-atajo-sin-
+        despacho): en una línea CONSULTA, quien la tomó es el veterinario que
+        la ejecutó."""
+        return self.asignado_a_nombre
+
+    @computed_field
+    @property
+    def area_nombre(self) -> Optional[str]:
+        """Nombre del área que ejecuta el servicio, "NINGUNO" si no tiene
+        (atajo sin despacho), None si hay área pero no vino cargada."""
+        if self.area_id is None:
+            return "NINGUNO"
+        return self.area_nombre_resuelto
 
 
 class AsignacionServicioGestor(BaseModel):
@@ -1213,8 +1240,10 @@ class OrdenServicioAnexarServicio(BaseModel):
     que decide el propio endpoint por el área del ítem (decisión 4, atajo sin
     despacho) en vez de aceptarlo del cliente.
 
-    `tipo_servicio='CONSULTA'` está reservado a POST /api/consultas/ (decisión
-    3, índice único uq_orden_una_consulta): el endpoint lo rechaza con 400.
+    `tipo_servicio='CONSULTA'` (consulta-directa-atajo-sin-despacho) anexa el
+    honorario suelto con el atajo sin despacho: entra EJECUTADO, sin área,
+    asignado a `veterinario_id`. Máximo una por orden (índice único
+    uq_orden_una_consulta, 409).
     """
     tipo_servicio: str = Field(..., max_length=50)
     referencia_id: Optional[int] = None
@@ -1226,6 +1255,10 @@ class OrdenServicioAnexarServicio(BaseModel):
     # Overrides opcionales de consumo real por material (decisión 6, Tarea 07).
     # Solo se usan si el atajo sin despacho deja el servicio en EJECUTADO.
     consumos: Optional[List[ConsumoMaterialOverride]] = None
+    # Solo para tipo_servicio='CONSULTA': quién la ejecuta. Si no viene, se
+    # hereda orden.veterinario_id; tiene que ser un usuario con rol veterinario
+    # (400). Se ignora para cualquier otro tipo.
+    veterinario_id: Optional[int] = Field(None, gt=0)
 
 
 class OrdenServicioAnular(BaseModel):

@@ -10,7 +10,8 @@ persiste es la liquidación, con el porcentaje y los montos congelados.
 
 - Línea elegible: ServicioConsulta vivo, facturado, con encargado, cuya
   factura está PAGADA y cuyo par (servicio, factura) todavía no se liquidó.
-- Encargado: veterinario de la consulta para la línea CONSULTA; si no, el
+- Encargado: veterinario de la consulta para la línea CONSULTA (o
+  asignado_a_id si es una CONSULTA directa, sin consulta clínica); si no, el
   gestor que tomó el servicio (asignado_a_id). Sin encargado no hay comisión.
 - Ajuste: línea ya liquidada cuya factura ahora está ANULADA y todavía no
   tiene su ajuste; se liquida en negativo en la próxima liquidación.
@@ -173,9 +174,21 @@ def _repartir(subtotal: Decimal, porcentaje: Decimal) -> Tuple[Decimal, Decimal]
 
 
 def _filtro_encargado(encargado_id: int):
-    """Línea CONSULTA -> veterinario de la consulta; el resto -> asignado_a_id."""
+    """Línea CONSULTA -> veterinario de la consulta; el resto -> asignado_a_id.
+
+    Una CONSULTA anexada directo a la orden (consulta-directa-atajo-sin-
+    despacho) no tiene `Consulta` detrás: su encargado es asignado_a_id, el
+    veterinario que la ejecutó. Si la línea sí tiene consulta, manda
+    Consulta.veterinario_id aunque asignado_a_id diga otra cosa (la consulta
+    puede reasignarse después). Requiere el outerjoin a Consulta del llamador.
+    """
     return or_(
         and_(ServicioConsulta.tipo_servicio == "CONSULTA", Consulta.veterinario_id == encargado_id),
+        and_(
+            ServicioConsulta.tipo_servicio == "CONSULTA",
+            ServicioConsulta.consulta_id.is_(None),
+            ServicioConsulta.asignado_a_id == encargado_id,
+        ),
         and_(ServicioConsulta.tipo_servicio != "CONSULTA", ServicioConsulta.asignado_a_id == encargado_id),
     )
 

@@ -15,6 +15,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -58,19 +59,9 @@ def _parse_fecha(valor: Optional[str], campo: str) -> Optional[date]:
 
 
 def _validar_veterinario(db: Session, veterinario_id: int) -> Usuario:
-    """El destino tiene que ser un usuario con rol veterinario.
-
-    Mismo criterio y mismo código (400) que ConsultaService.crear_consulta: sin
-    esto una orden puede quedar "asignada" a la recepcionista y no aparecer
-    nunca en la lista de nadie.
-    """
-    vet = db.query(Usuario).filter(Usuario.id == veterinario_id).first()
-    if not vet or vet.role != "veterinario":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El veterinario_id indicado no corresponde a un usuario con rol veterinario",
-        )
-    return vet
+    """Ver orden_service.validar_veterinario (vive ahí para que el anexo de
+    CONSULTA directa la comparta sin importar el router)."""
+    return orden_service.validar_veterinario(db, veterinario_id)
 
 
 @router.post("/", response_model=OrdenServicioDetalleResponse, status_code=status.HTTP_201_CREATED)
@@ -279,22 +270,14 @@ def anexar_servicio_orden(
     Es la hermana de POST /api/consultas/{id}/servicios para el caso en que la
     orden no tiene consulta (decisión 1: venta de mostrador, orden solo de
     estética -- una orden puede no tener paciente y de todas formas necesitar
-    líneas facturables). La línea `tipo_servicio='CONSULTA'` queda reservada a
-    POST /api/consultas/ -- única fuente, decisión 3, índice
-    `uq_orden_una_consulta` -- y este endpoint la rechaza con 400.
+    líneas facturables). `tipo_servicio='CONSULTA'` anexa el honorario suelto
+    con el atajo sin despacho (consulta-directa-atajo-sin-despacho): EJECUTADO
+    directo, sin área, asignado a `veterinario_id` o al de la orden -- 422 si
+    no hay ninguno, 400 si no es veterinario, 409 si la orden ya tiene su
+    consulta (índice `uq_orden_una_consulta`).
     """
     orden = orden_service.obtener_orden(db, orden_id)
     orden_service.asegurar_recibe_trabajo(orden)
-
-    tipo = (data.tipo_servicio or "").strip().upper()
-    if tipo == orden_service.TIPO_SERVICIO_CONSULTA:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "La línea CONSULTA no se anexa por acá: la crea únicamente "
-                "POST /api/consultas/ (decisión 3)."
-            ),
-        )
 
     validar_tipo_servicio_por_rol(current_user, data.tipo_servicio)
 
@@ -310,8 +293,17 @@ def anexar_servicio_orden(
         detalles_clinicos=data.detalles_clinicos,
         consumos_override=data.consumos,
         current_user=current_user,
+        veterinario_id=data.veterinario_id,
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera de dos anexos CONSULTA simultáneos: el pre-chequeo de
+        # crear_servicio_en_orden no la cubre, el índice único sí.
+        db.rollback()
+        if "uq_orden_una_consulta" in str(getattr(exc, "orig", exc)):
+            raise orden_service.error_una_consulta_por_orden(orden)
+        raise
     db.refresh(servicio)
     resp = ServicioConsultaResponse.model_validate(servicio)
     if advertencias:

@@ -38,6 +38,23 @@ def _ahora() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def validar_veterinario(db: Session, veterinario_id: int) -> Usuario:
+    """El destino tiene que ser un usuario con rol veterinario.
+
+    Mismo criterio y mismo código (400) que ConsultaService.crear_consulta: sin
+    esto una orden puede quedar "asignada" a la recepcionista y no aparecer
+    nunca en la lista de nadie. Vive acá (y no en routers/ordenes.py) para que
+    crear_servicio_en_orden la use sin importar el router.
+    """
+    vet = db.query(Usuario).filter(Usuario.id == veterinario_id).first()
+    if not vet or vet.role != "veterinario":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El veterinario_id indicado no corresponde a un usuario con rol veterinario",
+        )
+    return vet
+
+
 # ---------------------------------------------------------------------------
 # Lecturas
 # ---------------------------------------------------------------------------
@@ -59,6 +76,8 @@ def obtener_orden(db: Session, orden_id: int, *, con_asignados: bool = False) ->
         q = q.options(
             selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_a),
             selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_directo_a),
+            # consulta-directa-atajo-sin-despacho: `area_nombre` en la respuesta.
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.area),
         )
     orden = q.filter(OrdenServicio.id == orden_id).first()
     if not orden:
@@ -316,6 +335,7 @@ def crear_servicio_en_orden(
     detalles_clinicos: Optional[str],
     consumos_override,
     current_user: Usuario,
+    veterinario_id: Optional[int] = None,
 ) -> tuple:
     """Anexa una linea de servicio a la orden SIN pasar por una consulta
     (Tarea 06, decision 1: venta de mostrador, orden solo de estetica; y
@@ -334,9 +354,56 @@ def crear_servicio_en_orden(
     esos dos toman el `estado` que manda el cliente, para no romper su
     contrato ya cubierto por la suite.
 
+    Excepcion: `tipo_servicio='CONSULTA'` (consulta-directa-atajo-sin-despacho)
+    es el honorario suelto de la consulta, sin `Consulta` clinica detras. Aplica
+    el atajo sin despacho EN EL MOMENTO, igual que crear_linea_consulta: entra
+    en EJECUTADO, sin area, asignada al veterinario (`veterinario_id` si viene,
+    si no el de la orden; 422 si no hay ninguno, 400 si no es veterinario) y
+    pasa la orden a EN_ATENCION. No dispara consumo: una consulta no tiene
+    receta. 409 si la orden ya tiene su consulta (uq_orden_una_consulta; el
+    llamador igual tiene que atajar el IntegrityError de la carrera).
+
     No commitea: el llamador decide la transaccion. Devuelve
     (servicio, advertencias).
     """
+    if (tipo_servicio or "").strip().upper() == TIPO_SERVICIO_CONSULTA:
+        vet_id = veterinario_id or orden.veterinario_id
+        if not vet_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "La orden no tiene veterinario asignado; indique veterinario_id "
+                    "en el body o asigne uno a la orden"
+                ),
+            )
+        validar_veterinario(db, vet_id)
+        if consulta_viva_en_orden(db, orden.id):
+            raise error_una_consulta_por_orden(orden)
+
+        linea = ServicioConsulta(
+            orden_id=orden.id,
+            consulta_id=None,
+            mascota_id=orden.mascota_id,
+            tipo_servicio=TIPO_SERVICIO_CONSULTA,
+            referencia_id=referencia_id,
+            catalogo_servicio_id=catalogo_servicio_id,
+            nombre_servicio=nombre_servicio or "Consulta veterinaria",
+            cantidad=cantidad,
+            precio_unitario=precio_unitario,
+            detalles_clinicos=detalles_clinicos,
+            # Atajo sin despacho (decision 4): sin area, la ejecuta el veterinario.
+            area_id=None,
+            asignado_a_id=vet_id,
+            estado="EJECUTADO",
+            ejecutado_at=_ahora(),
+            is_deleted=False,
+        )
+        db.add(linea)
+        db.flush()
+        # Decision 1, regla 1: igual que el alta de consulta por POST /api/consultas/.
+        marcar_en_atencion(orden)
+        return linea, []
+
     area_id = None
     if catalogo_servicio_id:
         item = db.query(CatalogoServicio).filter(CatalogoServicio.id == catalogo_servicio_id).first()
@@ -501,6 +568,10 @@ def crear_linea_consulta(
         # consulta no tiene receta de materiales propia; los insumos que se
         # usan durante la atencion se anexan como sus propias lineas.
         estado="EJECUTADO",
+        # consulta-directa-atajo-sin-despacho: el veterinario de la consulta,
+        # para que la respuesta exponga `veterinario_nombre`. Sin ejecutado_at
+        # a proposito: no cambia lo que lista GET /api/servicios/mis-ejecutados.
+        asignado_a_id=consulta.veterinario_id,
         origen=None,
         is_deleted=False,
     )

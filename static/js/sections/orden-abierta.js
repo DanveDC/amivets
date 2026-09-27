@@ -11,11 +11,11 @@
 // - ServicioConsultaResponse no expone qué insumos consumió cada línea, así
 //   que la fila de servicio no pinta el sub-texto "Alcohol 50ml · Gasas 2u"
 //   que muestra la maqueta — sólo el nombre.
-// - AnexarServicio.html lista "Consultas" como categoría del picker, pero
-//   POST /api/ordenes/{id}/servicios RECHAZA con 400 tipo_servicio=CONSULTA
-//   (esa línea es exclusiva de POST /api/consultas/, orden_service.py). Se
-//   excluye la categoría CONSULTA del picker para no ofrecer una acción que
-//   el backend va a rechazar siempre.
+// - AnexarServicio.html lista "Consultas" como categoría del picker. POST
+//   /api/ordenes/{id}/servicios ya acepta tipo_servicio=CONSULTA (consulta-
+//   directa-atajo-sin-despacho: EJECUTADO directo, asignada al veterinario),
+//   pero el picker sigue excluyendo la categoría: la consulta se abre desde
+//   el consultorio (POST /api/consultas/), que además crea la ficha clínica.
 // - Facturar una orden usa su propio endpoint (orden-servicio-carrito,
 //   decisión 6): GET /api/ordenes/{id}/pendientes-facturar arma la vista
 //   previa (ítems + total) y POST /api/ordenes/{id}/facturar arma la factura
@@ -181,10 +181,19 @@ async function pintarServicios(orden) {
                    ${(_gestoresPorArea.get(s.area_id) || []).map(g => `<option value="${g.usuario_id}">${escapeHtml(g.username)}</option>`).join('')}
                </select>`
             : (s.estado_toma ? `<span class="av-pill ${ESTADO_TOMA_PILL[s.estado_toma] || 'av-pill--neutral'}">${escapeHtml(estadoTomaLabel(s))}</span>` : '');
+        // consulta-directa-atajo-sin-despacho: en una línea CONSULTA,
+        // veterinario_nombre es quien la ejecutó. En el resto es el gestor que
+        // la tomó, y eso ya lo dice la pill de toma de la última columna.
+        const vet = s.tipo_servicio === 'CONSULTA' && s.veterinario_nombre
+            ? `<div style="font-size:12px; color:var(--text-secondary);">Veterinario: ${escapeHtml(s.veterinario_nombre)}</div>`
+            : '';
+        const area = s.area_nombre
+            ? ` <span class="av-pill av-pill--neutral" title="Área que ejecuta el servicio">${s.area_nombre === 'NINGUNO' ? 'Sin área' : escapeHtml(s.area_nombre)}</span>`
+            : '';
         return `
         <tr>
-            <td><span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span></td>
-            <td><span class="av-pill av-pill--info">${escapeHtml(s.tipo_servicio || '—')}</span></td>
+            <td><span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span>${vet}</td>
+            <td><span class="av-pill av-pill--info">${escapeHtml(s.tipo_servicio || '—')}</span>${area}</td>
             <td class="num">${s.cantidad}</td>
             <td class="num" style="font-weight:500;">${money(s.precio_unitario)}</td>
             <td class="num" style="font-weight:500;">${money((s.cantidad || 0) * (s.precio_unitario || 0))}</td>
@@ -422,7 +431,7 @@ async function cargarCatalogoAnexar() {
         _catalogo = [];
     }
     // AnexarServicio.html contradicción documentada arriba: se excluye
-    // CONSULTA — el backend la rechaza siempre (orden_service.py:238).
+    // CONSULTA — se abre desde el consultorio, no desde el picker.
     _catalogo = _catalogo.filter(s => (s.categoria || '').toUpperCase() !== 'CONSULTA');
     _catActual = null;
     pintarCategorias();
