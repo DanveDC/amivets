@@ -20,12 +20,53 @@ class PDFService:
         return None
 
     @staticmethod
+    def _agrupar_detalles_por_paquete(detalles):
+        """Agrupa `detalles` (DetalleFactura, con `.servicio` ya eager-cargado
+        por FacturacionService.obtener_factura) en grupos {base, items,
+        subtotal_paquete} + una lista de sueltos -- mismo criterio que
+        agruparPorPaquete (static/js/core/format.js), del lado del servidor
+        porque el template del PDF (xhtml2pdf/Jinja) no tiene ese helper.
+
+        Puramente aditivo: NO toca FacturacionService.crear_factura ni cómo
+        se arman los `DetalleFactura` -- solo cómo se ORDENAN/AGRUPAN para
+        mostrarlos en el PDF.
+        """
+        vistos = set()
+        grupos = []
+        for d in detalles:
+            if d.id in vistos:
+                continue
+            servicio = getattr(d, 'servicio', None)
+            if servicio is not None and servicio.es_base:
+                hijos = [
+                    h for h in detalles
+                    if h.servicio is not None and h.servicio.servicio_padre_id == servicio.id
+                ]
+                subtotal_paquete = d.subtotal + sum(h.subtotal for h in hijos)
+                # OJO: la clave NO puede llamarse "items" -- Jinja resuelve
+                # `grupo.items` como el método `dict.items()` (bound method),
+                # no como `grupo["items"]`, y el `{% for %}` explota con
+                # "'builtin_function_or_method' object is not iterable"
+                # (hallazgo de esta sesión). "componentes" evita la colisión.
+                grupos.append({"base": d, "componentes": hijos, "subtotal_paquete": subtotal_paquete})
+                vistos.add(d.id)
+                vistos.update(h.id for h in hijos)
+        sueltos = [d for d in detalles if d.id not in vistos]
+        return grupos, sueltos
+
+    @staticmethod
     def generar_factura_pdf(factura):
         """Genera el PDF de una factura específica"""
+        detalles = list(factura.detalles)
+        grupos, sueltos = PDFService._agrupar_detalles_por_paquete(detalles)
         context = {
             "factura": factura,
             "propietario": factura.propietario,
-            "detalles": factura.detalles,
+            "detalles": detalles,
+            # servicio-base-paquete-items, tarea 7.2: agrupamiento por paquete
+            # para invoice_template.html -- ver decisión arriba.
+            "grupos_paquete": grupos,
+            "detalles_sueltos": sueltos,
             "fecha": factura.fecha_emision.strftime("%d/%m/%Y"),
             "logo_url": "https://cdn-icons-png.flaticon.com/512/809/809957.png"
         }

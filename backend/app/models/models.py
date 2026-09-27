@@ -444,6 +444,15 @@ class ServicioConsulta(Base):
             unique=True,
             postgresql_where=text("tipo_servicio = 'CONSULTA' AND is_deleted = false"),
         ),
+        # servicio-base-paquete-items: solo la regla de una fila (base sin
+        # padre) entra en un CHECK -- PostgreSQL rechaza subqueries dentro de
+        # un CHECK ("cannot use subquery in check constraint"), así que "el
+        # padre tiene que ser es_base", "misma orden" y "un solo nivel" se
+        # validan en orden_service.crear_servicio_en_orden, no acá.
+        CheckConstraint(
+            "NOT (es_base AND servicio_padre_id IS NOT NULL)",
+            name="ck_servicio_base_sin_padre",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -529,6 +538,25 @@ class ServicioConsulta(Base):
     # liberado vuelve a estar disponible para cualquier gestor del area.
     asignado_directo_a_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)
 
+    # --- Jerarquía base/paquete (servicio-base-paquete-items) ---
+    # Autorreferencia: NULL = servicio suelto o base; con valor = "item
+    # adicional" colgado de un servicio base de la MISMA orden (un solo
+    # nivel). `ondelete="SET NULL"` cubre el borrado físico -- el soft delete
+    # (is_deleted) NO dispara ON DELETE, así que un padre soft-deleted deja de
+    # contar como padre válido en las validaciones de orden_service y en los
+    # cómputos de abajo, pero la columna sigue apuntándolo (documentado, no
+    # una fuga: el front lo trata como servicio "suelto" si no encuentra el
+    # padre en la lista visible).
+    servicio_padre_id = Column(
+        Integer,
+        ForeignKey("servicios_consulta.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # True = "paquete base" (puede tener items adicionales); False = item
+    # suelto o item adicional de un paquete. Ver ck_servicio_base_sin_padre.
+    es_base = Column(Boolean, nullable=False, server_default=text("false"), default=False)
+
     orden = relationship("OrdenServicio", back_populates="servicios")
     consulta = relationship("Consulta", back_populates="servicios")
     mascota = relationship("Mascota")
@@ -541,6 +569,17 @@ class ServicioConsulta(Base):
     # Movimientos de stock generados por aplicar este servicio (slice B lo escribe).
     movimientos = relationship("MovimientoInventario", back_populates="servicio_consulta")
     consumos_material = relationship("ConsumoMaterial", back_populates="servicio_consulta")
+    servicio_padre = relationship(
+        "ServicioConsulta",
+        remote_side=[id],
+        back_populates="items_adicionales",
+        foreign_keys=[servicio_padre_id],
+    )
+    items_adicionales = relationship(
+        "ServicioConsulta",
+        back_populates="servicio_padre",
+        foreign_keys=[servicio_padre_id],
+    )
 
     def subtotal(self):
         return self.cantidad * self.precio_unitario

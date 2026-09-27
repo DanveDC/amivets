@@ -64,6 +64,48 @@ export const fechaLargaEsVE = (date = new Date()) => {
 };
 
 /**
+ * Agrupa una lista plana de servicios/ítems en `{ grupos, sueltos }`
+ * (servicio-base-paquete-items): cada `grupo` es un servicio base con sus
+ * items adicionales anidados (`items`) y el subtotal del paquete (base +
+ * items); `sueltos` son los que no son base ni tienen padre. Se comparte
+ * entre `orden-abierta.js` (objetos `ServicioConsultaResponse` completos) y
+ * `facturacion.js`/el preview de `pendientes-facturar` (ítems planos de
+ * factura, con otros nombres de campo) — cada caller indica cómo leer
+ * id/padre/base/subtotal de su propia forma vía `opts`.
+ */
+export function agruparPorPaquete(items, opts = {}) {
+    const getId = opts.getId || (it => it.id);
+    const getPadreId = opts.getPadreId || (it => it.servicio_padre_id);
+    const getEsBase = opts.getEsBase || (it => !!it.es_base);
+    const getSubtotal = opts.getSubtotal || (it => (it.cantidad || 0) * (it.precio_unitario || 0));
+
+    const lista = items || [];
+    const bases = lista.filter(getEsBase);
+    const idsBase = new Set(bases.map(getId));
+    const itemsPorPadre = new Map();
+    // Un hijo cuyo padre no está en la lista (padre ya facturado en otra
+    // factura, soft-deleted o cancelado) va a `sueltos`: si no, no entraba en
+    // ningún grupo y desaparecía, y las líneas dejaban de sumar el total.
+    const sueltos = [];
+    lista.filter(it => !getEsBase(it)).forEach(it => {
+        const padreId = getPadreId(it);
+        if (padreId == null || !idsBase.has(padreId)) {
+            sueltos.push(it);
+            return;
+        }
+        const arr = itemsPorPadre.get(padreId) || [];
+        arr.push(it);
+        itemsPorPadre.set(padreId, arr);
+    });
+    const grupos = bases.map(base => {
+        const hijos = itemsPorPadre.get(getId(base)) || [];
+        const subtotalPaquete = getSubtotal(base) + hijos.reduce((acc, h) => acc + getSubtotal(h), 0);
+        return { base, items: hijos, subtotalPaquete };
+    });
+    return { grupos, sueltos };
+}
+
+/**
  * Tiempo transcurrido desde `iso`, con una única forma de retorno:
  * `{ texto, minutos }`. `minutos` sirve para ordenar/comparar (ej. la cola
  * de la bandeja del gestor); `texto` es la versión legible que cada caller

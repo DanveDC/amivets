@@ -1142,6 +1142,22 @@
                                 </div>
                                 <div id="oaConsumosList"></div>
                             </div>
+                            <!-- servicio-base-paquete-items: marcar este servicio como
+                                 "paquete base", o anclarlo como item adicional de un
+                                 paquete base ya anexado a esta orden. Mutuamente
+                                 excluyentes (ver confirmarAnexo/wireAnexarPaquete en
+                                 orden-abierta.js). -->
+                            <div class="oa-anexar-paquete" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+                                <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                                    <input type="checkbox" id="oaEsBase"> Es un paquete base (puede tener items adicionales)
+                                </label>
+                                <div>
+                                    <label class="av-visually-hidden" for="oaPaquetePadre">Paquete padre</label>
+                                    <select id="oaPaquetePadre" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font:inherit;">
+                                        <option value="">Servicio suelto (sin paquete)</option>
+                                    </select>
+                                </div>
+                            </div>
                             <div class="oa-anexar-footer">
                                 <div id="oaAnexarWarning" hidden class="oa-anexar-warning"></div>
                                 <div class="oa-anexar-footer-row">

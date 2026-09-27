@@ -28,7 +28,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
-import { money, totalServicios, ESTADO_TOMA_PILL, estadoTomaLabel } from '../core/format.js';
+import { money, totalServicios, ESTADO_TOMA_PILL, estadoTomaLabel, agruparPorPaquete } from '../core/format.js';
 import { showSection } from '../core/router.js';
 import { getRole } from '../core/session.js';
 
@@ -172,7 +172,21 @@ async function pintarServicios(orden) {
         await Promise.all(areaIds.map(cargarGestoresActivosDeArea));
     }
 
-    body.innerHTML = servicios.map(s => {
+    // servicio-base-paquete-items: agrupar bases + sus items adicionales;
+    // "sueltos" son los que no son base ni tienen padre (el caso de siempre).
+    // Un item cuyo padre no aparece en `servicios` (ej. padre soft-deleted, o
+    // huérfano por ON DELETE SET NULL tras un borrado físico) cae en
+    // `sueltos` de agruparPorPaquete (servicio_padre_id sigue apuntando a un
+    // id que no está en la lista visible), así que se pinta como fila suelta
+    // en vez de desaparecer — decisión del orquestador.
+    const { grupos, sueltos } = agruparPorPaquete(servicios);
+    const idsAgrupados = new Set([
+        ...grupos.map(g => g.base.id),
+        ...grupos.flatMap(g => g.items.map(i => i.id)),
+    ]);
+    const filasSueltas = sueltos.filter(s => !idsAgrupados.has(s.id));
+
+    const filaHtml = (s, { indent = false } = {}) => {
         const puedeElegirGestor = puedeAsignar && s.estado === 'SOLICITADO' && s.area_id;
         const ultimaColumna = puedeElegirGestor
             ? `<label class="av-visually-hidden" for="oaAsignar-${s.id}">Gestor para ${escapeHtml(s.nombre_servicio || 'este servicio')}</label>
@@ -190,9 +204,12 @@ async function pintarServicios(orden) {
         const area = s.area_nombre
             ? ` <span class="av-pill av-pill--neutral" title="Área que ejecuta el servicio">${s.area_nombre === 'NINGUNO' ? 'Sin área' : escapeHtml(s.area_nombre)}</span>`
             : '';
+        const nombre = indent
+            ? `<span style="padding-left:2rem; color:var(--text-secondary);">└─ </span><span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span>`
+            : `<span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span>`;
         return `
-        <tr>
-            <td><span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span>${vet}</td>
+        <tr class="${indent ? 'oa-paquete-item' : ''}" data-padre-id="${s.servicio_padre_id ?? ''}">
+            <td>${nombre}${vet}</td>
             <td><span class="av-pill av-pill--info">${escapeHtml(s.tipo_servicio || '—')}</span>${area}</td>
             <td class="num">${s.cantidad}</td>
             <td class="num" style="font-weight:500;">${money(s.precio_unitario)}</td>
@@ -200,7 +217,60 @@ async function pintarServicios(orden) {
             <td><span class="av-pill ${ESTADO_PILL_SRV[s.estado] || 'av-pill--neutral'}">${ESTADO_LABEL_SRV[s.estado] || s.estado}</span></td>
             <td>${ultimaColumna}</td>
         </tr>`;
-    }).join('');
+    };
+
+    const filaBaseHtml = (base, subtotalPaquete, itemsCount) => {
+        const area = base.area_nombre
+            ? ` <span class="av-pill av-pill--neutral" title="Área que ejecuta el servicio">${base.area_nombre === 'NINGUNO' ? 'Sin área' : escapeHtml(base.area_nombre)}</span>`
+            : '';
+        return `
+        <tr class="oa-paquete-base" data-paquete-id="${base.id}" style="background:var(--surface-hover); cursor:pointer;">
+            <td>
+                <span class="oa-service-name" style="font-weight:600;">${escapeHtml(base.nombre_servicio || '—')}</span>
+                <span class="av-pill av-pill--info" style="margin-left:6px; font-size:11px;">PAQUETE</span>
+                <span class="av-pill av-pill--neutral" style="font-size:11px;">${itemsCount} item${itemsCount === 1 ? '' : 's'}</span>
+            </td>
+            <td><span class="av-pill av-pill--info">${escapeHtml(base.tipo_servicio || '—')}</span>${area}</td>
+            <td class="num">${base.cantidad}</td>
+            <td class="num" style="font-weight:500;">${money(base.precio_unitario)}</td>
+            <td class="num" style="font-weight:600;">${money(subtotalPaquete)}</td>
+            <td><span class="av-pill ${ESTADO_PILL_SRV[base.estado] || 'av-pill--neutral'}">${ESTADO_LABEL_SRV[base.estado] || base.estado}</span></td>
+            <td></td>
+        </tr>`;
+    };
+
+    const filaSubtotalHtml = (base, subtotalPaquete) => `
+        <tr class="oa-paquete-subtotal" data-padre-id="${base.id}">
+            <td colspan="7" style="text-align:right; font-weight:600; padding:0.4rem 1rem; background:var(--surface-hover); font-size:12px; color:var(--text-secondary);">
+                Subtotal paquete "${escapeHtml(base.nombre_servicio || '—')}": ${money(subtotalPaquete)}
+            </td>
+        </tr>`;
+
+    let html = '';
+    grupos.forEach(({ base, items, subtotalPaquete }) => {
+        html += filaBaseHtml(base, subtotalPaquete, items.length);
+        html += items.map(i => filaHtml(i, { indent: true })).join('');
+        html += filaSubtotalHtml(base, subtotalPaquete);
+    });
+    html += filasSueltas.map(s => filaHtml(s)).join('');
+
+    body.innerHTML = html;
+
+    // Colapso/expandir (tarea 6.4): click en la fila base alterna la
+    // visibilidad de sus items + su fila de subtotal. Delegado en `body`
+    // (no se reasigna en cada pintado, `body` no se reemplaza — solo su
+    // innerHTML) y guardado con un dataset flag para no apilar listeners.
+    if (!body.dataset.wiredColapso) {
+        body.dataset.wiredColapso = '1';
+        body.addEventListener('click', (e) => {
+            const baseRow = e.target.closest('.oa-paquete-base');
+            if (!baseRow) return;
+            const paqueteId = baseRow.dataset.paqueteId;
+            body.querySelectorAll(`[data-padre-id="${paqueteId}"]`).forEach(el => {
+                el.style.display = el.style.display === 'none' ? '' : 'none';
+            });
+        });
+    }
 }
 
 function pintarResumen(orden) {
@@ -311,6 +381,45 @@ async function confirmarServicios() {
 // quedó habilitado con datos viejos.
 let _pendientesFacturar = null;
 
+// servicio-base-paquete-items, tarea 7.1: mismo agrupamiento visual que
+// pintarServicios(), sobre los ítems planos de GET .../pendientes-facturar
+// (`id_interno`, `es_base`, `servicio_padre_id` -- cambio aditivo en
+// FacturacionService.obtener_items_pendientes_orden). Reutiliza
+// agruparPorPaquete (core/format.js, tarea 7.3) con getters propios porque
+// estos ítems no tienen `id`/`cantidad`/`precio_unitario` con esos nombres
+// para el id, y ya traen `subtotal` calculado.
+function pintarConceptosAgrupados(items) {
+    const opts = {
+        getId: it => it.id_interno,
+        getPadreId: it => it.servicio_padre_id,
+        getEsBase: it => !!it.es_base,
+        getSubtotal: it => it.subtotal,
+    };
+    const { grupos, sueltos } = agruparPorPaquete(items, opts);
+    const idsAgrupados = new Set([
+        ...grupos.map(g => g.base.id_interno),
+        ...grupos.flatMap(g => g.items.map(i => i.id_interno)),
+    ]);
+    const filasSueltas = sueltos.filter(it => !idsAgrupados.has(it.id_interno));
+
+    const filaConcepto = (it, { indent = false } = {}) => `
+        <div style="display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0; ${indent ? 'padding-left:1.5rem; color:var(--text-secondary);' : ''}">
+            <span>${indent ? '└─ ' : ''}${escapeHtml(it.descripcion || '—')}</span>
+            <span class="rp-num" style="white-space:nowrap;">${money(it.subtotal)}</span>
+        </div>`;
+
+    let html = '';
+    grupos.forEach(({ base, items: hijos, subtotalPaquete }) => {
+        html += `<div style="font-weight:600; font-size:13px; padding:6px 0 0;">${escapeHtml(base.descripcion || '—')} <span class="av-pill av-pill--info" style="font-size:10px;">PAQUETE</span></div>`;
+        html += hijos.map(h => filaConcepto(h, { indent: true })).join('');
+        html += `<div style="display:flex; justify-content:space-between; gap:10px; font-size:12px; color:var(--text-secondary); padding:2px 0 8px; border-bottom:1px dashed var(--border);">
+            <span>Subtotal paquete</span><span class="rp-num">${money(subtotalPaquete)}</span>
+        </div>`;
+    });
+    html += filasSueltas.map(it => filaConcepto(it)).join('');
+    return html;
+}
+
 async function facturarOrden() {
     if (_ordenData?.estado !== 'CERRADA') {
         showNotification('Solo se puede facturar una orden CERRADA.', 'warning');
@@ -329,11 +438,7 @@ async function facturarOrden() {
     }
 
     document.getElementById('facOrdenNumero').textContent = `orden ${_ordenData.numero || _ordenId}`;
-    document.getElementById('facOrdenConceptos').innerHTML = items.map(it => `
-        <div style="display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:6px 0;">
-            <span style="color:var(--text-secondary);">${escapeHtml(it.descripcion || '—')}</span>
-            <span class="rp-num" style="white-space:nowrap;">${money(it.subtotal)}</span>
-        </div>`).join('');
+    document.getElementById('facOrdenConceptos').innerHTML = pintarConceptosAgrupados(items);
     document.getElementById('facOrdenTotal').textContent = money(_pendientesFacturar.total);
     document.querySelector('input[name="facOrdenMetodo"][value="EFECTIVO"]').checked = true;
     document.getElementById('facOrdenPagaAhora').checked = true;
@@ -417,7 +522,29 @@ async function abrirAnexarPanel() {
     if (canvas) canvas.classList.add('oa-canvas--compressed');
     document.addEventListener('keydown', onAnexarKeydown);
     document.getElementById('oaAnexarSearch')?.focus();
+    pintarPaquetePadreOptions();
     await cargarCatalogoAnexar();
+}
+
+// servicio-base-paquete-items, tarea 8: opciones del selector "Paquete
+// padre" = servicios `es_base=true` vivos (no is_deleted, no CANCELADO —
+// mismo criterio que orden_service.crear_servicio_en_orden) de la orden
+// actual. Se recalcula cada vez que se abre el panel, sobre `_ordenData` ya
+// cargado por cargarOrden().
+function pintarPaquetePadreOptions() {
+    const select = document.getElementById('oaPaquetePadre');
+    const checkbox = document.getElementById('oaEsBase');
+    if (!select) return;
+    const bases = (_ordenData?.servicios || []).filter(s =>
+        s.es_base && !s.is_deleted && s.estado !== 'CANCELADO'
+    );
+    select.innerHTML = [
+        '<option value="">Servicio suelto (sin paquete)</option>',
+        ...bases.map(b => `<option value="${b.id}">${escapeHtml(b.nombre_servicio || `#${b.id}`)} (PAQUETE)</option>`),
+    ].join('');
+    select.value = '';
+    if (checkbox) checkbox.checked = false;
+    select.disabled = false;
 }
 
 function onAnexarKeydown(e) {
@@ -536,6 +663,16 @@ async function confirmarAnexo() {
         }
         body.consumos = _consumos.map(c => ({ inventario_id: c.inventario_id, cantidad: c.cantidad }));
     }
+    // servicio-base-paquete-items, tarea 8: "es paquete base" y "paquete
+    // padre" son mutuamente excluyentes (ya se garantiza en el wiring de
+    // abajo, se repite acá por si el DOM quedó en un estado intermedio).
+    const esBase = document.getElementById('oaEsBase')?.checked || false;
+    const padreId = document.getElementById('oaPaquetePadre')?.value;
+    if (esBase) {
+        body.es_base = true;
+    } else if (padreId) {
+        body.servicio_padre_id = Number(padreId);
+    }
     try {
         const resp = await fetchAPI(`/ordenes/${_ordenId}/servicios`, { method: 'POST', body: JSON.stringify(body) });
         showNotification('Servicio anexado a la orden.', 'success');
@@ -559,6 +696,25 @@ export const initOrdenAbierta = () => {
     document.getElementById('btnOaAnexarCancelar')?.addEventListener('click', cerrarAnexarPanel);
     document.getElementById('btnOaAnexarConfirmar')?.addEventListener('click', confirmarAnexo);
     document.getElementById('oaAnexarSearch')?.addEventListener('input', debounce(pintarServiciosPicker, 150));
+
+    // servicio-base-paquete-items, tarea 8.3: "es paquete base" y "paquete
+    // padre" son mutuamente excluyentes -- marcar uno limpia/deshabilita el
+    // otro, no dos requests separadas a confirmarAnexo lo van a permitir de
+    // todas formas (el backend rechaza es_base+servicio_padre_id con 422).
+    document.getElementById('oaEsBase')?.addEventListener('change', (e) => {
+        const select = document.getElementById('oaPaquetePadre');
+        if (!select) return;
+        if (e.target.checked) {
+            select.value = '';
+            select.disabled = true;
+        } else {
+            select.disabled = false;
+        }
+    });
+    document.getElementById('oaPaquetePadre')?.addEventListener('change', (e) => {
+        const checkbox = document.getElementById('oaEsBase');
+        if (e.target.value && checkbox) checkbox.checked = false;
+    });
 
     document.getElementById('btnOaConfirmar')?.addEventListener('click', confirmarServicios);
     document.getElementById('btnOaFacturar')?.addEventListener('click', facturarOrden);

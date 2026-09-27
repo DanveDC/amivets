@@ -168,7 +168,23 @@
             </tr>
         </thead>
         <tbody>
-            {% for detalle in detalles %}
+            {% for grupo in grupos_paquete %}
+            <tr>
+                <td><strong>{{ grupo.base.descripcion }}</strong> <span style="font-size: 8pt; color: #666;">[PAQUETE]</span></td>
+                <td style="text-align: center;">{{ grupo.base.cantidad }}</td>
+                <td style="text-align: right;">${{ "{:.2f}".format(grupo.base.precio_unitario) }}</td>
+                <td style="text-align: right; font-weight: bold;">${{ "{:.2f}".format(grupo.subtotal_paquete) }}</td>
+            </tr>
+            {% for item in grupo.componentes %}
+            <tr class="tr-alt">
+                <td style="padding-left: 18pt; color: #555;">&#x2514; {{ item.descripcion }}</td>
+                <td style="text-align: center;">{{ item.cantidad }}</td>
+                <td style="text-align: right;">${{ "{:.2f}".format(item.precio_unitario) }}</td>
+                <td style="text-align: right;">${{ "{:.2f}".format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+            {% for detalle in detalles_sueltos %}
             <tr class="{% if loop.index0 % 2 != 0 %}tr-alt{% endif %}">
                 <td>{{ detalle.descripcion }}</td>
                 <td style="text-align: center;">{{ detalle.cantidad }}</td>

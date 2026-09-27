@@ -294,6 +294,8 @@ def anexar_servicio_orden(
         consumos_override=data.consumos,
         current_user=current_user,
         veterinario_id=data.veterinario_id,
+        servicio_padre_id=data.servicio_padre_id,
+        es_base=data.es_base,
     )
     try:
         db.commit()

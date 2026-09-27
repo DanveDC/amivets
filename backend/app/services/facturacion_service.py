@@ -330,8 +330,21 @@ class FacturacionService:
     
     @staticmethod
     def obtener_factura(db: Session, factura_id: int) -> Optional[Factura]:
-        """Obtiene una factura por ID"""
-        return db.query(Factura).filter(Factura.id == factura_id).first()
+        """Obtiene una factura por ID.
+
+        `selectinload(Factura.detalles).selectinload(DetalleFactura.servicio)`
+        (servicio-base-paquete-items): DetalleFacturaResponse expone
+        `es_base`/`servicio_padre_id` leídos de `detalle.servicio` -- sin este
+        eager load cada detalle dispara su propio lazy-load (N+1 acotado al
+        número de líneas de ESTA factura, pero evitable).
+        """
+        from sqlalchemy.orm import selectinload
+        return (
+            db.query(Factura)
+            .options(selectinload(Factura.detalles).selectinload(DetalleFactura.servicio))
+            .filter(Factura.id == factura_id)
+            .first()
+        )
     
     @staticmethod
     def listar_facturas(
@@ -659,6 +672,13 @@ class FacturacionService:
                 "subtotal": subtotal,
                 "tipo": "SERVICIO",
                 "id_interno": s.id,
+                # servicio-base-paquete-items: claves puramente aditivas para
+                # que el preview de facturar-orden (GET .../pendientes-
+                # facturar, orden-abierta.js::facturarOrden) pueda agrupar
+                # base + items -- no cambia nada de lo que ya consume
+                # FacturacionService.crear_factura/facturar_orden (no-goal).
+                "es_base": s.es_base,
+                "servicio_padre_id": s.servicio_padre_id,
             })
 
         return {

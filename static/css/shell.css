@@ -522,6 +522,13 @@
 }
 .oa-anexar-row:hover { background: var(--surface-hover); color: var(--text-primary); }
 
+/* servicio-base-paquete-items: fila base destacada, items indentados,
+   subtotal del paquete al pie del grupo (colapsable al click en la base). */
+.oa-paquete-base:hover { filter: brightness(0.97); }
+.oa-paquete-item td { background: var(--surface); }
+.oa-paquete-item:hover td { background: var(--surface-hover); }
+.oa-paquete-subtotal td { border-top: 1px dashed var(--border); }
+
 .oa-side { display: flex; flex-direction: column; gap: 14px; }
 .oa-summary {
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;

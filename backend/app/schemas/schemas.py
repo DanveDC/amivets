@@ -196,6 +196,11 @@ class ServicioConsultaBase(BaseModel):
     estado: Optional[str] = Field(default="SOLICITADO", max_length=50)
     detalles_clinicos: Optional[str] = None
     is_deleted: Optional[bool] = False
+    # servicio-base-paquete-items: jerarquía padre/hijo. `servicio_padre_id`
+    # apunta a un servicio `es_base=true` de la MISMA orden (validado en
+    # orden_service.crear_servicio_en_orden, no acá).
+    servicio_padre_id: Optional[int] = Field(None, gt=0)
+    es_base: bool = False
 
 class ServicioConsultaCreate(ServicioConsultaBase):
     # Overrides opcionales de consumo real por material (Decision 6). Solo se
@@ -210,6 +215,11 @@ class ServicioConsultaUpdate(BaseModel):
     is_deleted: Optional[bool] = None
     catalogo_servicio_id: Optional[int] = Field(None, gt=0)
     consumos: Optional[List[ConsumoMaterialOverride]] = None
+    # Sin servicio_padre_id / es_base a propósito (servicio-base-paquete-items):
+    # la jerarquía se define solo al anexar, donde crear_servicio_en_orden la
+    # valida. actualizar_servicio_impl aplica los campos con setattr sin
+    # validación, así que exponerlos acá permitía colgar un servicio de un
+    # padre de otra orden o que no es base.
 
 class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
@@ -252,6 +262,20 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     # Nombre del área resuelto desde la relación `area` si vino cargada
     # (obtener_orden(con_asignados=True)). Interno: lo expone `area_nombre`.
     area_nombre_resuelto: Optional[str] = Field(None, exclude=True)
+    # servicio-base-paquete-items: campos planos (NO @computed_field/@property
+    # -- con `from_attributes` una property de la clase Pydantic no lee nada
+    # del ORM, así que nunca se serializaría) llenados por el
+    # model_validator de abajo a partir de `items_adicionales`, la misma
+    # relación que hay que eager-cargar con selectinload para que esto no
+    # dispare un N+1 por servicio base (ver orden_service.obtener_orden).
+    # `es_item_adicional` es una desviación deliberada del spec ("alias de not
+    # es_base"): un servicio suelto (sin padre, no base) no es un "item
+    # adicional" de nada, así que se define como `servicio_padre_id is not
+    # None` -- documentado en tasks.md.
+    es_item_adicional: bool = False
+    items_adicionales_count: int = 0
+    subtotal_items_adicionales: float = 0.0
+    subtotal_paquete: Optional[float] = None
     model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode='before')
@@ -277,6 +301,31 @@ class ServicioConsultaResponse(ServicioConsultaBase):
                 # en los endpoints que no la piden.
                 if 'area' in data.__dict__ and data.area is not None:
                     data.area_nombre_resuelto = data.area.nombre
+            except Exception:
+                pass
+            try:
+                data.es_item_adicional = getattr(data, 'servicio_padre_id', None) is not None
+            except Exception:
+                pass
+            try:
+                if data.es_base:
+                    # Solo si `items_adicionales` ya vino eager-cargada
+                    # (selectinload): igual que `area` arriba, chequear
+                    # `data.es_base` no dispara la lazy-load que se evita acá
+                    # -- es una columna propia, no la relación. Sin eager
+                    # load, count/subtotal_items_adicionales quedan en 0 (no
+                    # se conocen los hijos), pero subtotal_paquete igual
+                    # refleja al menos el propio precio del base.
+                    subtotal_hijos = 0.0
+                    if 'items_adicionales' in data.__dict__:
+                        hijos = [
+                            h for h in (data.items_adicionales or [])
+                            if not h.is_deleted and h.estado != 'CANCELADO'
+                        ]
+                        subtotal_hijos = sum((h.cantidad or 0) * (h.precio_unitario or 0) for h in hijos)
+                        data.items_adicionales_count = len(hijos)
+                        data.subtotal_items_adicionales = subtotal_hijos
+                    data.subtotal_paquete = (data.cantidad or 0) * (data.precio_unitario or 0) + subtotal_hijos
             except Exception:
                 pass
         return data
@@ -684,8 +733,26 @@ class DetalleFacturaResponse(DetalleFacturaBase):
     factura_id: int
     subtotal: float
     servicio_id: Optional[int] = None
-    
+    # servicio-base-paquete-items: leídos de la relación `servicio`
+    # (DetalleFactura.servicio -> ServicioConsulta) para que
+    # facturacion.js::abrirPreviewFactura pueda agrupar base + items igual que
+    # orden-abierta.js. Campos aditivos, no tocan FacturacionService.crear_factura.
+    es_base: bool = False
+    servicio_padre_id: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    def _adjuntar_jerarquia_servicio(cls, data):
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                servicio = getattr(data, 'servicio', None)
+                if servicio is not None:
+                    data.es_base = bool(servicio.es_base)
+                    data.servicio_padre_id = servicio.servicio_padre_id
+            except Exception:
+                pass
+        return data
 
 
 class FacturaBase(BaseModel):
@@ -1387,6 +1454,12 @@ class OrdenServicioAnexarServicio(BaseModel):
     # hereda orden.veterinario_id; tiene que ser un usuario con rol veterinario
     # (400). Se ignora para cualquier otro tipo.
     veterinario_id: Optional[int] = Field(None, gt=0)
+    # servicio-base-paquete-items: `servicio_padre_id` ancla este servicio como
+    # item adicional de un paquete base (`es_base=true`) de la MISMA orden;
+    # `es_base=true` lo marca a él mismo como paquete. Mutuamente excluyentes
+    # -- ver orden_service.crear_servicio_en_orden.
+    servicio_padre_id: Optional[int] = Field(None, gt=0)
+    es_base: bool = False
 
 
 class OrdenServicioAnular(BaseModel):

@@ -78,6 +78,11 @@ def obtener_orden(db: Session, orden_id: int, *, con_asignados: bool = False) ->
             selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_directo_a),
             # consulta-directa-atajo-sin-despacho: `area_nombre` en la respuesta.
             selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.area),
+            # servicio-base-paquete-items: para que
+            # ServicioConsultaResponse.items_adicionales_count /
+            # subtotal_items_adicionales / subtotal_paquete no disparen un N+1
+            # (un lazy-load de `items_adicionales` por cada servicio base).
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.items_adicionales),
         )
     orden = q.filter(OrdenServicio.id == orden_id).first()
     if not orden:
@@ -336,6 +341,8 @@ def crear_servicio_en_orden(
     consumos_override,
     current_user: Usuario,
     veterinario_id: Optional[int] = None,
+    servicio_padre_id: Optional[int] = None,
+    es_base: bool = False,
 ) -> tuple:
     """Anexa una linea de servicio a la orden SIN pasar por una consulta
     (Tarea 06, decision 1: venta de mostrador, orden solo de estetica; y
@@ -365,7 +372,58 @@ def crear_servicio_en_orden(
 
     No commitea: el llamador decide la transaccion. Devuelve
     (servicio, advertencias).
+
+    servicio-base-paquete-items: `es_base`/`servicio_padre_id` arman la
+    jerarquia padre/hijo de un paquete. Las reglas de integridad
+    "padre es_base", "misma orden" y "un solo nivel" se validan ACA (no en un
+    CHECK: PostgreSQL no admite subqueries en un CHECK) -- ver design.md y
+    ck_servicio_base_sin_padre (models.py) para la unica regla que si vive en
+    la DB (base sin padre).
     """
+    if es_base and servicio_padre_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un servicio base no puede tener padre",
+        )
+
+    padre: Optional[ServicioConsulta] = None
+    if servicio_padre_id is not None:
+        # Excluye padres soft-deleted y CANCELADO (decision de la orquestacion,
+        # decision 2): un padre "borrado" o cancelado no es un ancla valida
+        # para un item nuevo, aunque la FK (ON DELETE SET NULL) solo reaccione
+        # al borrado fisico, no al soft delete.
+        padre = db.query(ServicioConsulta).filter(
+            ServicioConsulta.id == servicio_padre_id,
+            ServicioConsulta.is_deleted == False,  # noqa: E712
+            ServicioConsulta.estado != "CANCELADO",
+        ).first()
+        if not padre:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Servicio padre no encontrado",
+            )
+        if not padre.es_base:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="El servicio padre debe ser un paquete base (es_base=true)",
+            )
+        if padre.orden_id != orden.id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="El servicio padre debe pertenecer a la misma orden",
+            )
+        if padre.servicio_padre_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No se permite anidación de más de un nivel",
+            )
+
+    # Hereda mascota_id del padre (decision de la orquestacion, decision 6):
+    # en este endpoint mascota_id siempre sale de la orden (nunca del
+    # cliente), asi que en la practica coincide con orden.mascota_id -- se
+    # deja explicito por si algun dia difieren.
+    mascota_id = padre.mascota_id if padre is not None else orden.mascota_id
+
     if (tipo_servicio or "").strip().upper() == TIPO_SERVICIO_CONSULTA:
         vet_id = veterinario_id or orden.veterinario_id
         if not vet_id:
@@ -383,7 +441,7 @@ def crear_servicio_en_orden(
         linea = ServicioConsulta(
             orden_id=orden.id,
             consulta_id=None,
-            mascota_id=orden.mascota_id,
+            mascota_id=mascota_id,
             tipo_servicio=TIPO_SERVICIO_CONSULTA,
             referencia_id=referencia_id,
             catalogo_servicio_id=catalogo_servicio_id,
@@ -397,6 +455,8 @@ def crear_servicio_en_orden(
             estado="EJECUTADO",
             ejecutado_at=_ahora(),
             is_deleted=False,
+            servicio_padre_id=servicio_padre_id,
+            es_base=es_base,
         )
         db.add(linea)
         db.flush()
@@ -413,9 +473,10 @@ def crear_servicio_en_orden(
         orden_id=orden.id,
         consulta_id=None,
         # mascota_id se llena desde la orden (puede ser None: venta de
-        # mostrador sin paciente, decision 1). El CHECK de la DB ya tiene
-        # orden_id como ancla valida.
-        mascota_id=orden.mascota_id,
+        # mostrador sin paciente, decision 1), o del padre si hay uno
+        # (servicio-base-paquete-items, decision 6). El CHECK de la DB ya
+        # tiene orden_id como ancla valida.
+        mascota_id=mascota_id,
         tipo_servicio=tipo_servicio,
         referencia_id=referencia_id,
         catalogo_servicio_id=catalogo_servicio_id,
@@ -426,6 +487,8 @@ def crear_servicio_en_orden(
         area_id=area_id,
         estado="SOLICITADO",
         is_deleted=False,
+        servicio_padre_id=servicio_padre_id,
+        es_base=es_base,
     )
     db.add(servicio)
     db.flush()  # id necesario para anclar movimientos/consumos

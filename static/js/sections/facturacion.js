@@ -7,6 +7,7 @@
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { ICONS, showNotification, openModal, closeModal, escapeHtml } from '../core/ui.js';
 import { getRole } from '../core/session.js';
+import { agruparPorPaquete } from '../core/format.js';
 
 // ============ FACTURACIÓN LOGIC ============
 // orden-servicio-carrito, decisión 8: se quitó el cobro por consulta y su
@@ -129,6 +130,42 @@ document.getElementById('form-abono')?.addEventListener('submit', async (e) => {
     }
 });
 
+// servicio-base-paquete-items, tarea 7.1/7.3: mismo agrupamiento visual que
+// orden-abierta.js::pintarServicios, sobre `DetalleFacturaResponse[]` (que
+// trae `es_base`/`servicio_padre_id` leídos de la relación `servicio` —
+// cambio aditivo en el schema, ver schemas.py::DetalleFacturaResponse).
+function pintarDetallesAgrupados(detalles) {
+    const opts = { getId: d => d.id, getSubtotal: d => d.subtotal };
+    const { grupos, sueltos } = agruparPorPaquete(detalles || [], opts);
+    const idsAgrupados = new Set([
+        ...grupos.map(g => g.base.id),
+        ...grupos.flatMap(g => g.items.map(i => i.id)),
+    ]);
+    const filasSueltas = sueltos.filter(d => !idsAgrupados.has(d.id));
+
+    const filaFactura = (d, { indent = false } = {}) => `
+        <tr>
+            <td>${indent ? '<span style="padding-left:1.5rem; color:var(--text-secondary);">└─ </span>' : ''}${escapeHtml(d.descripcion || 'Ítem Médico')}</td>
+            <td>${d.cantidad}</td>
+            <td>$${d.precio_unitario.toFixed(2)}</td>
+            <td style="text-align: right; font-weight: 500;">$${d.subtotal.toFixed(2)}</td>
+        </tr>`;
+
+    let html = '';
+    grupos.forEach(({ base, items, subtotalPaquete }) => {
+        html += `
+        <tr style="background:var(--surface-hover); font-weight:600;">
+            <td>${escapeHtml(base.descripcion || 'Ítem Médico')} <span class="av-pill av-pill--info" style="font-size:10px;">PAQUETE</span></td>
+            <td>${base.cantidad}</td>
+            <td>$${base.precio_unitario.toFixed(2)}</td>
+            <td style="text-align: right;">$${subtotalPaquete.toFixed(2)}</td>
+        </tr>`;
+        html += items.map(i => filaFactura(i, { indent: true })).join('');
+    });
+    html += filasSueltas.map(d => filaFactura(d)).join('');
+    return html;
+}
+
 export const abrirPreviewFactura = async (facturaId) => {
     try {
         const [factura, abonos] = await Promise.all([
@@ -143,17 +180,7 @@ export const abrirPreviewFactura = async (facturaId) => {
         document.getElementById('previewFacturaConsulta').textContent = factura.consulta_id ? `Consulta #${factura.consulta_id}` : 'General';
 
         const tbody = document.getElementById('previewFacturaItems');
-        let totalC = 0;
-        tbody.innerHTML = factura.detalles.map(d => {
-            totalC += d.subtotal;
-            return `
-            <tr>
-                <td>${d.descripcion || 'Ítem Médico'}</td>
-                <td>${d.cantidad}</td>
-                <td>$${d.precio_unitario.toFixed(2)}</td>
-                <td style="text-align: right; font-weight: 500;">$${d.subtotal.toFixed(2)}</td>
-            </tr>`;
-        }).join('');
+        tbody.innerHTML = pintarDetallesAgrupados(factura.detalles);
 
         document.getElementById('previewFacturaSubtotal').textContent = `$${factura.subtotal.toFixed(2)}`;
         document.getElementById('previewFacturaTotal').textContent = `$${factura.total.toFixed(2)}`;
