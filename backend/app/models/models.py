@@ -221,6 +221,7 @@ class AreaServicio(Base):
     activo = Column(Boolean, nullable=False, server_default=text("true"), default=True)
 
     gestores = relationship("GestorArea", back_populates="area", cascade="all, delete-orphan")
+    gestores_externos = relationship("GestorAreaExterno", back_populates="area", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<AreaServicio {self.codigo}>"
@@ -255,6 +256,76 @@ class GestorArea(Base):
 
     def __repr__(self):
         return f"<GestorArea usuario={self.usuario_id} area={self.area_id}>"
+
+
+class GestorExterno(Base):
+    """Proveedor/gestor externo (gestor-externo-crud): no es un `Usuario` del
+    sistema, pero recibe trabajo despachado a un área (laboratorio de
+    referencia, imágenes externas, especialista).
+
+    `usuario_id` es opcional (decisión "vinculación opcional"): un veterinario
+    que también factura como proveedor externo puede tener ambas filas, una
+    como `Usuario` y otra acá, sin que una dependa de la otra.
+
+    `rif` es inmutable una vez que el gestor tiene áreas asignadas (auditoría
+    fiscal, ver routers/gestores_externos.py::actualizar_gestor_externo) --
+    esa regla vive en el router, no acá, porque necesita consultar `areas`.
+    """
+    __tablename__ = "gestores_externos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(120), nullable=False)
+    rif = Column(String(20), unique=True, nullable=False, index=True)
+    telefono = Column(String(20), nullable=False)
+    metodo_pago = Column(String(50), nullable=False)  # TRANSFERENCIA, EFECTIVO, ZELLE, CHEQUE, OTRO
+    numero_cuenta = Column(String(50), nullable=True)
+    es_movil = Column(Boolean, nullable=False, server_default=text("false"), default=False)
+    zelle = Column(String(100), nullable=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)
+    activo = Column(Boolean, nullable=False, server_default=text("true"), default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "metodo_pago IN ('TRANSFERENCIA','EFECTIVO','ZELLE','CHEQUE','OTRO')",
+            name="ck_gestor_externo_metodo_pago",
+        ),
+    )
+
+    usuario = relationship("Usuario")
+    areas = relationship("GestorAreaExterno", back_populates="gestor", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<GestorExterno {self.id} - {self.nombre}>"
+
+
+class GestorAreaExterno(Base):
+    """Que gestor externo atiende que área (gestor-externo-crud). N:M
+    gestor_externo<->área, mismo patrón que `GestorArea` (PK propia,
+    UniqueConstraint sobre el par, created_at para auditar desde cuando).
+
+    `ondelete="CASCADE"` en ambas FKs: borrar el gestor externo (hard delete,
+    solo posible sin áreas -- ver router) o el área se lleva sus asignaciones,
+    no deja filas huérfanas.
+    """
+    __tablename__ = "gestor_area_externo"
+
+    id = Column(Integer, primary_key=True)
+    gestor_externo_id = Column(
+        Integer, ForeignKey("gestores_externos.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    area_id = Column(Integer, ForeignKey("areas_servicio.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("gestor_externo_id", "area_id", name="uq_gestor_area_externo"),
+    )
+
+    gestor = relationship("GestorExterno", back_populates="areas")
+    area = relationship("AreaServicio", back_populates="gestores_externos")
+
+    def __repr__(self):
+        return f"<GestorAreaExterno gestor={self.gestor_externo_id} area={self.area_id}>"
 
 
 # SEQUENCE que numera las ordenes (Tarea 06, decision 1). Asociada al MetaData
@@ -525,6 +596,11 @@ class Notificacion(Base):
     OJO con la distincion: la notificacion es el empujon, la BANDEJA del gestor
     es una query sobre servicios_consulta. No son lo mismo: si lo fueran,
     marcar leida una notificacion esconderia trabajo real.
+
+    gestor-externo-crud: un destinatario puede ser un `Usuario` (de siempre)
+    o un `GestorExterno` (proveedor sin login) -- nunca ninguno ni los dos.
+    `destinatario_id` pasa a nullable y se suma `gestor_externo_id`; el CHECK
+    XOR es la fuente de verdad de esa regla, no el código de escritura.
     """
     __tablename__ = "notificaciones"
 
@@ -536,12 +612,23 @@ class Notificacion(Base):
             "leida_at",
             "created_at",
         ),
+        CheckConstraint(
+            "(destinatario_id IS NOT NULL) != (gestor_externo_id IS NOT NULL)",
+            name="ck_notificaciones_destinatario_xor_externo",
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    destinatario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    destinatario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)
+    # FK a gestores_externos: exactamente uno de destinatario_id / gestor_externo_id
+    # está seteado (CHECK XOR arriba). ON DELETE RESTRICT: un gestor externo con
+    # historial de notificaciones no puede hard-deletearse (SET NULL violaría el
+    # CHECK XOR); el router lo bloquea con 409 antes, esta FK es la red de seguridad.
+    gestor_externo_id = Column(
+        Integer, ForeignKey("gestores_externos.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     # SERVICIO_ASIGNADO | SERVICIO_EJECUTADO | ORDEN_ASIGNADA | SERVICIO_SIN_GESTOR |
-    # SERVICIO_TOMADO | SERVICIO_LIBERADO
+    # SERVICIO_TOMADO | SERVICIO_LIBERADO | SERVICIO_ASIGNADO_EXTERNO
     tipo = Column(String(40), nullable=False)
     titulo = Column(String(160), nullable=False)
     cuerpo = Column(Text, nullable=True)
@@ -559,11 +646,12 @@ class Notificacion(Base):
     enviado_at = Column(DateTime(timezone=True), nullable=True)  # NULL para APP
 
     destinatario = relationship("Usuario")
+    gestor_externo = relationship("GestorExterno")
     orden = relationship("OrdenServicio")
     servicio = relationship("ServicioConsulta")
 
     def __repr__(self):
-        return f"<Notificacion {self.id} - {self.tipo} -> {self.destinatario_id}>"
+        return f"<Notificacion {self.id} - {self.tipo} -> {self.destinatario_id or self.gestor_externo_id}>"
 
 
 class Receta(Base):

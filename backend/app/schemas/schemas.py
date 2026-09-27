@@ -1392,10 +1392,128 @@ class GestorAreaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ========== GESTORES EXTERNOS (gestor-externo-crud) ==========
+METODOS_PAGO_GESTOR_EXTERNO = Literal["TRANSFERENCIA", "EFECTIVO", "ZELLE", "CHEQUE", "OTRO"]
+
+# Columnas NOT NULL de la tabla `gestores_externos` (migración
+# b4e04370dc32_gestor_externo_crud.py). `null` explícito en el PATCH para
+# cualquiera de estas revienta en un IntegrityError de NOT NULL si no se
+# rechaza antes en el schema (ver GestorExternoUpdate._rechazar_null_explicito).
+# numero_cuenta / zelle / usuario_id quedan afuera a propósito: esas sí son
+# nullable y `null` las limpia normalmente.
+CAMPOS_GESTOR_EXTERNO_NO_NULOS = ("nombre", "rif", "telefono", "metodo_pago", "es_movil", "activo")
+
+
+class GestorExternoBase(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=120)
+    rif: str = Field(..., min_length=1, max_length=20)
+    telefono: str = Field(..., min_length=1, max_length=20)
+    metodo_pago: METODOS_PAGO_GESTOR_EXTERNO
+    numero_cuenta: Optional[str] = Field(None, max_length=50)
+    es_movil: bool = False
+    zelle: Optional[str] = Field(None, max_length=100)
+    usuario_id: Optional[int] = Field(None, gt=0)
+    activo: bool = True
+
+    # mode="before": si no se limpia antes de min_length=1, " " pasa la
+    # validación y se guarda tal cual (fix de revisión).
+    @field_validator("nombre", "telefono", mode="before")
+    @classmethod
+    def _strip_nombre_telefono(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
+class GestorExternoCreate(GestorExternoBase):
+    @field_validator("rif", mode="before")
+    @classmethod
+    def _rif_upper(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+
+class GestorExternoUpdate(BaseModel):
+    """Todos los campos opcionales (PATCH). `rif` se normaliza a mayúsculas
+    igual que en el alta, pero el router es quien decide si se puede aplicar
+    (422 si el gestor ya tiene áreas asignadas -- ver spec, "RIF inmutable
+    con áreas asignadas").
+
+    `null` explícito en un campo NOT NULL (CAMPOS_GESTOR_EXTERNO_NO_NULOS) se
+    rechaza con 422 antes de llegar al router -- exclude_unset lo aplicaría
+    igual y rompería en la DB con un IntegrityError (fix de revisión).
+    """
+    nombre: Optional[str] = Field(None, min_length=1, max_length=120)
+    rif: Optional[str] = Field(None, min_length=1, max_length=20)
+    telefono: Optional[str] = Field(None, min_length=1, max_length=20)
+    metodo_pago: Optional[METODOS_PAGO_GESTOR_EXTERNO] = None
+    numero_cuenta: Optional[str] = Field(None, max_length=50)
+    es_movil: Optional[bool] = None
+    zelle: Optional[str] = Field(None, max_length=100)
+    usuario_id: Optional[int] = Field(None, gt=0)
+    activo: Optional[bool] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rechazar_null_explicito(cls, data):
+        if isinstance(data, dict):
+            for campo in CAMPOS_GESTOR_EXTERNO_NO_NULOS:
+                if campo in data and data[campo] is None:
+                    raise ValueError(f"'{campo}' no puede ser null")
+        return data
+
+    @field_validator("nombre", "telefono", mode="before")
+    @classmethod
+    def _strip_nombre_telefono(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("rif", mode="before")
+    @classmethod
+    def _rif_upper(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+
+class GestorExternoResponse(GestorExternoBase):
+    id: int
+    created_at: datetime
+    areas: List[AreaServicioResponse] = []
+    usuario_nombre: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _adjuntar_nombres(cls, data):
+        # ORM -> dict antes de validar: reemplaza `areas` (filas GestorAreaExterno)
+        # por las AreaServicio reales, y expone usuario_nombre si hay vínculo.
+        if not isinstance(data, dict) and hasattr(data, "__table__"):
+            usuario = getattr(data, "usuario", None)
+            areas = getattr(data, "areas", None)
+            return {
+                "id": data.id,
+                "nombre": data.nombre,
+                "rif": data.rif,
+                "telefono": data.telefono,
+                "metodo_pago": data.metodo_pago,
+                "numero_cuenta": data.numero_cuenta,
+                "es_movil": data.es_movil,
+                "zelle": data.zelle,
+                "usuario_id": data.usuario_id,
+                "activo": data.activo,
+                "created_at": data.created_at,
+                "areas": [ga.area for ga in (areas or []) if ga.area],
+                "usuario_nombre": usuario.username if usuario else None,
+            }
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GestorExternoAreaCreate(BaseModel):
+    """Body de `POST /api/gestores-externos/{id}/areas/`."""
+    area_id: int = Field(..., gt=0)
+
+
 # ========== NOTIFICACIONES (Tarea 06, decisión 6, etapa 5) ==========
 class NotificacionResponse(BaseModel):
     id: int
-    destinatario_id: int
+    destinatario_id: Optional[int] = None
+    gestor_externo_id: Optional[int] = None
     tipo: str
     titulo: str
     cuerpo: Optional[str] = None

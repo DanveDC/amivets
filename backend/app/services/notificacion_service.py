@@ -16,7 +16,14 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.models import GestorArea, Notificacion, ServicioConsulta, Usuario
+from app.models.models import (
+    GestorArea,
+    GestorAreaExterno,
+    GestorExterno,
+    Notificacion,
+    ServicioConsulta,
+    Usuario,
+)
 
 
 def _titulo_servicio(servicio: ServicioConsulta) -> str:
@@ -43,6 +50,15 @@ def notificar_asignacion(db: Session, servicio: ServicioConsulta) -> Optional[di
     advertencia para que el llamador la sume a `advertencias[]` de la
     respuesta (defensa 1) -- reutiliza el canal que ya existe en
     `ServicioConsultaResponse.advertencias`, no se inventa un mecanismo nuevo.
+
+    gestor-externo-crud: en esta misma rama (sin asignación directa) también
+    se notifica a los gestores externos activos del área (`GestorAreaExterno`
+    -> `GestorExterno.activo`), haya o no gestores internos -- un área puede
+    tener solo externos, y la alerta `SERVICIO_SIN_GESTOR` a los admins se
+    mantiene igual en ese caso porque los externos no tienen portal para
+    operar la bandeja (spec, "Área solo con gestores externos"). La
+    asignación directa NUNCA notifica externos (spec, "Asignación directa no
+    notifica externos").
 
     No hace nada (devuelve None sin crear filas) si el servicio no tiene área:
     es el atajo sin despacho de la decisión 4, no hay a quién avisarle.
@@ -71,6 +87,8 @@ def notificar_asignacion(db: Session, servicio: ServicioConsulta) -> Optional[di
         .filter(GestorArea.area_id == servicio.area_id, Usuario.is_active == True)  # noqa: E712
         .all()
     )
+
+    _notificar_externos_area(db, servicio, titulo)
 
     if gestores:
         for gestor in gestores:
@@ -107,6 +125,42 @@ def notificar_asignacion(db: Session, servicio: ServicioConsulta) -> Optional[di
             "se notificó a los administradores."
         ),
     }
+
+
+def _notificar_externos_area(db: Session, servicio: ServicioConsulta, titulo: str) -> None:
+    """Notifica a cada gestor externo activo del área del servicio (gestor-
+    externo-crud). Llamada solo desde la rama sin asignación directa de
+    `notificar_asignacion` -- ver docstring de esa función."""
+    gestores_externos = (
+        db.query(GestorExterno)
+        .join(GestorAreaExterno, GestorAreaExterno.gestor_externo_id == GestorExterno.id)
+        .filter(GestorAreaExterno.area_id == servicio.area_id, GestorExterno.activo == True)  # noqa: E712
+        .all()
+    )
+    for gestor_externo in gestores_externos:
+        crear_notificacion_externa(db, gestor_externo, servicio, titulo)
+
+
+def crear_notificacion_externa(
+    db: Session, gestor_externo: GestorExterno, servicio: ServicioConsulta, titulo: Optional[str] = None
+) -> None:
+    """Crea la notificación `SERVICIO_ASIGNADO_EXTERNO` para un gestor
+    externo: `destinatario_id=NULL`, `gestor_externo_id` seteado (CHECK XOR
+    de `Notificacion`), canal `APP` -- sin portal propio todavía, esto solo
+    deja registro en BD (design.md, Non-Goals)."""
+    titulo = titulo or _titulo_servicio(servicio)
+    db.add(
+        Notificacion(
+            destinatario_id=None,
+            gestor_externo_id=gestor_externo.id,
+            tipo="SERVICIO_ASIGNADO_EXTERNO",
+            titulo=f"Nuevo servicio asignado: {titulo}",
+            cuerpo=f"Se despachó '{titulo}' a tu área.",
+            orden_id=servicio.orden_id,
+            servicio_id=servicio.id,
+            canal="APP",
+        )
+    )
 
 
 def _cuerpo_orden(servicio: ServicioConsulta) -> str:

@@ -2428,49 +2428,79 @@
                     <h2>Áreas y gestores</h2>
                 </div>
 
-                <div class="cat-grid">
-                    <section class="cat-master">
-                        <div class="cat-master-head">
-                            <span class="rp-panel-title">Áreas</span>
-                            <button type="button" id="btnAreaNueva" class="av-btn av-btn--primary">+ Nueva área</button>
-                        </div>
-                        <div class="cat-list" id="areasLista">
-                            <p class="rp-empty-text">Cargando…</p>
-                        </div>
-                    </section>
+                <div class="ar-tabs" role="tablist" aria-label="Áreas y gestores">
+                    <button type="button" class="ar-tab-btn active" id="arTabBtnInternas" data-ar-tab="tab-areas-internas" role="tab" aria-selected="true" aria-controls="tab-areas-internas">Áreas internas</button>
+                    <button type="button" class="ar-tab-btn" id="arTabBtnExternos" data-ar-tab="tab-gestores-externos" role="tab" aria-selected="false" aria-controls="tab-gestores-externos">Gestores externos</button>
+                </div>
 
-                    <section class="cat-detail" id="areaDetalle">
-                        <form id="formArea" class="ar-form">
-                            <input type="hidden" id="areaId">
-                            <div class="form-group">
-                                <label for="areaNombre">Nombre *</label>
-                                <input type="text" id="areaNombre" required maxlength="100" placeholder="Ej: Hospitalización">
+                <div id="tab-areas-internas" class="ar-tab-content" role="tabpanel" aria-labelledby="arTabBtnInternas">
+                    <div class="cat-grid">
+                        <section class="cat-master">
+                            <div class="cat-master-head">
+                                <span class="rp-panel-title">Áreas</span>
+                                <button type="button" id="btnAreaNueva" class="av-btn av-btn--primary">+ Nueva área</button>
                             </div>
-                            <div class="form-group">
-                                <label for="areaCodigo">Código *</label>
-                                <input type="text" id="areaCodigo" required maxlength="50" placeholder="Ej: HOSPITALIZACION">
+                            <div class="cat-list" id="areasLista">
+                                <p class="rp-empty-text">Cargando…</p>
                             </div>
-                            <label class="ar-check"><input type="checkbox" id="areaRequiereAdjunto"> Exige cargar un adjunto (resultado, informe, foto) al realizar el servicio</label>
-                            <label class="ar-check"><input type="checkbox" id="areaActiva" checked> Activa</label>
-                            <button type="submit" id="btnGuardarArea" class="av-btn av-btn--primary">Guardar área</button>
-                        </form>
+                        </section>
 
-                        <div id="areaAsignaciones" hidden>
-                            <h3 class="ar-subtitle">Gestores que atienden esta área</h3>
-                            <ul id="areaGestoresLista" class="ar-lista"></ul>
-                            <div class="ar-add-row">
-                                <select id="areaGestorSelect" aria-label="Usuario para sumar como gestor"></select>
-                                <button type="button" id="btnAreaAgregarGestor" class="av-btn">Agregar gestor</button>
-                            </div>
+                        <section class="cat-detail" id="areaDetalle">
+                            <form id="formArea" class="ar-form">
+                                <input type="hidden" id="areaId">
+                                <div class="form-group">
+                                    <label for="areaNombre">Nombre *</label>
+                                    <input type="text" id="areaNombre" required maxlength="100" placeholder="Ej: Hospitalización">
+                                </div>
+                                <div class="form-group">
+                                    <label for="areaCodigo">Código *</label>
+                                    <input type="text" id="areaCodigo" required maxlength="50" placeholder="Ej: HOSPITALIZACION">
+                                </div>
+                                <label class="ar-check"><input type="checkbox" id="areaRequiereAdjunto"> Exige cargar un adjunto (resultado, informe, foto) al realizar el servicio</label>
+                                <label class="ar-check"><input type="checkbox" id="areaActiva" checked> Activa</label>
+                                <button type="submit" id="btnGuardarArea" class="av-btn av-btn--primary">Guardar área</button>
+                            </form>
 
-                            <h3 class="ar-subtitle">Servicios que despacha</h3>
-                            <ul id="areaServiciosLista" class="ar-lista"></ul>
-                            <div class="ar-add-row">
-                                <select id="areaServicioSelect" aria-label="Servicio del catálogo para asignar"></select>
-                                <button type="button" id="btnAreaAgregarServicio" class="av-btn">Asignar servicio</button>
+                            <div id="areaAsignaciones" hidden>
+                                <h3 class="ar-subtitle">Gestores que atienden esta área</h3>
+                                <ul id="areaGestoresLista" class="ar-lista"></ul>
+                                <div class="ar-add-row">
+                                    <select id="areaGestorSelect" aria-label="Usuario para sumar como gestor"></select>
+                                    <button type="button" id="btnAreaAgregarGestor" class="av-btn">Agregar gestor</button>
+                                </div>
+
+                                <h3 class="ar-subtitle">Servicios que despacha</h3>
+                                <ul id="areaServiciosLista" class="ar-lista"></ul>
+                                <div class="ar-add-row">
+                                    <select id="areaServicioSelect" aria-label="Servicio del catálogo para asignar"></select>
+                                    <button type="button" id="btnAreaAgregarServicio" class="av-btn">Asignar servicio</button>
+                                </div>
                             </div>
-                        </div>
-                    </section>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- gestor-externo-crud: proveedores/laboratorios de referencia sin login,
+                     que reciben trabajo despachado a un área (ver notificacion_service.py). -->
+                <div id="tab-gestores-externos" class="ar-tab-content" role="tabpanel" aria-labelledby="arTabBtnExternos" hidden>
+                    <div class="cat-toolbar">
+                        <button type="button" id="btnGestorExternoNuevo" class="av-btn av-btn--primary">+ Nuevo gestor externo</button>
+                    </div>
+                    <table class="consultas-table">
+                        <thead>
+                            <tr>
+                                <th>RIF</th>
+                                <th>Nombre / Teléfono</th>
+                                <th>Método de pago</th>
+                                <th>Áreas asignadas</th>
+                                <th>Activo</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gestoresExternosBody">
+                            <tr><td colspan="6" style="text-align:center; color:var(--text-secondary);">Cargando…</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
@@ -2511,6 +2541,79 @@
         </main>
         </div>
       </div>
+    </div>
+
+    <!-- Modal Gestor Externo (crear/editar) — gestor-externo-crud -->
+    <div id="modalGestorExterno" class="modal" role="dialog" aria-modal="true" aria-labelledby="gestorExternoTitulo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="gestorExternoTitulo">Nuevo gestor externo</h2>
+                <span class="close" data-modal="modalGestorExterno" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <form id="formGestorExterno">
+                <input type="hidden" id="geId">
+                <div class="form-group">
+                    <label for="geNombre">Nombre *</label>
+                    <input type="text" id="geNombre" required maxlength="120" placeholder="Ej: Laboratorio Referencia C.A.">
+                </div>
+                <div class="form-group">
+                    <label for="geRif">RIF *</label>
+                    <input type="text" id="geRif" required maxlength="20" placeholder="Ej: J-12345678-9">
+                    <small id="geRifHint" class="text-muted" hidden>El RIF no se puede editar mientras el gestor tenga áreas asignadas.</small>
+                </div>
+                <div class="form-group">
+                    <label for="geTelefono">Teléfono *</label>
+                    <input type="text" id="geTelefono" required maxlength="20" placeholder="Ej: 04121234567">
+                </div>
+                <label class="ar-check"><input type="checkbox" id="geEsMovil"> Es un teléfono móvil (WhatsApp/SMS)</label>
+                <div class="form-group">
+                    <label for="geMetodoPago">Método de pago *</label>
+                    <select id="geMetodoPago" required>
+                        <option value="TRANSFERENCIA">Transferencia</option>
+                        <option value="EFECTIVO">Efectivo</option>
+                        <option value="ZELLE">Zelle</option>
+                        <option value="CHEQUE">Cheque</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="geNumeroCuenta">Número de cuenta</label>
+                    <input type="text" id="geNumeroCuenta" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="geZelle">Zelle (email o teléfono)</label>
+                    <input type="text" id="geZelle" maxlength="100">
+                </div>
+                <div class="form-group">
+                    <label for="geUsuarioId">Vincular a un usuario del sistema (opcional)</label>
+                    <select id="geUsuarioId">
+                        <option value="">Sin vincular</option>
+                    </select>
+                </div>
+                <label class="ar-check" id="geActivoRow" hidden><input type="checkbox" id="geActivo" checked> Activo</label>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" data-close="modalGestorExterno">Cancelar</button>
+                    <button type="submit" class="btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Áreas del gestor externo (checklist asignar/desasignar) — gestor-externo-crud -->
+    <div id="modalGestorExternoAreas" class="modal" role="dialog" aria-modal="true" aria-labelledby="geAreasTitulo">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="geAreasTitulo">Áreas asignadas</h2>
+                <span class="close" data-modal="modalGestorExternoAreas" role="button" tabindex="0" aria-label="Cerrar">&times;</span>
+            </div>
+            <div style="padding:1.5rem;">
+                <p id="geAreasSubtitulo" style="margin:0 0 1rem; color:var(--text-secondary);"></p>
+                <ul id="geAreasChecklist" class="ar-checklist"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" data-close="modalGestorExternoAreas">Cerrar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Modal: Anular orden (Tarea 06, etapa 7) -->
