@@ -6,6 +6,7 @@
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { ICONS, showNotification, openModal, closeModal, escapeHtml } from '../core/ui.js';
+import { getRole } from '../core/session.js';
 
 // ============ FACTURACIÓN LOGIC ============
 // orden-servicio-carrito, decisión 8: se quitó el cobro por consulta y su
@@ -64,13 +65,35 @@ export const exportarAbonoPDF = async (facturaId, abonoId) => {
     }
 };
 
-export const abrirModalAbono = (facturaId, saldoPendiente) => {
+// `propietarioId` es opcional (facturacion-metodos-gestores-saldo): si viene,
+// popula el select "Orden vinculada" con las órdenes CERRADA/FACTURADA de ese
+// tutor, para poder mandar `orden_id` en el abono (útil en ventas de servicio
+// directo, donde la orden no tiene por qué tener factura vinculada todavía).
+export const abrirModalAbono = async (facturaId, saldoPendiente, propietarioId) => {
     document.getElementById('abonoFacturaId').value = facturaId;
     document.getElementById('abonoSaldoPendiente').textContent = `$${parseFloat(saldoPendiente).toFixed(2)}`;
     document.getElementById('abonoMonto').max = parseFloat(saldoPendiente).toFixed(2);
     document.getElementById('abonoMonto').value = '';
     document.getElementById('abonoMetodoPago').value = 'EFECTIVO';
     document.getElementById('abonoNotas').value = '';
+
+    const selectOrden = document.getElementById('abonoOrdenId');
+    if (selectOrden) {
+        selectOrden.innerHTML = '<option value="">Sin vincular a una orden</option>';
+        if (propietarioId) {
+            try {
+                const ordenes = await fetchAPI(`/ordenes/?propietario_id=${propietarioId}&estado=CERRADA,FACTURADA&limit=50`);
+                if (Array.isArray(ordenes) && ordenes.length > 0) {
+                    selectOrden.innerHTML += ordenes.map(o =>
+                        `<option value="${o.id}">${escapeHtml(o.numero)} — $${parseFloat(o.total || 0).toFixed(2)}</option>`
+                    ).join('');
+                }
+            } catch (e) {
+                console.error('Error cargando órdenes del propietario:', e);
+            }
+        }
+    }
+
     openModal('modal-abono');
 };
 
@@ -80,6 +103,8 @@ document.getElementById('form-abono')?.addEventListener('submit', async (e) => {
     const monto = parseFloat(document.getElementById('abonoMonto').value);
     const metodoPago = document.getElementById('abonoMetodoPago').value;
     const notas = document.getElementById('abonoNotas').value.trim() || null;
+    const ordenIdRaw = document.getElementById('abonoOrdenId')?.value;
+    const ordenId = ordenIdRaw ? parseInt(ordenIdRaw, 10) : null;
 
     if (!monto || monto <= 0) { alert('El monto debe ser mayor a 0.'); return; }
 
@@ -88,7 +113,7 @@ document.getElementById('form-abono')?.addEventListener('submit', async (e) => {
         const res = await fetch(`${API_BASE_URL}/facturas/${facturaId}/abonar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ monto, metodo_pago: metodoPago, notas })
+            body: JSON.stringify({ monto, metodo_pago: metodoPago, notas, orden_id: ordenId })
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -192,7 +217,7 @@ export const abrirPreviewFactura = async (facturaId) => {
                 <div><span style="color:var(--text-secondary);">Pagado:</span> <strong style="color:var(--secondary);">$${totalAbonado.toFixed(2)}</strong></div>
                 <div><span style="color:var(--text-secondary);">Saldo:</span> <strong style="color:${saldo > 0 ? 'var(--warning-dark)' : 'var(--secondary)'};">$${saldo.toFixed(2)}</strong></div>
             </div>
-            ${saldo > 0 ? `<div style="margin-top:0.75rem; text-align:right;"><button onclick="abrirModalAbono(${facturaId}, ${saldo})" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);">+ Registrar Abono</button></div>` : ''}
+            ${saldo > 0 ? `<div style="margin-top:0.75rem; text-align:right;"><button onclick="abrirModalAbono(${facturaId}, ${saldo}, ${factura.propietario_id})" class="btn-primary" style="background:var(--secondary); border-color:var(--secondary-dark);">+ Registrar Abono</button></div>` : ''}
         `;
 
         modalContent.insertBefore(abonosSection, modalFooter);
@@ -210,21 +235,28 @@ export const abrirPreviewFactura = async (facturaId) => {
 // existiera esta vista — ver proposal.md). El historial de facturas queda
 // como vista secundaria (pestaña "Historial", _mostrarVistaFacturacion).
 const LIMITE_POR_COBRAR = 200;
+// Pedidos de saldo en vuelo a la vez (ver cargarOrdenesPorCobrar).
+const SALDO_CONCURRENCIA = 6;
+// Cada recarga de la vista incrementa la generación; una carga superada
+// deja de pedir y de escribir en la tabla.
+let _generacionPorCobrar = 0;
 
 export const cargarOrdenesPorCobrar = async () => {
+    const generacion = ++_generacionPorCobrar;
     const tbody = document.getElementById('facOrdenesBody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
     try {
         // por_cobrar: solo CERRADA con algo pendiente de facturar -- una orden
         // cerrada sin nada que cobrar no puede salir de la lista (fix de revisión).
         const ordenes = await fetchAPI(`/ordenes/?por_cobrar=true&limit=${LIMITE_POR_COBRAR}`);
+        if (generacion !== _generacionPorCobrar) return;
         if (!ordenes || ordenes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes cerradas esperando cobro.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes cerradas esperando cobro.</td></tr>';
             return;
         }
         const aviso = ordenes.length >= LIMITE_POR_COBRAR
-            ? `<tr><td colspan="6" style="text-align:center; color:var(--text-secondary); padding:0.75rem;">Se muestran las ${LIMITE_POR_COBRAR} órdenes más recientes; buscá una más vieja por su número con la búsqueda global.</td></tr>`
+            ? `<tr><td colspan="7" style="text-align:center; color:var(--text-secondary); padding:0.75rem;">Se muestran las ${LIMITE_POR_COBRAR} órdenes más recientes; buscá una más vieja por su número con la búsqueda global.</td></tr>`
             : '';
         tbody.innerHTML = aviso + ordenes.map(o => {
             const fecha = o.fecha_cierre || o.fecha_apertura;
@@ -235,39 +267,172 @@ export const cargarOrdenesPorCobrar = async () => {
                 <td>${escapeHtml(o.mascota_nombre || 'Sin paciente')}</td>
                 <td>${fecha ? new Date(fecha).toLocaleDateString() : '—'}</td>
                 <td class="num"><b>$${parseFloat(o.total || 0).toFixed(2)}</b></td>
+                <td class="num" id="facOrdenSaldo-${o.id}" style="color:var(--text-muted);">…</td>
                 <td style="text-align:right;">
                     <button class="btn-primary btn-sm" onclick="abrirOrden(${o.id})" style="padding:0.4rem 0.75rem; font-size:0.8rem; background: var(--secondary); border-color: var(--secondary-dark); color:#fff; border-radius:6px;">${ICONS.dollar} Cobrar</button>
                 </td>
             </tr>`;
         }).join('');
+
+        // Saldo pendiente por orden (facturacion-metodos-gestores-saldo): se
+        // resuelve aparte, después de pintar la tabla, para no bloquear el
+        // primer render. Como mucho SALDO_CONCURRENCIA pedidos a la vez, y
+        // una tanda superada por una recarga más nueva deja de pedir y de
+        // escribir (si no, una respuesta vieja pisa un saldo recién abonado).
+        const pendientes = [...ordenes];
+        const pedirSaldos = async () => {
+            while (generacion === _generacionPorCobrar && pendientes.length) {
+                const o = pendientes.shift();
+                await pintarSaldoOrden(o, generacion);
+            }
+        };
+        await Promise.all(Array.from({ length: SALDO_CONCURRENCIA }, pedirSaldos));
     } catch (e) {
+        if (generacion !== _generacionPorCobrar) return;
         console.error('Error cargando órdenes por cobrar:', e);
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--accent);">Error cargando.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color: var(--accent);">Error cargando.</td></tr>';
     }
 };
 
-// Toggle entre las dos vistas de la sección (sin sub-router: son dos <div>
+const pintarSaldoOrden = (o, generacion) =>
+    fetchAPI(`/facturas/orden/${o.id}/saldo-pendiente`)
+        .then((data) => {
+            if (generacion !== _generacionPorCobrar) return;
+            const celda = document.getElementById(`facOrdenSaldo-${o.id}`);
+            if (!celda || !data) return;
+            const saldo = parseFloat(data.saldo_pendiente || 0);
+            const totalPagado = parseFloat(data.total_pagado || 0);
+            // Badge de 3 estados: verde (saldada), naranja (pago parcial),
+            // rojo (nada cobrado todavía).
+            let bg, fg;
+            if (saldo <= 0) {
+                bg = 'var(--secondary-subtle)'; fg = 'var(--secondary-dark)';
+            } else if (totalPagado > 0) {
+                bg = 'var(--warning-subtle)'; fg = 'var(--warning-dark)';
+            } else {
+                bg = 'var(--accent-subtle)'; fg = 'var(--accent-dark)';
+            }
+            celda.innerHTML = `<span class="status-pill" style="padding:2px 6px; border-radius:4px; background:${bg}; color:${fg}; font-weight:600;">$${saldo.toFixed(2)}</span>`;
+        })
+        .catch(() => {
+            if (generacion !== _generacionPorCobrar) return;
+            const celda = document.getElementById(`facOrdenSaldo-${o.id}`);
+            if (celda) celda.textContent = '—';
+        });
+
+// Toggle entre las cuatro vistas de la sección (sin sub-router: son <div>
 // hermanos, mismo criterio que otras secciones con pestañas internas del
-// front, ej. bandeja-gestor.js).
+// front, ej. bandeja-gestor.js). "gestores" es admin-only: el tab queda
+// oculto para el resto (ver initFacturacion) y el backend igual rechaza con
+// 403 si alguien fuerza la vista.
+const VISTAS_FACTURACION = ['ordenes', 'historial', 'hoy', 'gestores'];
 const _mostrarVistaFacturacion = (vista) => {
-    const viewOrdenes = document.getElementById('facViewOrdenes');
-    const viewHistorial = document.getElementById('facViewHistorial');
-    const tabOrdenes = document.getElementById('facTabOrdenes');
-    const tabHistorial = document.getElementById('facTabHistorial');
-    if (viewOrdenes) viewOrdenes.hidden = vista !== 'ordenes';
-    if (viewHistorial) viewHistorial.hidden = vista !== 'historial';
-    if (tabOrdenes) tabOrdenes.setAttribute('aria-pressed', String(vista === 'ordenes'));
-    if (tabHistorial) tabHistorial.setAttribute('aria-pressed', String(vista === 'historial'));
+    const views = {
+        ordenes: document.getElementById('facViewOrdenes'),
+        historial: document.getElementById('facViewHistorial'),
+        hoy: document.getElementById('facViewHoy'),
+        gestores: document.getElementById('facViewGestores'),
+    };
+    const tabs = {
+        ordenes: document.getElementById('facTabOrdenes'),
+        historial: document.getElementById('facTabHistorial'),
+        hoy: document.getElementById('facTabHoy'),
+        gestores: document.getElementById('facTabGestores'),
+    };
+    VISTAS_FACTURACION.forEach((v) => {
+        if (views[v]) views[v].hidden = v !== vista;
+        if (tabs[v]) tabs[v].setAttribute('aria-pressed', String(v === vista));
+    });
     if (vista === 'ordenes') cargarOrdenesPorCobrar();
-    else cargarHistorialFacturas();
+    else if (vista === 'historial') cargarHistorialFacturas();
+    else if (vista === 'hoy') cargarFacturasHoy();
+    // "gestores" no auto-carga: espera a que el usuario elija un rango y
+    // toque "Calcular" (ver btnCalcularGestoresPagos más abajo).
 };
 
 document.getElementById('facTabOrdenes')?.addEventListener('click', () => _mostrarVistaFacturacion('ordenes'));
 document.getElementById('facTabHistorial')?.addEventListener('click', () => _mostrarVistaFacturacion('historial'));
+document.getElementById('facTabHoy')?.addEventListener('click', () => _mostrarVistaFacturacion('hoy'));
+document.getElementById('facTabGestores')?.addEventListener('click', () => _mostrarVistaFacturacion('gestores'));
+
+// ── Hoy (facturas emitidas hoy) ───────────────────────────────────────────────
+export const cargarFacturasHoy = async () => {
+    const tbody = document.getElementById('facHoyTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
+    try {
+        const facturas = await fetchAPI('/facturas/hoy');
+        if (!facturas || facturas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Todavía no se emitió ninguna factura hoy.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = facturas.map(f => {
+            const numero = f.numero_factura || f.id;
+            const fecha = f.fecha_emision ? new Date(f.fecha_emision).toLocaleTimeString() : '-';
+            const estado = f.estado || 'PENDIENTE';
+            const colors = ESTADO_FACTURA_COLORS[estado] || ESTADO_FACTURA_COLORS.PENDIENTE;
+            return `
+            <tr>
+                <td><b>#${numero}</b></td>
+                <td>${fecha}</td>
+                <td><span class="status-pill" style="padding: 2px 6px; border-radius: 4px; background: ${colors.bg}; color: ${colors.fg};">${estado}</span></td>
+                <td class="num"><b>$${parseFloat(f.total || 0).toFixed(2)}</b></td>
+                <td><span style="font-size: 0.85rem; color: var(--text-secondary);">${f.metodo_pago || '-'}</span></td>
+                <td style="text-align: right;">
+                    <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); border: none; color: #fff; border-radius: 6px;">${ICONS.fileText} Ver</button>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        console.error('Error cargando facturas de hoy:', e);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--accent);">Error cargando.</td></tr>';
+    }
+};
+
+// ── Pagos a gestores (solo admin) ─────────────────────────────────────────────
+export const cargarPagosGestores = async () => {
+    const tbody = document.getElementById('facGestoresTableBody');
+    if (!tbody) return;
+    const desde = document.getElementById('gestoresPagosDesde')?.value;
+    const hasta = document.getElementById('gestoresPagosHasta')?.value;
+    if (!desde || !hasta) {
+        alert('Elegí fecha "Desde" y "Hasta".');
+        return;
+    }
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Calculando…</td></tr>';
+    try {
+        const pagos = await fetchAPI(`/facturas/gestores-pagos?desde=${desde}&hasta=${hasta}`);
+        if (!pagos || pagos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay liquidaciones en ese rango.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = pagos.map(p => `
+            <tr>
+                <td><b>${escapeHtml(p.username)}</b></td>
+                <td>${escapeHtml(p.role)}</td>
+                <td class="num"><b>$${parseFloat(p.total_encargado || 0).toFixed(2)}</b></td>
+                <td class="num">$${parseFloat(p.total_amivets || 0).toFixed(2)}</td>
+                <td class="num">${p.cantidad_lineas}</td>
+                <td class="num" style="color:${parseFloat(p.total_ajustes || 0) < 0 ? 'var(--accent-dark)' : 'var(--text-secondary)'};">$${parseFloat(p.total_ajustes || 0).toFixed(2)}</td>
+            </tr>`).join('');
+    } catch (e) {
+        console.error('Error calculando pagos a gestores:', e);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--accent);">Error calculando.</td></tr>';
+    }
+};
+
+document.getElementById('btnCalcularGestoresPagos')?.addEventListener('click', cargarPagosGestores);
 
 // initFn de la sección (router.js): Facturación abre en "Órdenes por cobrar",
-// no en el historial (decisión 8).
-export const initFacturacion = () => _mostrarVistaFacturacion('ordenes');
+// no en el historial (decisión 8). El tab "Pagos a gestores" solo se muestra
+// a admin -- mismo criterio que reportes.js (localStorage.getItem('role')).
+export const initFacturacion = () => {
+    if (getRole() === 'admin') {
+        const tabGestores = document.getElementById('facTabGestores');
+        if (tabGestores) tabGestores.hidden = false;
+    }
+    _mostrarVistaFacturacion('ordenes');
+};
 
 const ESTADO_FACTURA_COLORS = {
     PAGADA: { bg: 'var(--secondary-subtle)', fg: 'var(--secondary-dark)' },
@@ -314,7 +479,7 @@ export const cargarHistorialFacturas = async () => {
                 <td><span style="font-size: 0.85rem; color: var(--text-secondary);">${metodo}</span></td>
                 <td style="text-align: right;">
                     <div class="row-actions">
-                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--secondary); border-color: var(--secondary-dark); color: #fff; border-radius: 6px;">${ICONS.dollar} Abonar</button>` : ''}
+                        ${(estado === 'PENDIENTE' || estado === 'PARCIAL') ? `<button class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${saldo}, ${f.propietario_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--secondary); border-color: var(--secondary-dark); color: #fff; border-radius: 6px;">${ICONS.dollar} Abonar</button>` : ''}
                         <button class="btn-primary btn-sm" onclick="abrirPreviewFactura(${f.id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background: var(--primary); border: none; color: #fff; border-radius: 6px;">${ICONS.fileText} Ver PDF</button>
                         ${f.consulta_id ? `<button class="btn-secondary btn-sm" onclick="verConsultaCompleta(${f.consulta_id})" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px;">Consulta</button>` : ''}
                     </div>

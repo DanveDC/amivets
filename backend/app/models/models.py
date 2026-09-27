@@ -821,12 +821,18 @@ class Abono(Base):
     id = Column(Integer, primary_key=True, index=True)
     numero_abono = Column(String(50), unique=True)
     factura_id = Column(Integer, ForeignKey("facturas.id"), nullable=False)
+    # Vínculo adicional y opcional con la orden pagada (facturacion-metodos-
+    # gestores-saldo): NO es excluyente con factura_id -- un abono siempre
+    # tiene factura_id (NOT NULL), y orden_id solo se suma cuando el pago se
+    # hizo apuntando a una orden puntual (ej. venta de servicio directo).
+    orden_id = Column(Integer, ForeignKey("ordenes_servicio.id"), nullable=True, index=True)
     monto = Column(Numeric(10, 2), nullable=False)
     metodo_pago = Column(String(50), nullable=False)
     fecha = Column(DateTime, default=datetime.utcnow)
     notas = Column(Text, nullable=True)
 
     factura = relationship("Factura", back_populates="abonos")
+    orden = relationship("OrdenServicio")
 
     def __repr__(self):
         return f"<Abono {self.numero_abono} - {self.monto}>"

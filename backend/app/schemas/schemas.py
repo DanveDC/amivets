@@ -1099,16 +1099,68 @@ class AbonoCreate(BaseModel):
     monto: Decimal
     metodo_pago: str
     notas: Optional[str] = None
+    # Vínculo adicional y opcional con la orden pagada (facturacion-metodos-
+    # gestores-saldo): NO reemplaza a factura_id (viene del path del
+    # endpoint) -- se suma cuando el abono corresponde a una orden puntual.
+    orden_id: Optional[int] = Field(None, gt=0)
 
 
 class AbonoResponse(BaseModel):
     id: int
     numero_abono: Optional[str] = None
     factura_id: int
+    orden_id: Optional[int] = None
+    orden_numero: Optional[str] = None
     monto: Decimal
     metodo_pago: str
     fecha: datetime
     notas: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    @classmethod
+    def _adjuntar_orden_numero(cls, data):
+        """Resuelve `orden_numero` desde `Abono.orden.numero` cuando `data`
+        es el modelo ORM (from_attributes). Si `data` ya es un dict (ej.
+        construcción manual), se deja tal cual -- el caller es responsable
+        de mandar `orden_numero` si lo necesita."""
+        if isinstance(data, dict):
+            return data
+        orden = getattr(data, 'orden', None)
+        if orden is not None and getattr(orden, 'numero', None):
+            try:
+                data.orden_numero = orden.numero
+            except Exception:
+                pass
+        return data
+
+
+# ========== DASHBOARD DE FACTURACIÓN (facturacion-metodos-gestores-saldo) ==========
+class GestorPagoResponse(BaseModel):
+    """Total a pagar a un gestor/encargado en un rango, desde liquidaciones
+    ya congeladas (LiquidacionComisionDetalle)."""
+    encargado_id: int
+    username: str
+    role: str
+    total_encargado: float
+    total_amivets: float
+    cantidad_lineas: int
+    total_ajustes: float
+
+
+class SaldoPendienteOrdenResponse(BaseModel):
+    """Saldo pendiente de cobro de una orden: de su factura vinculada
+    (FacturaOrden) o, si no tiene, de sus ítems sin facturar (orden CERRADA)."""
+    orden_id: int
+    orden_numero: str
+    estado_orden: str
+    factura_id: Optional[int] = None
+    factura_numero: Optional[str] = None
+    factura_estado: Optional[str] = None
+    saldo_pendiente: float
+    total_factura: float
+    total_pagado: float
 
 
 # ========== LIQUIDACIONES A VETERINARIOS (Unidad E) ==========

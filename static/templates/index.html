@@ -1834,6 +1834,11 @@
                     <div class="pd-orders-filters">
                         <button type="button" id="facTabOrdenes" class="pd-filter" aria-pressed="true">Órdenes por cobrar</button>
                         <button type="button" id="facTabHistorial" class="pd-filter" aria-pressed="false">Historial</button>
+                        <button type="button" id="facTabHoy" class="pd-filter" aria-pressed="false">Hoy</button>
+                        <!-- Solo admin (facturacion-metodos-gestores-saldo): expone cuánto se le
+                             paga a cada gestor/encargado. gateado en JS via getRole(), el backend
+                             además rechaza con 403 a cualquier otro rol. -->
+                        <button type="button" id="facTabGestores" class="pd-filter" aria-pressed="false" hidden>Pagos a gestores</button>
                     </div>
                 </div>
 
@@ -1848,6 +1853,7 @@
                                     <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Paciente</th>
                                     <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
                                     <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Saldo pendiente</th>
                                     <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
                                 </tr>
                             </thead>
@@ -1889,6 +1895,55 @@
                             </thead>
                             <tbody id="facturacionTableBody">
                                 <!-- Loaded via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Vista: Hoy (facturas emitidas hoy) -->
+                <div id="facViewHoy" hidden>
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                        <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Factura #</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Fecha</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Estado</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Método</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: right; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facHoyTableBody">
+                                <!-- Loaded via JS: cargarFacturasHoy() -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Vista: Pagos a gestores (solo admin) -->
+                <div id="facViewGestores" hidden>
+                    <div class="content-header" style="justify-content: flex-end; align-items: center; display: flex; margin-bottom: 1rem; gap: 0.75rem;">
+                        <label for="gestoresPagosDesde" style="font-size: 0.85rem; color: var(--text-secondary);">Desde</label>
+                        <input type="date" id="gestoresPagosDesde" class="search-input" style="width: 160px; margin: 0;">
+                        <label for="gestoresPagosHasta" style="font-size: 0.85rem; color: var(--text-secondary);">Hasta</label>
+                        <input type="date" id="gestoresPagosHasta" class="search-input" style="width: 160px; margin: 0;">
+                        <button type="button" id="btnCalcularGestoresPagos" class="btn-primary" style="padding: 0.6rem 1rem;">Calcular</button>
+                    </div>
+                    <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); overflow: hidden;">
+                        <table class="consultas-table" style="width: 100%; border-collapse: collapse; margin-top: 0; box-shadow: none;">
+                            <thead>
+                                <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Gestor</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Rol</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total encargado</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Total AmiVets</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Líneas</th>
+                                    <th style="padding: 1.25rem 1.5rem; text-align: left; font-size: 0.8rem; text-transform: uppercase; color: var(--text-secondary);">Ajustes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="facGestoresTableBody">
+                                <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Elegí un rango de fechas y tocá "Calcular".</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -2898,6 +2953,12 @@
                         <option value="TARJETA">Tarjeta</option>
                         <option value="TRANSFERENCIA">Transferencia</option>
                         <option value="OTRO">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="abonoOrdenId">Orden vinculada (opcional)</label>
+                    <select id="abonoOrdenId" style="width: 100%; padding: 0.75rem; border: 1.5px solid var(--border); border-radius: var(--radius-md); font-size: 0.95rem;">
+                        <option value="">Sin vincular a una orden</option>
                     </select>
                 </div>
                 <div class="form-group" style="margin-bottom: 1.5rem;">
