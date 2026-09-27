@@ -1,12 +1,17 @@
 """Comisiones por servicio (comisiones-por-servicio).
 
-Reparte lo cobrado por cada línea de servicio entre AmiVets y su encargado,
-según un porcentaje configurable (por defecto o propio del encargado).
+Reparte lo cobrado por cada línea de servicio entre AmiVets y su encargado.
+La parte del encargado sale del tipo de comisión efectivo de la línea
+(comision-tipo-mixto-encargado), en este orden de prioridad:
+  1. override del item del catálogo (FIJO o PORCENTAJE, si no es HEREDA);
+  2. comisión propia del encargado (FIJO, PORCENTAJE o MIXTO);
+  3. porcentaje de defecto de ConfiguracionComision.
 
 Todo se calcula DESDE EL ESTADO (decisión 3), no con hooks en los caminos de
 cobro: una factura puede pasar a PAGADA por crear_factura, por un abono o por
 el PATCH de facturas, y un hook en cada uno sería frágil. Lo único que se
-persiste es la liquidación, con el porcentaje y los montos congelados.
+persiste es la liquidación, con el tipo, el porcentaje, el monto fijo y los
+montos congelados.
 
 - Línea elegible: ServicioConsulta vivo, facturado, con encargado, cuya
   factura está PAGADA y cuyo par (servicio, factura) todavía no se liquidó.
@@ -24,11 +29,12 @@ from typing import Dict, List, Optional, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import (
     ComisionEncargado,
     ConfiguracionComision,
+    CatalogoServicio,
     Consulta,
     DetalleFactura,
     Factura,
@@ -84,12 +90,14 @@ def actualizar_configuracion(db: Session, porcentaje: Decimal, usuario: Usuario)
     return config
 
 
-def porcentajes_propios(db: Session) -> Dict[int, Decimal]:
-    return {c.usuario_id: _dec(c.porcentaje) for c in db.query(ComisionEncargado).all()}
+def _comision_propia(db: Session, usuario_id: int) -> Optional[ComisionEncargado]:
+    return db.query(ComisionEncargado).filter(ComisionEncargado.usuario_id == usuario_id).first()
 
 
 def porcentaje_efectivo(db: Session, usuario_id: int, defecto: Optional[Decimal] = None) -> Decimal:
-    propio = db.query(ComisionEncargado).filter(ComisionEncargado.usuario_id == usuario_id).first()
+    """Porcentaje que se aplica al encargado (compatibilidad): el propio si
+    tiene uno (0 si su tipo es FIJO), si no el de defecto."""
+    propio = _comision_propia(db, usuario_id)
     if propio:
         return _dec(propio.porcentaje)
     return defecto if defecto is not None else _dec(obtener_configuracion(db).porcentaje_defecto)
@@ -102,46 +110,49 @@ def obtener_encargado(db: Session, usuario_id: int) -> Usuario:
     return usuario
 
 
+def _encargado_a_dict(u: Usuario, propia: Optional[ComisionEncargado], defecto: Decimal) -> dict:
+    return {
+        "usuario_id": u.id,
+        "username": u.username,
+        "role": u.role,
+        "tipo_comision": propia.tipo_comision if propia else None,
+        "monto_fijo": propia.monto_fijo if propia else None,
+        "porcentaje_propio": propia.porcentaje if propia else None,
+        "porcentaje_efectivo": _dec(propia.porcentaje) if propia else defecto,
+    }
+
+
 def listar_encargados(db: Session) -> List[dict]:
     defecto = _dec(obtener_configuracion(db).porcentaje_defecto)
-    propios = porcentajes_propios(db)
+    propias = {c.usuario_id: c for c in db.query(ComisionEncargado).all()}
     usuarios = (
         db.query(Usuario)
         .filter(Usuario.role.in_(ROLES_ENCARGADO), Usuario.is_active == True)  # noqa: E712
         .order_by(Usuario.username)
         .all()
     )
-    return [
-        {
-            "usuario_id": u.id,
-            "username": u.username,
-            "role": u.role,
-            "porcentaje_propio": propios.get(u.id),
-            "porcentaje_efectivo": propios.get(u.id, defecto),
-        }
-        for u in usuarios
-    ]
+    return [_encargado_a_dict(u, propias.get(u.id), defecto) for u in usuarios]
 
 
-def fijar_porcentaje_encargado(db: Session, usuario_id: int, porcentaje: Optional[Decimal]) -> dict:
-    """Fija el porcentaje propio; con None lo quita y vuelve al de defecto."""
+def fijar_comision_encargado(db: Session, usuario_id: int, tipo_comision: Optional[str],
+                             monto_fijo: Optional[Decimal], porcentaje: Optional[Decimal]) -> dict:
+    """Fija la comisión propia; con tipo None la quita y vuelve al porcentaje
+    de defecto. El schema ya dejó en None el campo que el tipo no usa."""
     encargado = obtener_encargado(db, usuario_id)
-    fila = db.query(ComisionEncargado).filter(ComisionEncargado.usuario_id == usuario_id).first()
-    if porcentaje is None:
+    fila = _comision_propia(db, usuario_id)
+    if tipo_comision is None:
         if fila:
             db.delete(fila)
-    elif fila:
-        fila.porcentaje = porcentaje
+            fila = None
     else:
-        db.add(ComisionEncargado(usuario_id=usuario_id, porcentaje=porcentaje))
+        if not fila:
+            fila = ComisionEncargado(usuario_id=usuario_id)
+            db.add(fila)
+        fila.tipo_comision = tipo_comision
+        fila.monto_fijo = monto_fijo
+        fila.porcentaje = porcentaje
     db.commit()
-    return {
-        "usuario_id": encargado.id,
-        "username": encargado.username,
-        "role": encargado.role,
-        "porcentaje_propio": porcentaje,
-        "porcentaje_efectivo": porcentaje_efectivo(db, usuario_id),
-    }
+    return _encargado_a_dict(encargado, fila, _dec(obtener_configuracion(db).porcentaje_defecto))
 
 
 # ---------------------------------------------------------------------------
@@ -163,14 +174,95 @@ class Linea:
     monto_amivets: Decimal
     es_ajuste: bool = False
     liquidacion_id: Optional[int] = None
+    tipo_comision_usado: str = "PORCENTAJE"
+    monto_fijo_usado: Optional[Decimal] = None
+    porcentaje_usado: Optional[Decimal] = None
 
     def as_dict(self) -> dict:
         return dict(self.__dict__)
 
 
-def _repartir(subtotal: Decimal, porcentaje: Decimal) -> Tuple[Decimal, Decimal]:
-    encargado = _centavos(subtotal * porcentaje / CIEN)
-    return encargado, _centavos(subtotal) - encargado
+def _repartir_con_tipo(subtotal: Decimal, tipo: str, monto_fijo: Decimal, porcentaje: Decimal) -> dict:
+    """Parte del encargado según el tipo. Nunca supera lo cobrado: un monto
+    fijo mayor al subtotal se recorta, así monto_amivets nunca es negativo.
+    Simétrico en el signo: con subtotal negativo (ajuste) devuelve el mismo
+    reparto en negativo."""
+    subtotal = _centavos(subtotal)
+    signo = Decimal("-1") if subtotal < 0 else Decimal("1")
+    base = abs(subtotal)
+    if tipo == "FIJO":
+        enc = _centavos(monto_fijo)
+    elif tipo == "PORCENTAJE":
+        enc = _centavos(base * porcentaje / CIEN)
+    elif tipo == "MIXTO":
+        enc = _centavos(monto_fijo + base * porcentaje / CIEN)
+    else:
+        enc = Decimal("0")
+    enc = min(enc, base) * signo
+    return {
+        "tipo_comision_usado": tipo,
+        "monto_fijo_usado": monto_fijo if tipo in ("FIJO", "MIXTO") else None,
+        "porcentaje_usado": porcentaje if tipo in ("PORCENTAJE", "MIXTO") else None,
+        "monto_encargado": enc,
+        "monto_amivets": subtotal - enc,
+    }
+
+
+def calcular_comision(
+    db: Session,
+    subtotal: Decimal,
+    encargado_id: int,
+    servicio: Optional[ServicioConsulta] = None,
+    catalogo_servicio: Optional[CatalogoServicio] = None,
+    propias: Optional[Dict[int, Optional[ComisionEncargado]]] = None,
+    defecto: Optional[Decimal] = None,
+) -> dict:
+    """Reparto de una línea con el tipo efectivo: catálogo (si no hereda) >
+    comisión propia del encargado > porcentaje de defecto. Tipo y parámetros
+    salen siempre del mismo origen.
+
+    `propias` y `defecto` son caches opcionales para no consultar por línea."""
+    if catalogo_servicio is None and servicio is not None:
+        catalogo_servicio = servicio.catalogo_servicio
+    if catalogo_servicio is not None and catalogo_servicio.tipo_comision_servicio in ("FIJO", "PORCENTAJE"):
+        tipo = catalogo_servicio.tipo_comision_servicio
+        return _repartir_con_tipo(
+            subtotal, tipo,
+            _dec(catalogo_servicio.monto_fijo_servicio) if tipo == "FIJO" else Decimal("0"),
+            _dec(catalogo_servicio.porcentaje_servicio) if tipo == "PORCENTAJE" else Decimal("0"),
+        )
+
+    if propias is not None and encargado_id in propias:
+        propia = propias[encargado_id]
+    else:
+        propia = _comision_propia(db, encargado_id)
+        if propias is not None:
+            propias[encargado_id] = propia
+    if propia is not None:
+        tipo = propia.tipo_comision
+        return _repartir_con_tipo(
+            subtotal, tipo,
+            _dec(propia.monto_fijo) if tipo in ("FIJO", "MIXTO") else Decimal("0"),
+            _dec(propia.porcentaje) if tipo in ("PORCENTAJE", "MIXTO") else Decimal("0"),
+        )
+
+    if defecto is None:
+        defecto = _dec(obtener_configuracion(db).porcentaje_defecto)
+    return _repartir_con_tipo(subtotal, "PORCENTAJE", Decimal("0"), defecto)
+
+
+def _linea(reparto: dict, **campos) -> Linea:
+    """Linea con los montos y el tipo de un reparto. `porcentaje` (columna
+    NOT NULL histórica) es 0 cuando el tipo no usa porcentaje."""
+    return Linea(
+        porcentaje=reparto["porcentaje_usado"] or Decimal("0"),
+        monto_encargado=reparto["monto_encargado"],
+        monto_amivets=reparto["monto_amivets"],
+        tipo_comision_usado=reparto["tipo_comision_usado"],
+        monto_fijo_usado=reparto["monto_fijo_usado"],
+        porcentaje_usado=reparto["porcentaje_usado"],
+        **campos,
+    )
 
 
 def _filtro_encargado(encargado_id: int):
@@ -224,6 +316,7 @@ def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[
     #    directo, caja rápida...).
     por_detalle = (
         db.query(ServicioConsulta, Factura, DetalleFactura)
+        .options(joinedload(ServicioConsulta.catalogo_servicio))
         .join(DetalleFactura, DetalleFactura.servicio_id == ServicioConsulta.id)
         .join(Factura, Factura.id == DetalleFactura.factura_id)
         .outerjoin(Consulta, Consulta.id == ServicioConsulta.consulta_id)
@@ -246,6 +339,7 @@ def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[
     #    factura de la consulta y la comisión se pagaba dos veces.
     por_consulta = (
         db.query(ServicioConsulta, Factura)
+        .options(joinedload(ServicioConsulta.catalogo_servicio))
         .join(Consulta, Consulta.id == ServicioConsulta.consulta_id)
         .join(Factura, Factura.consulta_id == ServicioConsulta.consulta_id)
         .filter(ServicioConsulta.tipo_servicio == "CONSULTA", *base_filtros)
@@ -280,12 +374,9 @@ def _numeros_orden(db: Session, orden_ids) -> Dict[int, str]:
     return dict(db.query(OrdenServicio.id, OrdenServicio.numero).filter(OrdenServicio.id.in_(ids)).all())
 
 
-def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=None,
-                      porcentaje: Optional[Decimal] = None) -> List[Linea]:
-    """Líneas cobradas y sin liquidar, con el porcentaje efectivo ACTUAL."""
-    if porcentaje is None:
-        porcentaje = porcentaje_efectivo(db, encargado_id)
-
+def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=None) -> List[Linea]:
+    """Líneas cobradas y sin liquidar, con el tipo de comisión efectivo ACTUAL
+    de cada una (catálogo > encargado > defecto)."""
     pares = _pares_cobrados(db, encargado_id, dt_desde, dt_hasta)
     if not pares:
         return []
@@ -306,6 +397,8 @@ def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=No
         .all()
     }
     numeros = _numeros_orden(db, (s.orden_id for s, _, _ in pares))
+    propias = {encargado_id: _comision_propia(db, encargado_id)}
+    defecto = _dec(obtener_configuracion(db).porcentaje_defecto)
 
     lineas = []
     for s, f, cobrado in pares:
@@ -313,9 +406,9 @@ def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=No
             continue
         if s.tipo_servicio == "CONSULTA" and s.consulta_id in consultas_tarifa_fija:
             continue
-        subtotal = cobrado
-        enc, ami = _repartir(subtotal, porcentaje)
-        lineas.append(Linea(
+        reparto = calcular_comision(db, cobrado, encargado_id, servicio=s, propias=propias, defecto=defecto)
+        lineas.append(_linea(
+            reparto,
             servicio_id=s.id,
             factura_id=f.id,
             orden_id=s.orden_id,
@@ -323,10 +416,7 @@ def lineas_pendientes(db: Session, encargado_id: int, dt_desde=None, dt_hasta=No
             numero_factura=f.numero_factura,
             descripcion=s.nombre_servicio or s.tipo_servicio,
             fecha_cobro=f.fecha_emision,
-            subtotal=subtotal,
-            porcentaje=porcentaje,
-            monto_encargado=enc,
-            monto_amivets=ami,
+            subtotal=cobrado,
         ))
     lineas.sort(key=lambda l: (l.fecha_cobro or datetime.min.replace(tzinfo=timezone.utc), l.servicio_id))
     return lineas
@@ -358,20 +448,16 @@ def ajustes_pendientes(db: Session, encargado_id: int) -> List[Linea]:
     for d, f in liquidadas:
         if (d.servicio_id, d.factura_id) in con_ajuste:
             continue
-        ajustes.append(Linea(
-            servicio_id=d.servicio_id,
-            factura_id=d.factura_id,
-            orden_id=d.orden_id,
-            orden_numero=numeros.get(d.orden_id),
-            numero_factura=f.numero_factura,
-            descripcion=d.descripcion,
-            fecha_cobro=d.fecha_cobro,
-            subtotal=-_dec(d.subtotal),
-            porcentaje=_dec(d.porcentaje),
-            monto_encargado=-_dec(d.monto_encargado),
-            monto_amivets=-_dec(d.monto_amivets),
-            es_ajuste=True,
-        ))
+        # El ajuste revierte EXACTAMENTE lo pagado: montos congelados en
+        # negativo, con el tipo y los parámetros congelados de la línea. No se
+        # recalcula, así un redondeo o un cambio de reglas nunca deja saldo.
+        linea = _linea_de_detalle(d, f.numero_factura, numeros.get(d.orden_id))
+        linea.subtotal = -linea.subtotal
+        linea.monto_encargado = -linea.monto_encargado
+        linea.monto_amivets = -linea.monto_amivets
+        linea.es_ajuste = True
+        linea.liquidacion_id = None
+        ajustes.append(linea)
     return ajustes
 
 
@@ -392,6 +478,7 @@ def lineas_liquidadas(db: Session, encargado_id: int, dt_desde=None, dt_hasta=No
 
 
 def _linea_de_detalle(d: LiquidacionComisionDetalle, numero_factura: Optional[str], orden_numero: Optional[str]) -> Linea:
+    tipo = d.tipo_comision or "PORCENTAJE"
     return Linea(
         servicio_id=d.servicio_id,
         factura_id=d.factura_id,
@@ -406,6 +493,9 @@ def _linea_de_detalle(d: LiquidacionComisionDetalle, numero_factura: Optional[st
         monto_amivets=_dec(d.monto_amivets),
         es_ajuste=bool(d.es_ajuste),
         liquidacion_id=d.liquidacion_id,
+        tipo_comision_usado=tipo,
+        monto_fijo_usado=_dec(d.monto_fijo) if d.monto_fijo is not None else None,
+        porcentaje_usado=_dec(d.porcentaje) if tipo in ("PORCENTAJE", "MIXTO") else None,
     )
 
 
@@ -419,13 +509,15 @@ def _totales(lineas: List[Linea]) -> dict:
 def control(db: Session, encargado_id: int, desde: Optional[date], hasta: Optional[date]) -> dict:
     encargado = obtener_encargado(db, encargado_id)
     dt_desde, dt_hasta = rango_utc(desde, hasta)
-    porcentaje = porcentaje_efectivo(db, encargado_id)
-    pendientes = ajustes_pendientes(db, encargado_id) + lineas_pendientes(db, encargado_id, dt_desde, dt_hasta, porcentaje)
+    propia = _comision_propia(db, encargado_id)
+    pendientes = ajustes_pendientes(db, encargado_id) + lineas_pendientes(db, encargado_id, dt_desde, dt_hasta)
     liquidadas = lineas_liquidadas(db, encargado_id, dt_desde, dt_hasta)
     return {
         "encargado_id": encargado.id,
         "username": encargado.username,
-        "porcentaje_efectivo": porcentaje,
+        "porcentaje_efectivo": porcentaje_efectivo(db, encargado_id),
+        "tipo_comision": propia.tipo_comision if propia else None,
+        "monto_fijo": propia.monto_fijo if propia else None,
         "pendientes": [l.as_dict() for l in pendientes],
         "liquidadas": [l.as_dict() for l in liquidadas],
         "totales_pendientes": _totales(pendientes),
@@ -471,6 +563,8 @@ def liquidar(db: Session, encargado_id: int, desde: date, hasta: date, usuario: 
             monto_encargado=l.monto_encargado,
             monto_amivets=l.monto_amivets,
             es_ajuste=l.es_ajuste,
+            tipo_comision=l.tipo_comision_usado,
+            monto_fijo=l.monto_fijo_usado,
         ))
     db.add(liquidacion)
     try:

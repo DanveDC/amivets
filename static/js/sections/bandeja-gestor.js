@@ -23,7 +23,7 @@ import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { showNotification, escapeHtml } from '../core/ui.js';
 import { haceCuanto, fechaLargaEsVE, fechaCorta } from '../core/format.js';
 import { getUserId } from '../core/session.js';
-import { tablaLineas, totales, descargarPdf, pct } from './comisiones.js';
+import { tablaLineas, totales, descargarPdf, describirComision } from './comisiones.js';
 
 const ESTADO_PILL = { ASIGNADO: 'av-pill--warn', EN_PROCESO: 'av-pill--info' };
 const ESTADO_LABEL = { ASIGNADO: 'Asignado', EN_PROCESO: 'En proceso' };
@@ -527,7 +527,7 @@ async function cargarMisComisiones() {
             fetchAPI('/comisiones/mias/liquidaciones'),
         ]);
         wrap.innerHTML = `
-            <p style="margin:0 0 0.75rem;">Tu porcentaje actual: <b>${pct(c.porcentaje_efectivo)}</b></p>
+            <p style="margin:0 0 0.75rem;">Tu comisión actual: <b>${describirComision(c.tipo_comision, c.monto_fijo, c.porcentaje_efectivo)}</b></p>
             <h4 style="margin: 0.5rem 0;">Pendiente de liquidar</h4>
             ${tablaLineas(c.pendientes, 'No tenés comisiones pendientes en este rango.')}
             <div id="bgComTotalesPendientes" style="margin:0.75rem 0 1.25rem;">${totales(c.totales_pendientes)}</div>

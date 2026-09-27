@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     CatalogoServicioCreate,
     CatalogoServicioUpdate,
     CatalogoServicioResponse,
+    validar_comision_servicio,
     RecetaServicioCreate,
     RecetaServicioUpdate,
     RecetaServicioResponse,
@@ -110,6 +111,30 @@ def listar_servicios(
     return query.order_by(CatalogoServicio.nombre).offset(skip).limit(limit).all()
 
 
+_CAMPOS_COMISION = ("tipo_comision_servicio", "monto_fijo_servicio", "porcentaje_servicio")
+_SOLO_ADMIN_COMISION = "Solo un administrador puede configurar la comisión del servicio"
+
+
+def _aplicar_comision(servicio: CatalogoServicio, payload: dict, current_user: Usuario) -> None:
+    """Override de comisión (comision-tipo-mixto-encargado), admin-only como
+    precio_ref. Un PUT parcial puede traer solo el monto: se combina con lo
+    que ya tiene la fila, se valida y se escriben los tres campos juntos."""
+    if not any(k in payload for k in _CAMPOS_COMISION):
+        return
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_SOLO_ADMIN_COMISION)
+    tipo = payload.pop("tipo_comision_servicio", None) or servicio.tipo_comision_servicio
+    monto = payload.pop("monto_fijo_servicio", servicio.monto_fijo_servicio)
+    porcentaje = payload.pop("porcentaje_servicio", servicio.porcentaje_servicio)
+    try:
+        monto, porcentaje = validar_comision_servicio(tipo, monto, porcentaje)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    servicio.tipo_comision_servicio = tipo
+    servicio.monto_fijo_servicio = monto
+    servicio.porcentaje_servicio = porcentaje
+
+
 @router.post("/", response_model=CatalogoServicioResponse, status_code=status.HTTP_201_CREATED)
 def crear_servicio(
     servicio: CatalogoServicioCreate,
@@ -129,6 +154,8 @@ def crear_servicio(
             detail="Solo un administrador puede asignar área o requiere_adjunto",
         )
     _validar_area_activa(db, payload.get("area_id"))
+    if payload.get("tipo_comision_servicio") != "HEREDA" and current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_SOLO_ADMIN_COMISION)
 
     nuevo = CatalogoServicio(**payload)
     db.add(nuevo)
@@ -193,6 +220,7 @@ def actualizar_servicio(
         )
     if "area_id" in payload:
         _validar_area_activa(db, payload["area_id"])
+    _aplicar_comision(servicio, payload, current_user)
 
     for key, value in payload.items():
         setattr(servicio, key, value)

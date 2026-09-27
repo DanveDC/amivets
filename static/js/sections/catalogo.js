@@ -11,6 +11,7 @@
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, escapeHtml } from '../core/ui.js';
 import { gatePrecioInput, getUsuariosMap } from './historial-precios.js';
+import { getRole } from '../core/session.js';
 
 // ============================================================
 // ESTADO DEL PANEL MAESTRO-DETALLE
@@ -158,6 +159,12 @@ async function cargarDetalle(id) {
     }
 }
 
+function pillComision(s) {
+    if (s.tipo_comision_servicio === 'FIJO') return `<span class="av-pill" data-cat-comision>Comisión ${formatMoney(s.monto_fijo_servicio)} fijo</span>`;
+    if (s.tipo_comision_servicio === 'PORCENTAJE') return `<span class="av-pill" data-cat-comision>Comisión ${Number(s.porcentaje_servicio)}%</span>`;
+    return '';
+}
+
 function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo) {
     const detalle = document.getElementById('catalogoDetalle');
     if (!detalle) return;
@@ -212,6 +219,7 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
                     <span class="av-pill">${escapeHtml(servicio.categoria)}</span>
                     <span class="av-pill ${servicio.activo ? 'av-pill--ok' : 'av-pill--neutral'}">${servicio.activo ? 'Activo' : 'Inactivo'}</span>
                     ${servicio.precio_variable ? '<span class="av-pill av-pill--warn">Precio variable</span>' : ''}
+                    ${pillComision(servicio)}
                 </div>
             </div>
             <div class="cat-detail-precio">
@@ -434,6 +442,43 @@ function toggleCategoriaNueva() {
     }
 }
 
+// Override de comisión por item (comision-tipo-mixto-encargado), admin-only
+// como el precio: a los demás roles el grupo ni se les muestra.
+function toggleCamposComision() {
+    const tipo = document.getElementById('catalogoTipoComision')?.value;
+    const monto = document.getElementById('catalogoMontoFijoComision');
+    const porcentaje = document.getElementById('catalogoPorcentajeComision');
+    if (monto) monto.hidden = tipo !== 'FIJO';
+    if (porcentaje) porcentaje.hidden = tipo !== 'PORCENTAJE';
+}
+
+function cargarComisionModal(s) {
+    const group = document.getElementById('catalogoComisionGroup');
+    if (group) group.hidden = getRole() !== 'admin';
+    document.getElementById('catalogoTipoComision').value = s?.tipo_comision_servicio || 'HEREDA';
+    document.getElementById('catalogoMontoFijoComision').value = s?.monto_fijo_servicio ?? '';
+    document.getElementById('catalogoPorcentajeComision').value = s?.porcentaje_servicio ?? '';
+    toggleCamposComision();
+}
+
+/** Campos de comisión del payload, o un string con el error. */
+function payloadComision() {
+    const tipo = document.getElementById('catalogoTipoComision').value;
+    const leer = (idInput) => {
+        const texto = document.getElementById(idInput).value.trim();
+        return texto === '' ? null : Number(texto);
+    };
+    const monto = tipo === 'FIJO' ? leer('catalogoMontoFijoComision') : null;
+    const porcentaje = tipo === 'PORCENTAJE' ? leer('catalogoPorcentajeComision') : null;
+    if (tipo === 'FIJO' && (monto === null || Number.isNaN(monto) || monto < 0)) {
+        return 'Indicá un monto fijo de comisión válido.';
+    }
+    if (tipo === 'PORCENTAJE' && (porcentaje === null || Number.isNaN(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
+        return 'El porcentaje de comisión tiene que estar entre 0 y 100.';
+    }
+    return { tipo_comision_servicio: tipo, monto_fijo_servicio: monto, porcentaje_servicio: porcentaje };
+}
+
 export async function abrirModalServicio(id = null) {
     document.getElementById('catalogoServicioId').value = '';
     document.getElementById('formCatalogoServicio').reset();
@@ -447,6 +492,7 @@ export async function abrirModalServicio(id = null) {
     if (precioInput) { precioInput.disabled = false; precioInput.classList.remove('is-locked'); }
     if (precioHint) precioHint.hidden = true;
     if (motivoGroup) motivoGroup.hidden = true;
+    cargarComisionModal(null);
 
     if (id) {
         try {
@@ -459,6 +505,7 @@ export async function abrirModalServicio(id = null) {
             document.getElementById('catalogoPrecioVariable').checked = s.precio_variable;
             document.getElementById('catalogoArea').value = s.area_id ? String(s.area_id) : '';
             document.getElementById('catalogoAdjunto').value = s.requiere_adjunto === true ? 'si' : (s.requiere_adjunto === false ? 'no' : '');
+            cargarComisionModal(s);
             gatePrecioInput({ inputId: 'catalogoPrecioRef', hintId: 'catalogoPrecioRefHint', motivoGroupId: 'catalogoMotivoGroup' });
         } catch (err) {
             showNotification('Error cargando servicio: ' + err.message, 'error');
@@ -494,6 +541,14 @@ export async function guardarServicio(e) {
     if (!areaGroup?.hidden) {
         const area = document.getElementById('catalogoArea').value;
         payload.area_id = area ? Number(area) : null;
+    }
+    if (!document.getElementById('catalogoComisionGroup')?.hidden) {
+        const comision = payloadComision();
+        if (typeof comision === 'string') {
+            showNotification(comision, 'warning');
+            return;
+        }
+        Object.assign(payload, comision);
     }
     try {
         if (id) {
@@ -533,6 +588,7 @@ export function init() {
     if (!_modalWired) {
         _modalWired = true;
         document.getElementById('catalogoCategoria')?.addEventListener('change', toggleCategoriaNueva);
+        document.getElementById('catalogoTipoComision')?.addEventListener('change', toggleCamposComision);
     }
     cargarCategoriasSelect();
     cargarCatalogo();

@@ -598,6 +598,15 @@ async function setPorcentajeEncargado(request, token, usuarioId, porcentaje) {
   });
 }
 
+/** PUT /api/comisiones/encargados/{id} { tipo_comision, monto_fijo, porcentaje }
+ *  (comision-tipo-mixto-encargado). Returns the raw response. */
+async function setComisionEncargado(request, token, usuarioId, { tipo_comision = null, monto_fijo = null, porcentaje = null } = {}) {
+  return request.put(`/api/comisiones/encargados/${usuarioId}`, {
+    headers: authHeaders(token),
+    data: { tipo_comision, monto_fijo, porcentaje },
+  });
+}
+
 /** GET /api/comisiones/?encargado_id=&desde=&hasta=. */
 async function controlComisiones(request, token, encargadoId, desde = null, hasta = null) {
   const params = { encargado_id: encargadoId };
@@ -1253,6 +1262,7 @@ module.exports = {
   buscarItemsCaja,
   setPorcentajeDefecto,
   setPorcentajeEncargado,
+  setComisionEncargado,
   controlComisiones,
   liquidarComisiones,
   facturarDesdeConsulta,

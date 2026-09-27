@@ -995,6 +995,25 @@ class RecetaServicioResponse(RecetaServicioBase):
 
 
 # ========== CATALOGO SERVICIO SCHEMAS ==========
+TIPOS_COMISION_SERVICIO = Literal["FIJO", "PORCENTAJE", "HEREDA"]
+
+
+def validar_comision_servicio(tipo: str, monto_fijo: Optional[Decimal], porcentaje: Optional[Decimal]):
+    """Coherencia del override de comisión de un item del catálogo
+    (comision-tipo-mixto-encargado). Devuelve (monto_fijo, porcentaje)
+    normalizados: el campo que el tipo no usa queda en None, así el CHECK
+    ck_catalogo_comision_campos nunca salta."""
+    if tipo == "FIJO":
+        if monto_fijo is None:
+            raise ValueError("monto_fijo_servicio es obligatorio para tipo FIJO")
+        return monto_fijo, None
+    if tipo == "PORCENTAJE":
+        if porcentaje is None:
+            raise ValueError("porcentaje_servicio es obligatorio para tipo PORCENTAJE")
+        return None, porcentaje
+    return None, None
+
+
 class CatalogoServicioBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=255)
     categoria: str = Field(..., min_length=1, max_length=100)
@@ -1011,6 +1030,17 @@ class CatalogoServicioCreate(CatalogoServicioBase):
     # valida el rol igual que ya hace con precio_ref.
     area_id: Optional[int] = Field(None, gt=0)
     requiere_adjunto: Optional[bool] = None
+    # Override de comisión (comision-tipo-mixto-encargado), admin-only.
+    tipo_comision_servicio: TIPOS_COMISION_SERVICIO = "HEREDA"
+    monto_fijo_servicio: Optional[Decimal] = Field(None, ge=0)
+    porcentaje_servicio: Optional[Decimal] = Field(None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validar_comision(self):
+        self.monto_fijo_servicio, self.porcentaje_servicio = validar_comision_servicio(
+            self.tipo_comision_servicio, self.monto_fijo_servicio, self.porcentaje_servicio
+        )
+        return self
 
 
 class CostoRecetaLinea(BaseModel):
@@ -1045,6 +1075,11 @@ class CatalogoServicioUpdate(BaseModel):
     # explícito o simplemente no mandando el campo (exclude_unset lo respeta).
     area_id: Optional[int] = Field(None, gt=0)
     requiere_adjunto: Optional[bool] = None
+    # Override de comisión. La coherencia contra lo que ya tiene la fila la
+    # resuelve el router (un PUT parcial puede traer solo el monto).
+    tipo_comision_servicio: Optional[TIPOS_COMISION_SERVICIO] = None
+    monto_fijo_servicio: Optional[Decimal] = Field(None, ge=0)
+    porcentaje_servicio: Optional[Decimal] = Field(None, ge=0, le=100)
 
 
 class CatalogoServicioResponse(CatalogoServicioBase):
@@ -1052,6 +1087,9 @@ class CatalogoServicioResponse(CatalogoServicioBase):
     created_at: datetime
     area_id: Optional[int] = None
     requiere_adjunto: Optional[bool] = None
+    tipo_comision_servicio: str = "HEREDA"
+    monto_fijo_servicio: Optional[Decimal] = None
+    porcentaje_servicio: Optional[Decimal] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -1140,16 +1178,47 @@ class ConfiguracionComisionResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class PorcentajeEncargadoUpdate(BaseModel):
-    """`porcentaje` null quita el porcentaje propio: el encargado vuelve al
-    de defecto. Es obligatorio mandarlo (aunque sea null)."""
-    porcentaje: Optional[Decimal] = Field(..., ge=0, le=100)
+class ComisionEncargadoUpdate(BaseModel):
+    """Comisión propia del encargado (comision-tipo-mixto-encargado).
+
+    Sin `tipo_comision` (o null) y sin porcentaje ni monto, se quita la
+    comisión propia y el encargado vuelve al porcentaje de defecto. Sin
+    `tipo_comision` pero con `porcentaje`, es PORCENTAJE: así el payload
+    anterior `{porcentaje: X | null}` sigue funcionando."""
+    tipo_comision: Optional[Literal["FIJO", "PORCENTAJE", "MIXTO"]] = None
+    monto_fijo: Optional[Decimal] = Field(None, ge=0)
+    porcentaje: Optional[Decimal] = Field(None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validar_campos(self):
+        if self.tipo_comision is None:
+            if self.monto_fijo is not None:
+                raise ValueError("tipo_comision es obligatorio si se manda monto_fijo")
+            if self.porcentaje is not None:
+                self.tipo_comision = "PORCENTAJE"
+            return self
+        if self.tipo_comision == "FIJO":
+            if self.monto_fijo is None:
+                raise ValueError("monto_fijo es obligatorio para tipo FIJO")
+            self.porcentaje = None
+        elif self.tipo_comision == "PORCENTAJE":
+            if self.porcentaje is None:
+                raise ValueError("porcentaje es obligatorio para tipo PORCENTAJE")
+            self.monto_fijo = None
+        elif self.monto_fijo is None or self.porcentaje is None:
+            raise ValueError("monto_fijo y porcentaje son obligatorios para tipo MIXTO")
+        return self
 
 
 class EncargadoComisionResponse(BaseModel):
+    """`tipo_comision` null: sin comisión propia, usa el porcentaje de
+    defecto. `porcentaje_efectivo` se mantiene por compatibilidad: es el
+    porcentaje que se aplica (0 si el tipo es FIJO)."""
     usuario_id: int
     username: str
     role: Optional[str] = None
+    tipo_comision: Optional[str] = None
+    monto_fijo: Optional[Decimal] = None
     porcentaje_propio: Optional[Decimal] = None
     porcentaje_efectivo: Decimal
 
@@ -1170,6 +1239,11 @@ class ComisionLineaResponse(BaseModel):
     monto_amivets: Decimal
     es_ajuste: bool = False
     liquidacion_id: Optional[int] = None
+    # Tipo y parámetros efectivos (comision-tipo-mixto-encargado): actuales
+    # en pendientes, congelados en liquidadas.
+    tipo_comision_usado: str = "PORCENTAJE"
+    monto_fijo_usado: Optional[Decimal] = None
+    porcentaje_usado: Optional[Decimal] = None
 
 
 class ComisionTotales(BaseModel):
@@ -1181,6 +1255,8 @@ class ComisionControlResponse(BaseModel):
     encargado_id: int
     username: str
     porcentaje_efectivo: Decimal
+    tipo_comision: Optional[str] = None
+    monto_fijo: Optional[Decimal] = None
     pendientes: List[ComisionLineaResponse] = []
     liquidadas: List[ComisionLineaResponse] = []
     totales_pendientes: ComisionTotales

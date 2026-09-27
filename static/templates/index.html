@@ -2179,7 +2179,7 @@
                                         <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
                                             <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Encargado</th>
                                             <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Rol</th>
-                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Porcentaje propio</th>
+                                            <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Comisión propia</th>
                                             <th style="padding: 0.6rem 0.75rem; text-align:left; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Aplica</th>
                                             <th style="padding: 0.6rem 0.75rem; text-align:right; font-size:0.8rem; text-transform:uppercase; color:var(--text-secondary);">Acción</th>
                                         </tr>
@@ -2742,6 +2742,16 @@
                         <option value="si">Obligatorio</option>
                         <option value="no">No hace falta</option>
                     </select>
+                </div>
+                <div class="form-group" id="catalogoComisionGroup" hidden>
+                    <label for="catalogoTipoComision">Comisión del encargado</label>
+                    <select id="catalogoTipoComision" style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md);">
+                        <option value="HEREDA">Como diga el encargado</option>
+                        <option value="FIJO">Monto fijo</option>
+                        <option value="PORCENTAJE">Porcentaje</option>
+                    </select>
+                    <input type="number" id="catalogoMontoFijoComision" min="0" step="0.01" placeholder="Monto fijo ($)" aria-label="Monto fijo de comisión" hidden style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md); margin-top:0.5rem;">
+                    <input type="number" id="catalogoPorcentajeComision" min="0" max="100" step="0.01" placeholder="Porcentaje (%)" aria-label="Porcentaje de comisión" hidden style="width:100%; padding:0.5rem; border:1px solid var(--border); border-radius:var(--radius-md); margin-top:0.5rem;">
                 </div>
                 <div class="form-group">
                     <label>Precio de Referencia ($)</label>

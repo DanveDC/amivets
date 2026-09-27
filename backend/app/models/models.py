@@ -924,19 +924,33 @@ class ConfiguracionComision(Base):
 
 
 class ComisionEncargado(Base):
-    """Porcentaje propio de un encargado; reemplaza al de defecto. Sin fila,
-    el encargado usa ConfiguracionComision.porcentaje_defecto."""
+    """Comision propia de un encargado; reemplaza al porcentaje de defecto.
+    Sin fila, el encargado usa ConfiguracionComision.porcentaje_defecto.
+
+    tipo_comision (comision-tipo-mixto-encargado): FIJO paga monto_fijo por
+    linea, PORCENTAJE paga porcentaje del subtotal, MIXTO paga ambos. El CHECK
+    exige exactamente los campos que usa cada tipo."""
     __tablename__ = "comision_encargados"
 
     id = Column(Integer, primary_key=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, unique=True, index=True)
-    porcentaje = Column(Numeric(5, 2), nullable=False)
+    tipo_comision = Column(String(20), nullable=False, default="PORCENTAJE", server_default="PORCENTAJE")
+    monto_fijo = Column(Numeric(10, 2), nullable=True)
+    porcentaje = Column(Numeric(5, 2), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     usuario = relationship("Usuario")
 
     __table_args__ = (
+        CheckConstraint("tipo_comision IN ('FIJO','PORCENTAJE','MIXTO')", name="ck_comision_encargado_tipo"),
+        CheckConstraint(
+            "(tipo_comision = 'FIJO' AND monto_fijo IS NOT NULL AND porcentaje IS NULL) OR "
+            "(tipo_comision = 'PORCENTAJE' AND porcentaje IS NOT NULL AND monto_fijo IS NULL) OR "
+            "(tipo_comision = 'MIXTO' AND monto_fijo IS NOT NULL AND porcentaje IS NOT NULL)",
+            name="ck_comision_encargado_campos",
+        ),
         CheckConstraint("porcentaje >= 0 AND porcentaje <= 100", name="ck_comision_encargado_rango"),
+        CheckConstraint("monto_fijo IS NULL OR monto_fijo >= 0", name="ck_comision_encargado_monto_fijo"),
     )
 
 
@@ -987,10 +1001,13 @@ class LiquidacionComisionDetalle(Base):
     descripcion = Column(String(255), nullable=True)
     fecha_cobro = Column(DateTime(timezone=True), nullable=True)
     subtotal = Column(Numeric(12, 2), nullable=False)
-    porcentaje = Column(Numeric(5, 2), nullable=False)
+    porcentaje = Column(Numeric(5, 2), nullable=False)  # 0 si el tipo fue FIJO
     monto_encargado = Column(Numeric(12, 2), nullable=False)
     monto_amivets = Column(Numeric(12, 2), nullable=False)
     es_ajuste = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Congelados al liquidar (comision-tipo-mixto-encargado).
+    tipo_comision = Column(String(20), nullable=False, default="PORCENTAJE", server_default="PORCENTAJE")
+    monto_fijo = Column(Numeric(10, 2), nullable=True)
 
     liquidacion = relationship("LiquidacionComision", back_populates="detalles")
 
@@ -1247,6 +1264,23 @@ class CatalogoServicio(Base):
     # AreaServicio.requiere_adjunto; sin area, no exige. La cascada se evalua en
     # la transicion EN_PROCESO -> EJECUTADO.
     requiere_adjunto = Column(Boolean, nullable=True)
+
+    # Override de comision por item (comision-tipo-mixto-encargado). HEREDA usa
+    # la comision del encargado; FIJO/PORCENTAJE la reemplazan para este item.
+    tipo_comision_servicio = Column(String(20), nullable=False, default="HEREDA", server_default="HEREDA")
+    monto_fijo_servicio = Column(Numeric(10, 2), nullable=True)
+    porcentaje_servicio = Column(Numeric(5, 2), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "(tipo_comision_servicio = 'HEREDA' AND monto_fijo_servicio IS NULL AND porcentaje_servicio IS NULL) OR "
+            "(tipo_comision_servicio = 'FIJO' AND monto_fijo_servicio IS NOT NULL AND monto_fijo_servicio >= 0 "
+            "AND porcentaje_servicio IS NULL) OR "
+            "(tipo_comision_servicio = 'PORCENTAJE' AND porcentaje_servicio IS NOT NULL "
+            "AND porcentaje_servicio >= 0 AND porcentaje_servicio <= 100 AND monto_fijo_servicio IS NULL)",
+            name="ck_catalogo_comision_campos",
+        ),
+    )
 
     # Materiales que consume este servicio (receta / BOM). Tarea 07, slice A.
     recetas = relationship(
