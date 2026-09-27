@@ -437,12 +437,30 @@ class ServicioConsulta(Base):
     # propio (ver routers/servicios.py::tomar_servicio).
     asignado_at = Column(DateTime(timezone=True), nullable=True)
     ejecutado_at = Column(DateTime(timezone=True), nullable=True)
+    # Liberación de la toma (toma-exclusiva-servicio-gestor): quién y cuándo
+    # devolvió el servicio a ASIGNADO/asignado_a_id=NULL. No se limpia al
+    # volver a tomarse -- queda como auditoría de la última liberación, el
+    # estado EN_PROCESO + asignado_a_id ya identifica la toma vigente (mismo
+    # criterio que asignado_at arriba, no hace falta otro timestamp para eso).
+    liberado_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    liberado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    # A QUIEN SE DESPACHO el servicio (asignacion-directa-servicio-gestor,
+    # decision 1) -- distinto de asignado_a_id, que sigue significando QUIEN LO
+    # TOMO. Se llena solo en orden_service.confirmar_servicios cuando quien
+    # confirma elige un gestor puntual para esa linea; con area sin gestor
+    # elegido queda NULL (el despacho actual "al area"). No se limpia al tomar
+    # (sirve para el badge "Asignado a" mientras esta EN_PROCESO); se limpia al
+    # liberar (routers/servicios.py::liberar_servicio), porque el servicio
+    # liberado vuelve a estar disponible para cualquier gestor del area.
+    asignado_directo_a_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)
 
     orden = relationship("OrdenServicio", back_populates="servicios")
     consulta = relationship("Consulta", back_populates="servicios")
     mascota = relationship("Mascota")
     area = relationship("AreaServicio")
     asignado_a = relationship("Usuario", foreign_keys=[asignado_a_id])
+    liberado_por = relationship("Usuario", foreign_keys=[liberado_por_id])
+    asignado_directo_a = relationship("Usuario", foreign_keys=[asignado_directo_a_id])
     adjuntos = relationship("Adjunto", back_populates="servicio")
     catalogo_servicio = relationship("CatalogoServicio", back_populates="servicios_consulta")
     # Movimientos de stock generados por aplicar este servicio (slice B lo escribe).
@@ -522,7 +540,8 @@ class Notificacion(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     destinatario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
-    # SERVICIO_ASIGNADO | SERVICIO_EJECUTADO | ORDEN_ASIGNADA | SERVICIO_SIN_GESTOR
+    # SERVICIO_ASIGNADO | SERVICIO_EJECUTADO | ORDEN_ASIGNADA | SERVICIO_SIN_GESTOR |
+    # SERVICIO_TOMADO | SERVICIO_LIBERADO
     tipo = Column(String(40), nullable=False)
     titulo = Column(String(160), nullable=False)
     cuerpo = Column(Text, nullable=True)

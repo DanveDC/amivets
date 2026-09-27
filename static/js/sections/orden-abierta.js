@@ -28,7 +28,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
-import { money, totalServicios } from '../core/format.js';
+import { money, totalServicios, ESTADO_TOMA_PILL, estadoTomaLabel } from '../core/format.js';
 import { showSection } from '../core/router.js';
 import { getRole } from '../core/session.js';
 
@@ -65,6 +65,24 @@ let _svcSeleccionado = null;
 let _consumos = [];
 let _wired = false;
 
+// Candidatos para el selector "elegir gestor" al confirmar (asignacion-
+// directa-servicio-gestor, decisión 9): cache por area_id, una request por
+// área distinta durante el pintado de la orden abierta — se reinicia en cada
+// pintarServicios porque distintas órdenes pueden reflejar altas/bajas de
+// gestores entre una y otra.
+let _gestoresPorArea = new Map();
+
+async function cargarGestoresActivosDeArea(areaId) {
+    if (_gestoresPorArea.has(areaId)) return _gestoresPorArea.get(areaId);
+    try {
+        const gestores = await fetchAPI(`/areas/${areaId}/gestores-activos`);
+        _gestoresPorArea.set(areaId, gestores || []);
+    } catch (_) {
+        _gestoresPorArea.set(areaId, []);
+    }
+    return _gestoresPorArea.get(areaId);
+}
+
 /** Abre la orden `ordenId`: navega a sec-orden-abierta y carga sus datos. */
 export const abrirOrden = async (ordenId) => {
     _ordenId = ordenId;
@@ -81,7 +99,7 @@ async function cargarOrden() {
         _ordenData = orden;
         pintarHeader(orden);
         pintarPaciente(orden);
-        pintarServicios(orden);
+        await pintarServicios(orden);
         pintarResumen(orden);
         pintarMeta(orden);
         pintarAcciones(orden);
@@ -123,7 +141,7 @@ function pintarPaciente(orden) {
     document.getElementById('btnOaAnexarInline')?.addEventListener('click', abrirAnexarPanel);
 }
 
-function pintarServicios(orden) {
+async function pintarServicios(orden) {
     const body = document.getElementById('oaServiciosBody');
     const count = document.getElementById('oaServiciosCount');
     const resumen = document.getElementById('oaServiciosResumen');
@@ -139,7 +157,31 @@ function pintarServicios(orden) {
         body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Todavía no se anexó ningún servicio.</td></tr>';
         return;
     }
-    body.innerHTML = servicios.map(s => `
+
+    // Elegir gestor al confirmar (asignacion-directa-servicio-gestor,
+    // decisión 9): solo admin/veterinario (los que confirman) y solo para
+    // líneas SOLICITADO con área — antes de despacharlas es cuando tiene
+    // sentido elegir a quién. Se precargan los gestores activos de cada área
+    // distinta antes de pintar, para no armar el <select> a medio llenar.
+    _gestoresPorArea = new Map();
+    const puedeAsignar = ['admin', 'veterinario'].includes(getRole());
+    if (puedeAsignar) {
+        const areaIds = [...new Set(
+            servicios.filter(s => s.estado === 'SOLICITADO' && s.area_id).map(s => s.area_id)
+        )];
+        await Promise.all(areaIds.map(cargarGestoresActivosDeArea));
+    }
+
+    body.innerHTML = servicios.map(s => {
+        const puedeElegirGestor = puedeAsignar && s.estado === 'SOLICITADO' && s.area_id;
+        const ultimaColumna = puedeElegirGestor
+            ? `<label class="av-visually-hidden" for="oaAsignar-${s.id}">Gestor para ${escapeHtml(s.nombre_servicio || 'este servicio')}</label>
+               <select id="oaAsignar-${s.id}" data-asignar-servicio="${s.id}" style="max-width:170px; padding:2px 6px; border:1px solid var(--border); border-radius:6px; font:inherit;">
+                   <option value="">Cualquier gestor del área</option>
+                   ${(_gestoresPorArea.get(s.area_id) || []).map(g => `<option value="${g.usuario_id}">${escapeHtml(g.username)}</option>`).join('')}
+               </select>`
+            : (s.estado_toma ? `<span class="av-pill ${ESTADO_TOMA_PILL[s.estado_toma] || 'av-pill--neutral'}">${escapeHtml(estadoTomaLabel(s))}</span>` : '');
+        return `
         <tr>
             <td><span class="oa-service-name">${escapeHtml(s.nombre_servicio || '—')}</span></td>
             <td><span class="av-pill av-pill--info">${escapeHtml(s.tipo_servicio || '—')}</span></td>
@@ -147,8 +189,9 @@ function pintarServicios(orden) {
             <td class="num" style="font-weight:500;">${money(s.precio_unitario)}</td>
             <td class="num" style="font-weight:500;">${money((s.cantidad || 0) * (s.precio_unitario || 0))}</td>
             <td><span class="av-pill ${ESTADO_PILL_SRV[s.estado] || 'av-pill--neutral'}">${ESTADO_LABEL_SRV[s.estado] || s.estado}</span></td>
-            <td></td>
-        </tr>`).join('');
+            <td>${ultimaColumna}</td>
+        </tr>`;
+    }).join('');
 }
 
 function pintarResumen(orden) {
@@ -232,8 +275,18 @@ function pintarAcciones(orden) {
 // ── acciones de ciclo de vida ────────────────────────────────────────────────
 
 async function confirmarServicios() {
+    // asignacion-directa-servicio-gestor, decisión 9: junta los <select
+    // data-asignar-servicio> con un gestor elegido; sin ninguno, manda el
+    // POST sin cuerpo como siempre (el front viejo, e2e/helpers.js::
+    // confirmarServiciosOrden, sigue funcionando igual del lado del backend).
+    const asignaciones = Array.from(document.querySelectorAll('[data-asignar-servicio]'))
+        .map(sel => ({ servicio_id: Number(sel.dataset.asignarServicio), gestor_id: Number(sel.value) }))
+        .filter(a => a.gestor_id > 0);
     try {
-        await fetchAPI(`/ordenes/${_ordenId}/confirmar`, { method: 'POST' });
+        await fetchAPI(`/ordenes/${_ordenId}/confirmar`, {
+            method: 'POST',
+            ...(asignaciones.length ? { body: JSON.stringify({ asignaciones }) } : {}),
+        });
         showNotification('Servicios confirmados.', 'success');
         await cargarOrden();
     } catch (e) {

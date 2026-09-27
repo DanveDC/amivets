@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.models.models import CatalogoServicio, Consulta, OrdenServicio, ServicioConsulta, Usuario
+from app.models.models import CatalogoServicio, Consulta, GestorArea, OrdenServicio, ServicioConsulta, Usuario
 from app.services import consumo_service, notificacion_service
 
 # La orden todavia recibe trabajo: se le pueden anexar servicios y abrir la
@@ -41,9 +41,26 @@ def _ahora() -> datetime:
 # ---------------------------------------------------------------------------
 # Lecturas
 # ---------------------------------------------------------------------------
-def obtener_orden(db: Session, orden_id: int) -> OrdenServicio:
-    """Trae la orden o levanta 404. No valida estado."""
-    orden = db.query(OrdenServicio).filter(OrdenServicio.id == orden_id).first()
+def obtener_orden(db: Session, orden_id: int, *, con_asignados: bool = False) -> OrdenServicio:
+    """Trae la orden o levanta 404. No valida estado.
+
+    `con_asignados=True` (toma-exclusiva-servicio-gestor, decisión 6): eager
+    -load de `servicios[].asignado_a` con `selectinload` -- lo pide GET
+    /api/ordenes/{id} para exponer `ServicioConsultaResponse.asignado_a_nombre`
+    sin un N+1 por servicio (el Panel del día hace un GET por orden, y cada
+    orden puede tener varios servicios despachados). Suma `asignado_directo_a`
+    (asignacion-directa-servicio-gestor, decisión 1): mismo motivo, para
+    `asignado_directo_a_nombre`. El resto de los call sites (cerrar, anular,
+    confirmar, anexar, etc.) no leen esos nombres y siguen sin el eager load,
+    que no les aporta nada.
+    """
+    q = db.query(OrdenServicio)
+    if con_asignados:
+        q = q.options(
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_a),
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_directo_a),
+        )
+    orden = q.filter(OrdenServicio.id == orden_id).first()
     if not orden:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
     return orden
@@ -137,23 +154,47 @@ def tomar_orden(db: Session, orden: OrdenServicio, current_user: Usuario) -> Ord
     return orden
 
 
-def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario) -> tuple:
+def confirmar_servicios(
+    db: Session,
+    orden: OrdenServicio,
+    current_user: Usuario,
+    asignaciones: Optional[list] = None,
+) -> tuple:
     """Despacha los servicios SOLICITADO de la orden (decision 4, fila 9 de la
     matriz de permisos): es el paso "el veterinario confirma los servicios"
     del diagrama de estados.
 
     - Si el item tiene area de ejecucion (area_id no nulo, snapshot tomado al
-      anexar): pasa a ASIGNADO y se notifica a cada gestor activo del area
-      (Notificacion tipo SERVICIO_ASIGNADO). Si el area no tiene NINGUN
-      gestor activo, se notifica a los admins (SERVICIO_SIN_GESTOR) en su
-      lugar y la linea se suma a `advertencias` (decision 5, defensas 1 y 2)
-      -- ver notificacion_service.notificar_asignacion. Queda a la espera de
-      que un gestor lo tome (POST /api/servicios/{id}/tomar, etapa 5).
+      anexar): pasa a ASIGNADO. Si quien confirma eligió un gestor puntual
+      para ESE servicio (`asignaciones`, asignacion-directa-servicio-gestor,
+      decisión 2), `asignado_directo_a_id` queda seteado y
+      `notificar_asignacion` avisa solo a ese gestor; sin entrada, se notifica
+      a cada gestor activo del area (Notificacion tipo SERVICIO_ASIGNADO),
+      igual que siempre. Si el area no tiene NINGUN gestor activo (solo puede
+      pasar sin asignación directa: un gestor elegido ya se validó activo), se
+      notifica a los admins (SERVICIO_SIN_GESTOR) en su lugar y la linea se
+      suma a `advertencias` (decision 5, defensas 1 y 2) -- ver
+      notificacion_service.notificar_asignacion. Queda a la espera de que un
+      gestor lo tome (POST /api/servicios/{id}/tomar, etapa 5).
     - Si no tiene area (atajo sin despacho de la decision 4 -- CONSULTA,
       INSUMO, o cualquier item de catalogo con area_id NULL): pasa directo a
       EJECUTADO y dispara consumo_service.consumir_para_servicio, exactamente
       como hace actualizar_servicio_impl al cruzar hacia un estado consumido.
       No se notifica nada acá: no hay area, no hay gestor a quien avisarle.
+
+    `asignaciones` (asignacion-directa-servicio-gestor, decisión 2): lista de
+    pares `(servicio_id, gestor_id)` armada por el router desde
+    `ConfirmarServiciosRequest.asignaciones`. Se valida ACÁ, antes de mutar
+    nada (después de `asegurar_recibe_trabajo` y de la query de `solicitados`
+    de abajo), en tres pasos; cualquiera de los tres deja la orden y sus
+    servicios sin cambios (422, nada de esto commitea):
+      1. Ningún `servicio_id` repetido en la lista.
+      2. Cada `servicio_id` tiene que ser uno de los `solicitados` con
+         `area_id` de ESTA orden.
+      3. El `gestor_id` elegido tiene que tener `GestorArea` en el área de
+         ESE servicio y estar activo (`Usuario.is_active`) -- una sola query
+         por lote (join `GestorArea`/`Usuario` filtrada por los pares
+         pedidos), no una por servicio.
 
     Idempotente: si no queda ninguna linea en SOLICITADO no es un error --
     confirmar una orden ya confirmada es un 200 sin cambios, no un 409. No hay
@@ -181,6 +222,53 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
         )
         .all()
     )
+    por_id = {s.id: s for s in solicitados}
+
+    pares = asignaciones or []
+    asignaciones_dict = {}
+    if pares:
+        servicio_ids_pedidos = [sid for sid, _ in pares]
+        if len(servicio_ids_pedidos) != len(set(servicio_ids_pedidos)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No se puede indicar el mismo servicio más de una vez al confirmar.",
+            )
+
+        for servicio_id, gestor_id in pares:
+            servicio_pedido = por_id.get(servicio_id)
+            if servicio_pedido is None or servicio_pedido.area_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"El servicio {servicio_id} no es un servicio SOLICITADO "
+                        "con área de esta orden."
+                    ),
+                )
+
+        pares_area_gestor = {(por_id[sid].area_id, gestor_id) for sid, gestor_id in pares}
+        areas_pedidas = {area_id for area_id, _ in pares_area_gestor}
+        gestores_pedidos = {gestor_id for _, gestor_id in pares_area_gestor}
+        validos = set(
+            db.query(GestorArea.area_id, GestorArea.usuario_id)
+            .join(Usuario, Usuario.id == GestorArea.usuario_id)
+            .filter(
+                GestorArea.area_id.in_(areas_pedidas),
+                GestorArea.usuario_id.in_(gestores_pedidos),
+                Usuario.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+        for servicio_id, gestor_id in pares:
+            par = (por_id[servicio_id].area_id, gestor_id)
+            if par not in validos:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"El gestor {gestor_id} no gestiona el área del servicio "
+                        f"{servicio_id}, o su cuenta no está activa."
+                    ),
+                )
+            asignaciones_dict[servicio_id] = gestor_id
 
     ahora = _ahora()
     advertencias = []
@@ -194,6 +282,8 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
             # escribe ASIGNADO, así que este es el único punto que necesita
             # sellarlo.
             servicio.asignado_at = ahora
+            if servicio.id in asignaciones_dict:
+                servicio.asignado_directo_a_id = asignaciones_dict[servicio.id]
             advertencia = notificacion_service.notificar_asignacion(db, servicio)
             if advertencia:
                 advertencias.append(advertencia)

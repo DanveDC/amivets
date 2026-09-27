@@ -2101,6 +2101,18 @@ document.addEventListener('av:servicio-directo-creado', () => {
     }
 });
 
+// toma-exclusiva-servicio-gestor, decisión 3: panel del veterinario -- avisa
+// con un toast cuando un gestor toma o libera un servicio de una orden suya.
+// core/notificaciones.js emite este evento desde el mismo polling de la
+// campana (sin WebSockets); acá solo se muestra el aviso -- no hay una
+// pantalla propia de "mis órdenes" en este módulo para refrescar (esa vista
+// es el Panel del día, filtrado por veterinario_id, en sections/hoy.js).
+document.addEventListener('av:notificacion-empuje', (e) => {
+    const nf = e.detail;
+    if (!nf) return;
+    showNotification(nf.cuerpo || nf.titulo || 'Un servicio de tu orden cambió de estado.', 'info');
+});
+
 const buildClinicoForm = (type) => {
     // Shared select for Consultas
     const comboConsultas = `<div class="form-group">

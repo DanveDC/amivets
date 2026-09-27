@@ -231,7 +231,86 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
     # que dispara el consumo.
     advertencias: Optional[List[dict]] = None
+    # Toma exclusiva por gestor (toma-exclusiva-servicio-gestor, decisión 2):
+    # quién lo tomó y cuándo se liberó por última vez. asignado_a_id ya vive en
+    # el modelo desde la etapa 5 (despacho al área); no se exponía en la
+    # respuesta porque nada lo necesitaba hasta ahora.
+    asignado_a_id: Optional[int] = None
+    # Nombre del gestor/veterinario que tomó el servicio, para el badge "Tomada
+    # por <nombre>" del front (Panel del día, orden-abierta.js) sin que cada
+    # pantalla tenga que resolverlo por su cuenta contra /usuarios. `Usuario`
+    # no tiene nombre/apellido -- se usa `username`, mismo criterio que
+    # `OrdenServicioResponse.veterinario_nombre`.
+    asignado_a_nombre: Optional[str] = None
+    liberado_at: Optional[datetime] = None
+    # Asignación directa (asignacion-directa-servicio-gestor, decisión 8): a
+    # quién se DESPACHÓ el servicio al confirmar, distinto de asignado_a_id
+    # (quién lo TOMÓ). asignado_directo_a_nombre se resuelve en el mismo
+    # model_validator que asignado_a_nombre, mismo criterio (username).
+    asignado_directo_a_id: Optional[int] = None
+    asignado_directo_a_nombre: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    def _adjuntar_asignado_a_nombre(cls, data):
+        # Mismo patrón que OrdenServicioResponse._adjuntar_nombres: se resuelve
+        # acá para que el front no tenga que hacer una segunda llamada por
+        # cada servicio tomado.
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                asignado = getattr(data, 'asignado_a', None)
+                if asignado:
+                    data.asignado_a_nombre = asignado.username
+            except Exception:
+                pass
+            try:
+                asignado_directo = getattr(data, 'asignado_directo_a', None)
+                if asignado_directo:
+                    data.asignado_directo_a_nombre = asignado_directo.username
+            except Exception:
+                pass
+        return data
+
+    @computed_field
+    @property
+    def estado_toma(self) -> Optional[str]:
+        """Mapea estado + asignado_a_id + asignado_directo_a_id + liberado_at
+        a un estado de toma legible para el front (decisión 2 y decisión 8,
+        design.md). `@computed_field` (no `@property` sola) es obligatorio en
+        pydantic 2 para que esto se serialice en la respuesta -- una property
+        común no aparece en `model_dump`/JSON.
+
+        "asignada" (ASIGNADO + nadie lo tomó + hay asignación directa) se
+        evalúa ANTES que "liberada"/"disponible": un servicio recién
+        despachado directamente nunca pasó por liberar_servicio, así que
+        liberado_at siempre es NULL en ese caso, pero la distinción de origen
+        (asignado a alguien vs. al área) importa más que ese detalle."""
+        if self.estado in ("EJECUTADO", "FACTURADO"):
+            return "completada"
+        if self.estado == "EN_PROCESO" and self.asignado_a_id is not None:
+            return "tomada"
+        if self.estado == "ASIGNADO" and self.asignado_a_id is None:
+            if self.asignado_directo_a_id is not None:
+                return "asignada"
+            return "liberada" if self.liberado_at is not None else "disponible"
+        return None
+
+
+class AsignacionServicioGestor(BaseModel):
+    """Un par (servicio, gestor elegido) dentro del cuerpo de confirmar
+    (asignacion-directa-servicio-gestor, decisión 2)."""
+    servicio_id: int = Field(..., gt=0)
+    gestor_id: int = Field(..., gt=0)
+
+
+class ConfirmarServiciosRequest(BaseModel):
+    """Cuerpo opcional de `POST /api/ordenes/{id}/confirmar` (decisión 2,
+    design.md): por cada servicio `SOLICITADO` con área que el que confirma
+    quiera despachar a un gestor puntual, un par {servicio_id, gestor_id}. Un
+    servicio sin entrada acá sigue yendo "al área", como hoy. Lista vacía por
+    defecto para que un `POST` sin cuerpo (front viejo, `e2e/helpers.js::
+    confirmarServiciosOrden`) siga funcionando igual."""
+    asignaciones: List[AsignacionServicioGestor] = Field(default_factory=list)
 
 
 class ConsultaResponse(ConsultaBase):

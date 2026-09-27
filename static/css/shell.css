@@ -445,6 +445,12 @@
 .pd-table tbody tr:hover td { background: var(--surface-hover); }
 .pd-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .pd-order-link { font-weight: 500; color: var(--primary); }
+/* Fila expandible de servicios (toma-exclusiva-servicio-gestor, tarea 6.1):
+   no navega a ningún lado al hacer click, así que no hereda el cursor
+   pointer ni el hover de fila de .pd-table tbody tr. */
+.pd-table tbody tr.pd-order-services-row { cursor: default; }
+.pd-table tbody tr.pd-order-services-row:hover td { background: none; }
+.pd-order-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 4px; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ORDEN ABIERTA — sec-orden-abierta (tab:false, Decisión 3).

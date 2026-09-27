@@ -15,7 +15,7 @@
 
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
-import { money, totalServicios, fechaLargaEsVE } from '../core/format.js';
+import { money, totalServicios, fechaLargaEsVE, ESTADO_TOMA_PILL, estadoTomaLabel } from '../core/format.js';
 import { getRole, getUserId, whenReady } from '../core/session.js';
 import {
     verConsultaCompleta,
@@ -168,6 +168,11 @@ const renderSalaEspera = async () => {
 // ── órdenes de servicio del día ──────────────────────────────────────────────
 let _ordenesCache = [];
 let _filtroActual = 'todas';
+// Filas expandibles (toma-exclusiva-servicio-gestor, tarea 6.1): qué órdenes
+// tienen su detalle de servicios abierto. Colapsadas por defecto en cada
+// loadHoy(); se conserva entre cambios de filtro (pintarOrdenes() se llama de
+// nuevo ahí) para no cerrar lo que el usuario ya abrió.
+let _ordenesExpandidas = new Set();
 
 const FILTRO_ESTADOS = {
     todas: null,
@@ -176,17 +181,53 @@ const FILTRO_ESTADOS = {
     cerradas: ['CERRADA', 'ANULADA'],
 };
 
+// Una línea de servicio dentro de la fila expandida de la orden: nombre +
+// badge de estado_toma (backend schemas.py) -- "Tomada por <gestor>" cuando
+// hay `asignado_a_nombre` (mismo helper que usa orden-abierta.js, sin
+// duplicar el mapeo estado_toma -> etiqueta/clase).
+const filaServicioHtml = (s) => `
+    <div class="pd-order-service-row" style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--border);">
+        <span>${escapeHtml(s.nombre_servicio || '—')}</span>
+        ${s.estado_toma ? `<span class="av-pill ${ESTADO_TOMA_PILL[s.estado_toma] || 'av-pill--neutral'}">${escapeHtml(estadoTomaLabel(s))}</span>` : ''}
+    </div>`;
+
+// Fila oculta con el detalle de servicios de una orden (colapsada por
+// defecto). `o._servicios` ya viene cacheado desde cargarOrdenesConDetalle
+// (mismo fetch de detalle que ya se hacía para total/cantidad) -- no dispara
+// ningún request nuevo al expandir.
+const filaServiciosOrdenHtml = (o) => {
+    const expandida = _ordenesExpandidas.has(o.id);
+    let contenido;
+    if (o._servicios == null) {
+        contenido = '<p class="av-muted" style="padding:6px 4px; margin:0;">No se pudo cargar el detalle de servicios.</p>';
+    } else if (o._servicios.length === 0) {
+        contenido = '<p class="av-muted" style="padding:6px 4px; margin:0;">Sin servicios anexados.</p>';
+    } else {
+        contenido = o._servicios.map(filaServicioHtml).join('');
+    }
+    return `<tr class="pd-order-services-row" id="pdOrdenServicios-${o.id}" ${expandida ? '' : 'hidden'}>
+        <td></td><td colspan="7" style="padding:4px 12px 10px;">${contenido}</td>
+    </tr>`;
+};
+
 const pintarOrdenes = () => {
     const body = document.getElementById('pdOrdersBody');
     if (!body) return;
     const estados = FILTRO_ESTADOS[_filtroActual];
     const filtradas = estados ? _ordenesCache.filter(o => estados.includes(o.estado)) : _ordenesCache;
     if (filtradas.length === 0) {
-        body.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes en este filtro.</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:1.5rem;">No hay órdenes en este filtro.</td></tr>';
         return;
     }
-    body.innerHTML = filtradas.map(o => `
+    body.innerHTML = filtradas.map(o => {
+        const expandida = _ordenesExpandidas.has(o.id);
+        return `
         <tr data-orden-id="${o.id}">
+            <td>
+                <button type="button" class="pd-order-toggle" data-toggle-servicios="${o.id}" aria-expanded="${expandida}" aria-controls="pdOrdenServicios-${o.id}" aria-label="Ver servicios de la orden ${escapeHtml(o.numero)}" style="background:none; border:none; cursor:pointer; padding:2px; display:flex; color:var(--text-secondary);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="transition:transform .15s; transform:rotate(${expandida ? '90' : '0'}deg);"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </td>
             <td><span class="num pd-order-link">${o.numero}</span></td>
             <td style="font-weight:500;">${o.mascota_nombre || '—'}</td>
             <td style="color:var(--text-secondary);">${o.propietario_nombre || '—'}</td>
@@ -194,9 +235,20 @@ const pintarOrdenes = () => {
             <td class="num" style="color:var(--text-secondary);">${o._serviciosCount ?? '—'}</td>
             <td class="num" style="font-weight:500;">${o._total != null ? money(o._total) : '—'}</td>
             <td><span class="av-pill ${ESTADO_PILL[o.estado] || 'av-pill--neutral'}">${ESTADO_LABEL[o.estado] || o.estado}</span></td>
-        </tr>`).join('');
+        </tr>${filaServiciosOrdenHtml(o)}`;
+    }).join('');
     body.querySelectorAll('tr[data-orden-id]').forEach(tr => {
         tr.addEventListener('click', () => abrirOrden(Number(tr.dataset.ordenId)));
+    });
+    // Toggle separado del click de la fila (abre la orden): stopPropagation
+    // para que no dispare abrirOrden() además de expandir/colapsar.
+    body.querySelectorAll('[data-toggle-servicios]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = Number(btn.dataset.toggleServicios);
+            if (_ordenesExpandidas.has(id)) _ordenesExpandidas.delete(id); else _ordenesExpandidas.add(id);
+            pintarOrdenes();
+        });
     });
 };
 
@@ -212,21 +264,29 @@ const pintarOrdenes = () => {
 // los demás (regresión de alcance de datos vs. la pantalla vieja).
 const cargarOrdenesConDetalle = async () => {
     const body = document.getElementById('pdOrdersBody');
-    if (body) body.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
+    if (body) body.innerHTML = '<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Cargando…</td></tr>';
     try {
         const soloMias = getRole() === 'veterinario' && getUserId();
         const filtroVet = soloMias ? `&veterinario_id=${getUserId()}` : '';
         const lista = await fetchAPI(`/ordenes/?estado=ABIERTA,EN_ATENCION,CERRADA&limit=100${filtroVet}`);
         const ordenes = Array.isArray(lista) ? lista : [];
         // N+1 documentado (ver cabecera del archivo): el listado no trae
-        // total ni cantidad de servicios, sólo el detalle por id.
+        // total ni cantidad de servicios, sólo el detalle por id. La fila
+        // expandible de servicios (tarea 6.1, toma-exclusiva-servicio-gestor)
+        // reusa este mismo detalle -- `_servicios` ya incluye `estado_toma` y
+        // `asignado_a_nombre` (schemas.py), no se pide nada más al expandir.
         const detalles = await Promise.all(ordenes.map(o => fetchAPI(`/ordenes/${o.id}`).catch(() => null)));
         return ordenes.map((o, i) => {
             const d = detalles[i];
-            return { ...o, _total: d ? totalServicios(d.servicios) : null, _serviciosCount: d ? countServicios(d.servicios) : null };
+            return {
+                ...o,
+                _total: d ? totalServicios(d.servicios) : null,
+                _serviciosCount: d ? countServicios(d.servicios) : null,
+                _servicios: d ? (d.servicios || []).filter(s => !s.is_deleted) : null,
+            };
         });
     } catch (e) {
-        if (body) body.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent); padding:1.5rem;">Error cargando órdenes: ${e.message}</td></tr>`;
+        if (body) body.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--accent); padding:1.5rem;">Error cargando órdenes: ${e.message}</td></tr>`;
         const cobrar = document.getElementById('pdKpiCobrar');
         if (cobrar) cobrar.textContent = '—';
         return [];
@@ -260,6 +320,7 @@ const pintarHeader = () => {
 
 export const loadHoy = async () => {
     _mascotaCache = null; // refrescar nombres cada vez que se entra al panel
+    _ordenesExpandidas = new Set(); // colapsadas por defecto en cada entrada al panel
     pintarHeader();
     wireFiltros();
     const salaP = renderSalaEspera().then(renderKpiSala);

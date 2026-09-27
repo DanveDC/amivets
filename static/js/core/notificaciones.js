@@ -31,14 +31,36 @@ let historyHasMore = false;
 // lista corta de no leídas.
 let listToken = 0;
 
+// toma-exclusiva-servicio-gestor, decisión 3: sin WebSockets -- se apoya en
+// este mismo polling (cada 60s) para que consultorio.js (panel del
+// veterinario) se entere de un SERVICIO_TOMADO/SERVICIO_LIBERADO sin abrir un
+// canal nuevo. `_vistosEmpuje` evita reemitir el mismo aviso en cada poll (la
+// notificación sigue no leída hasta que el usuario la abre) y la primera
+// carga solo siembra el set -- si no, cada login con avisos viejos sin leer
+// dispara un toast por cada uno.
+const TIPOS_EMPUJE = ['SERVICIO_TOMADO', 'SERVICIO_LIBERADO'];
+const _vistosEmpuje = new Set();
+let _primeraCargaBadge = true;
+
 async function refreshBadge() {
     const countEl = document.getElementById('notifCount');
     try {
         const no_leidas = await fetchAPI('/notificaciones/?no_leidas=true');
-        const n = Array.isArray(no_leidas) ? no_leidas.length : 0;
+        const lista = Array.isArray(no_leidas) ? no_leidas : [];
+        const n = lista.length;
         if (countEl) {
             countEl.textContent = String(n);
             countEl.hidden = n === 0;
+        }
+        const empuje = lista.filter(nf => TIPOS_EMPUJE.includes(nf.tipo));
+        if (_primeraCargaBadge) {
+            empuje.forEach(nf => _vistosEmpuje.add(nf.id));
+            _primeraCargaBadge = false;
+        } else {
+            empuje.filter(nf => !_vistosEmpuje.has(nf.id)).forEach(nf => {
+                _vistosEmpuje.add(nf.id);
+                document.dispatchEvent(new CustomEvent('av:notificacion-empuje', { detail: nf }));
+            });
         }
     } catch (_) {
         /* la campana es informativa: si falla, no rompe nada */

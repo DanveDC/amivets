@@ -26,6 +26,37 @@ export const totalServicios = (servicios) =>
         .filter(s => !s.is_deleted)
         .reduce((acc, s) => acc + (s.cantidad || 0) * (s.precio_unitario || 0), 0);
 
+/** Toma exclusiva por gestor (toma-exclusiva-servicio-gestor, decisiones 2 y
+ * 6; asignacion-directa-servicio-gestor, decisiones 8 y 9): clase `av-pill` y
+ * etiqueta legible de `servicio.estado_toma`, compartidas entre
+ * orden-abierta.js y hoy.js (antes duplicadas cada una por su lado).
+ * "tomada" suma el nombre de quien lo tomó (`asignado_a_nombre`,
+ * `schemas.py::ServicioConsultaResponse`) cuando el backend lo manda, y
+ * distingue si ese "quien lo tomó" es el mismo al que se lo despacharon
+ * directamente (`asignado_directo_a_id`) — sigue mostrando "Asignado a"
+ * porque para el usuario es la misma asignación, ahora en proceso. "asignada"
+ * es el caso ASIGNADO con asignación directa que todavía nadie tomó. */
+export const ESTADO_TOMA_PILL = {
+    disponible: 'av-pill--ok', tomada: 'av-pill--info',
+    completada: 'av-pill--neutral', liberada: 'av-pill--warn',
+    asignada: 'av-pill--info',
+};
+
+export const estadoTomaLabel = (servicio) => {
+    switch (servicio?.estado_toma) {
+        case 'disponible': return 'Disponible';
+        case 'asignada': return servicio.asignado_directo_a_nombre ? `Asignado a ${servicio.asignado_directo_a_nombre}` : 'Asignado';
+        case 'tomada':
+            if (servicio.asignado_directo_a_id != null && servicio.asignado_directo_a_id === servicio.asignado_a_id) {
+                return `Asignado a ${servicio.asignado_a_nombre} · en proceso`;
+            }
+            return servicio.asignado_a_nombre ? `Tomada por ${servicio.asignado_a_nombre}` : 'Tomada';
+        case 'completada': return 'Completada';
+        case 'liberada': return 'Liberada';
+        default: return '';
+    }
+};
+
 /** Fecha larga en es-VE con mayúscula inicial, ej. "Lunes 21 de septiembre". */
 export const fechaLargaEsVE = (date = new Date()) => {
     const fecha = date.toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long' });

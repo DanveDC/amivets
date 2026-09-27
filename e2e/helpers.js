@@ -503,15 +503,30 @@ async function anexarServicioOrden(request, ordenId, overrides = {}, token = nul
  * of status — callers check `.status()`-sensitive assertions themselves via
  * the raw response when needed; this helper is for the happy path. Throws on
  * rejection.
+ *
+ * `asignaciones` (asignacion-directa-servicio-gestor, decisión 2): array
+ * opcional de `{servicio_id, gestor_id}`. Sin ella (el default), el `POST` va
+ * SIN CUERPO -- mismo request que antes de este change, para no romper los
+ * ~10 call sites existentes que ya usan este helper.
  */
-async function confirmarServiciosOrden(request, ordenId, token = null) {
+async function confirmarServiciosOrden(request, ordenId, token = null, asignaciones = null) {
   const res = await request.post(`/api/ordenes/${ordenId}/confirmar`, {
     headers: token ? authHeaders(token) : {},
+    ...(asignaciones ? { data: { asignaciones } } : {}),
   });
   if (!res.ok()) {
     throw new Error(
       `[amivets-e2e] Failed to confirmar servicios of orden ${ordenId}: ${res.status()} ${await res.text()}`
     );
+  }
+  return res.json();
+}
+
+/** GET /api/areas/{id}/gestores-activos. Throws on rejection. */
+async function listarGestoresActivos(request, areaId, token) {
+  const res = await request.get(`/api/areas/${areaId}/gestores-activos`, { headers: authHeaders(token) });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to list gestores activos of área ${areaId}: ${res.status()} ${await res.text()}`);
   }
   return res.json();
 }
@@ -765,6 +780,72 @@ async function createTestGestor(request, adminToken, overrides = {}) {
  * on `.status()` themselves, since several specs deliberately expect 403/409. */
 async function tomarServicio(request, servicioId, token) {
   return request.post(`/api/servicios/${servicioId}/tomar`, { headers: authHeaders(token) });
+}
+
+/**
+ * Limpieza de FK antes de borrar a gestores/veterinarios de prueba creados
+ * por un `describe.serial` de despacho (toma-exclusiva-servicio-gestor,
+ * hallazgo de revisión: sin esto, `deleteTestUser` filtraba el usuario en
+ * silencio). Compartida por `toma-exclusiva-servicio-gestor.spec.js` y
+ * `asignacion-directa-servicio-gestor.spec.js` (asignacion-directa-servicio-
+ * gestor, "Working-tree context"): las dos crean gestores Y un veterinario de
+ * prueba referenciados por FK SIN `ondelete` desde tablas que ningún endpoint
+ * limpia en todos los estados posibles:
+ *   - `servicios_consulta.asignado_a_id` / `.liberado_por_id` / `.
+ *     asignado_directo_a_id` (esta última, asignacion-directa-servicio-
+ *     gestor): no hay endpoint que las limpie en todos los estados posibles
+ *     (p.ej. un servicio EJECUTADO, o uno ya ASIGNADO con `liberado_por_id`
+ *     histórico) -- `/liberar` solo actúa sobre EN_PROCESO, y una asignación
+ *     directa que nadie tomó tampoco pasa por ahí.
+ *   - `ordenes_servicio.veterinario_id` (nullable) / `.abierta_por_id` (NOT
+ *     NULL, se reasigna al admin en vez de limpiarse) (hallazgo de esta
+ *     revisión, asignacion-directa-servicio-gestor: cada `createTestOrden`
+ *     con `veterinarioId` de estas dos unidades deja al veterinario de
+ *     prueba enganchado a TODAS las órdenes que abrió, y no hay endpoint que
+ *     desvincule una orden de su veterinario).
+ *   - `notificaciones.destinatario_id`: cada `confirmarServiciosOrden` /
+ *     `tomarServicio` de estas unidades les manda notificaciones (fan-out en
+ *     escritura, notificacion_service.py) y no existe un DELETE de
+ *     notificaciones.
+ *   - `gestor_area.usuario_id`: `agregarGestorArea` los deja de alta en el
+ *     área de prueba; `desactivarTestArea` desactiva el ÁREA, no borra la
+ *     fila de membresía del gestor.
+ * Al borrar el usuario, `usuarios.py::eliminar_usuario` hace `db.delete()`
+ * (hard delete real, a diferencia del resto del dominio que es soft-delete)
+ * y cualquiera de estas filas viola la FK: 409 que `deleteTestUser` traga a
+ * propósito (best-effort), y el usuario queda huérfano para siempre.
+ *
+ * Se resuelve a nivel de BD (no del modelo: son columnas de auditoría/
+ * relación que deben seguir sin `ondelete` para el resto del dominio) porque
+ * no existe un endpoint que las limpie fuera de tomar/liberar/confirmar/abrir
+ * orden. Acotado por ID: como los usuarios pasados son recién creados en el
+ * `beforeAll` de cada spec, filtrar por su ID nunca puede tocar una fila de
+ * otro spec. Best-effort: si el entorno no tiene Docker (CI sin acceso al
+ * daemon), el afterAll sigue igual y el leak conocido persiste, sin romper
+ * la corrida.
+ */
+function limpiarReferenciasDeGestor(...usuarioIds) {
+  const ids = usuarioIds.filter(Boolean);
+  if (!ids.length) return;
+  const { execFileSync } = require('child_process');
+  const lista = ids.join(',');
+  try {
+    execFileSync('docker', [
+      'exec', 'veterinaria_db', 'psql', '-U', 'vetuser', '-d', 'veterinaria_db', '-c',
+      `UPDATE servicios_consulta SET asignado_a_id = NULL WHERE asignado_a_id IN (${lista}); ` +
+      `UPDATE servicios_consulta SET liberado_por_id = NULL WHERE liberado_por_id IN (${lista}); ` +
+      `UPDATE servicios_consulta SET asignado_directo_a_id = NULL WHERE asignado_directo_a_id IN (${lista}); ` +
+      `UPDATE ordenes_servicio SET veterinario_id = NULL WHERE veterinario_id IN (${lista}); ` +
+      // abierta_por_id es NOT NULL (a diferencia de veterinario_id): no se
+      // puede limpiar a NULL, se reasigna al admin real (cuenta seed, nunca
+      // se borra) para no violar esa constraint.
+      `UPDATE ordenes_servicio SET abierta_por_id = (SELECT id FROM usuarios WHERE username = 'admin') WHERE abierta_por_id IN (${lista}); ` +
+      `DELETE FROM notificaciones WHERE destinatario_id IN (${lista}); ` +
+      `DELETE FROM gestor_area WHERE usuario_id IN (${lista});`,
+    ], { stdio: 'ignore' });
+  } catch (_) {
+    // best-effort cleanup, ver comentario de arriba.
+  }
 }
 
 /** GET /api/servicios/bandeja?area_id=&usuario_id=. Throws on rejection. */
@@ -1165,6 +1246,7 @@ module.exports = {
   anexarServicioConsulta,
   anexarServicioOrden,
   confirmarServiciosOrden,
+  listarGestoresActivos,
   pendientesFacturarOrden,
   facturarOrden,
   ventaRapida,
@@ -1183,6 +1265,7 @@ module.exports = {
   agregarGestorArea,
   createTestGestor,
   tomarServicio,
+  limpiarReferenciasDeGestor,
   listarBandeja,
   listarNotificaciones,
   pdfBufferValido,

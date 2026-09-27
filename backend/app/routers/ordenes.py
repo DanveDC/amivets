@@ -13,7 +13,7 @@ la bandeja. Por eso `gestor` todavía no tiene acceso a ningún endpoint de acá
 from datetime import date, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
@@ -22,6 +22,7 @@ from app.models.models import Mascota, OrdenServicio, Propietario, ServicioConsu
 from app.routers.usuarios import get_current_admin, require_roles
 from app.routers.servicios import validar_tipo_servicio_por_rol
 from app.schemas.schemas import (
+    ConfirmarServiciosRequest,
     FacturaResponse,
     OrdenFacturarBody,
     OrdenServicioAnexarServicio,
@@ -222,7 +223,7 @@ def obtener_orden(
     _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """La orden completa: paciente, tutor, veterinario, estado y sus servicios."""
-    return orden_service.obtener_orden(db, orden_id)
+    return orden_service.obtener_orden(db, orden_id, con_asignados=True)
 
 
 @router.put("/{orden_id}/veterinario", response_model=OrdenServicioDetalleResponse)
@@ -321,26 +322,36 @@ def anexar_servicio_orden(
 @router.post("/{orden_id}/confirmar", response_model=OrdenServicioDetalleResponse)
 def confirmar_servicios(
     orden_id: int,
+    # Cuerpo opcional (asignacion-directa-servicio-gestor, decisión 2): sin
+    # cuerpo (front viejo, e2e/helpers.js::confirmarServiciosOrden) el
+    # comportamiento es el de siempre, "área → cualquier gestor".
+    payload: Optional[ConfirmarServiciosRequest] = Body(None),
     db: Session = Depends(get_db),
     # Fila 9 de la matriz: admin / veterinario. Recepción y gestor no
     # confirman servicios.
     current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     """Confirma los servicios SOLICITADO de la orden (decisión 4): a ASIGNADO
-    los que tienen área de ejecución (despacho, con notificación a los
-    gestores del área -- etapa 5); a EJECUTADO directo los que no la tienen
-    (atajo sin despacho).
+    los que tienen área de ejecución (despacho; a un gestor puntual si el
+    cuerpo lo elige para esa línea -- asignacion-directa-servicio-gestor,
+    decisión 2 -- o con notificación a los gestores del área si no, como
+    siempre); a EJECUTADO directo los que no la tienen (atajo sin despacho).
 
     Idempotente: si no queda ninguna línea en SOLICITADO, devuelve 200 sin
     cambios -- confirmar una orden ya confirmada no es un error.
 
-    Si algún área despachada no tiene ningún gestor activo (decisión 5,
-    defensa 1), la línea correspondiente vuelve con `advertencias` seteado
-    dentro de `servicios[]` -- mismo campo que ya usa `ServicioConsultaResponse`
-    en el resto de la API, no un canal nuevo.
+    422 si el cuerpo trae un `servicio_id` repetido, un `servicio_id` que no
+    es un `SOLICITADO` con área de esta orden, o un `gestor_id` que no
+    gestiona esa área o no está activo -- ver orden_service.confirmar_servicios.
+
+    Si algún área despachada sin gestor elegido no tiene ningún gestor activo
+    (decisión 5, defensa 1), la línea correspondiente vuelve con
+    `advertencias` seteado dentro de `servicios[]` -- mismo campo que ya usa
+    `ServicioConsultaResponse` en el resto de la API, no un canal nuevo.
     """
     orden = orden_service.obtener_orden(db, orden_id)
-    orden, advertencias = orden_service.confirmar_servicios(db, orden, current_user)
+    pares = [(a.servicio_id, a.gestor_id) for a in payload.asignaciones] if payload else []
+    orden, advertencias = orden_service.confirmar_servicios(db, orden, current_user, asignaciones=pares)
     resp = OrdenServicioDetalleResponse.model_validate(orden)
     if advertencias:
         por_servicio = {a["servicio_id"]: a for a in advertencias}
