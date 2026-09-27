@@ -172,6 +172,9 @@ test.describe('Gestores externos (gestor-externo-crud)', () => {
         data: { nombre: testTag('Dup'), rif, telefono: '04129999999', metodo_pago: 'EFECTIVO' },
       });
       expect(res.status()).toBe(409);
+      // The generic fallback is also 409: only the message proves the router
+      // recognized uq_gestores_externos_rif.
+      expect((await res.json()).detail).toBe('RIF ya registrado');
 
       await eliminarGestorExterno(request, admin, gestor.id);
     });

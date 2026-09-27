@@ -275,7 +275,7 @@ class GestorExterno(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String(120), nullable=False)
-    rif = Column(String(20), unique=True, nullable=False, index=True)
+    rif = Column(String(20), nullable=False, index=True)
     telefono = Column(String(20), nullable=False)
     metodo_pago = Column(String(50), nullable=False)  # TRANSFERENCIA, EFECTIVO, ZELLE, CHEQUE, OTRO
     numero_cuenta = Column(String(50), nullable=True)
@@ -290,6 +290,10 @@ class GestorExterno(Base):
             "metodo_pago IN ('TRANSFERENCIA','EFECTIVO','ZELLE','CHEQUE','OTRO')",
             name="ck_gestor_externo_metodo_pago",
         ),
+        # Named like the migration: the router maps this exact name to
+        # "RIF ya registrado". `unique=True` on the column would make
+        # create_all emit a unique index named ix_gestores_externos_rif instead.
+        UniqueConstraint("rif", name="uq_gestores_externos_rif"),
     )
 
     usuario = relationship("Usuario")
