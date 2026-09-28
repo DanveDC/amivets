@@ -40,7 +40,7 @@ La sección actual "Historia clínica" (sec-consultorio) tiene varios problemas 
   4. **Servicios e insumos** — Vista plana de todos los servicios aplicados (buscador + filtros por tipo, fecha, estado, orden)
   5. **Notas** — Lista cronológica de todas las notas del animal (con formulario para agregar)
   6. **Facturación** — Facturas pagadas + pendientes/abiertas (con botones de acción)
-  7. **Evolución peso** — Gráfica (ya existe, dentro del tab Resumen)
+  7. **Evolución peso** — Gráfica (ya existía; implementada como tab propio en la barra vertical — ver design.md Goal 3 — con un botón "Ver gráfica" desde la card de peso del tab Resumen que navega ahí; reusa `loadWeightChart` sin cambios)
 
 ### Cambios en botones y acciones
 

@@ -17,6 +17,11 @@ const {
   createTestMascota,
   createTestVeterinario,
   createTestOrden,
+  cerrarTestOrden,
+  anexarServicioOrden,
+  facturarOrden,
+  createTestNota,
+  createTestConsulta,
   createTestCita,
   gotoSection,
 } = require('./helpers');
@@ -326,5 +331,273 @@ test.describe('Regresión — flujos de consulta que no se tocan', () => {
     // DOM, sólo el que corresponde recibe la clase "show" (locator combinado
     // con id da "strict mode violation" porque matchea los dos elementos).
     await expect(page.locator('.modal.show')).toBeVisible({ timeout: 10000 });
+  });
+});
+
+// ============================================================================
+// SLICE 3: contenido de los tabs (Resumen, Órdenes por estado, Servicios,
+// Notas, Facturación, Peso). Slices 1/2 cubrieron navegación y el panel
+// inline "Nueva orden"; acá se cubre lo que pintan los tabs con datos reales.
+// ============================================================================
+
+test.describe('Tab Resumen — cards con datos reales (tarea 5.1)', () => {
+  test('muestra la última orden (con "Ver"), su total facturado y el peso actual', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    // tipo_servicio='CONSULTA' (atajo sin despacho): entra EJECUTADO directo,
+    // así la orden se puede cerrar sin pasar por confirmar/despachar.
+    await anexarServicioOrden(request, orden.id, { tipo_servicio: 'CONSULTA', nombre_servicio: 'Consulta de control', precio_unitario: 150 }, admin);
+    await cerrarTestOrden(request, orden.id, admin);
+    const resFactura = await facturarOrden(request, orden.id, { metodo_pago: 'EFECTIVO', total_pagado: 150 }, admin);
+    expect(resFactura.ok()).toBeTruthy();
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+
+    // "resumen" es el tab activo por defecto al entrar a la ficha.
+    const cards = page.locator('#resumenCards');
+    await expect(cards).toContainText(orden.numero, { timeout: 15000 });
+    await expect(cards).toContainText('FACTURADA');
+    await expect(cards).toContainText('150');
+
+    // "Ver" de la card de última orden navega a la orden real.
+    await cards.getByRole('button', { name: 'Ver' }).click();
+    await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+  });
+});
+
+test.describe('Tab Evolución peso (tarea 5.6.1)', () => {
+  test('es un tab propio que reusa la gráfica de peso existente', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    // GET /peso-history (MascotaService.obtener_historial_peso) lee de
+    // Consulta.peso, NO del campo Mascota.peso -- loadWeightChart sólo pinta
+    // el <canvas> si ese endpoint trae al menos un punto; sin ninguno,
+    // reemplaza el contenedor por un mensaje de "sin registros" (mismo
+    // comportamiento que ya tenía dentro de "Resumen" antes de este cambio,
+    // no es nuevo acá). Se registra una consulta con peso para tener un
+    // punto real.
+    await createTestConsulta(request, { mascotaId: mascota.id, veterinarioId: vet.id, peso: 12.5 }, admin);
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+
+    await page.locator('.pet-nav-item[data-tab="peso"]').click();
+    await expect(page.locator('.pet-nav-item[data-tab="peso"]')).toHaveClass(/active/);
+    await expect(page.locator('#chartContainer canvas#weightChart')).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe('Tab Órdenes — acciones por estado (tarea 5.2.3)', () => {
+  test('"Facturar" en una orden CERRADA reusa el flujo real de facturación de la orden', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    await anexarServicioOrden(request, orden.id, { tipo_servicio: 'CONSULTA', nombre_servicio: 'Consulta a facturar', precio_unitario: 200 }, admin);
+    await cerrarTestOrden(request, orden.id, admin);
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="ordenes"]').click();
+    await expect(page.locator('#ordenesTableBody')).toContainText(orden.numero, { timeout: 15000 });
+
+    const fila = page.locator('#ordenesTableBody tr', { hasText: orden.numero });
+    await expect(fila.getByRole('button', { name: '+ Servicio' })).toHaveCount(0);
+    await fila.getByRole('button', { name: 'Facturar' }).click();
+
+    // Navega a la orden y dispara el #btnOaFacturar real (modal existente).
+    await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+    await expect(page.locator('#modalFacturarOrden')).toBeVisible();
+    await page.click('#btnConfirmarFacturarOrden');
+    await expect(page.locator('.notification-toast', { hasText: /Factura/i }).first()).toBeVisible({ timeout: 10000 });
+
+    const facturas = await (await request.get(`/api/facturas/mascota/${mascota.id}`, { headers: authHeaders(admin) })).json();
+    expect(facturas.some((f) => f.total === 200 || f.total_pagado === 200)).toBe(true);
+  });
+
+  test('"+ Servicio" en una orden ABIERTA abre el panel real de anexar servicio', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    // ABIERTA por defecto (createTestOrden no cierra la orden).
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="ordenes"]').click();
+    await expect(page.locator('#ordenesTableBody')).toContainText(orden.numero, { timeout: 15000 });
+
+    const fila = page.locator('#ordenesTableBody tr', { hasText: orden.numero });
+    await expect(fila.getByRole('button', { name: 'Facturar' })).toHaveCount(0);
+    await fila.getByRole('button', { name: '+ Servicio' }).click();
+
+    await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+    await expect(page.locator('#oaAnexarPanel')).toBeVisible();
+  });
+
+  test('"Factura" en una orden FACTURADA abre el preview de la factura vinculada', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    await anexarServicioOrden(request, orden.id, { tipo_servicio: 'CONSULTA', nombre_servicio: 'Consulta ya facturada', precio_unitario: 90 }, admin);
+    await cerrarTestOrden(request, orden.id, admin);
+    const resFactura = await facturarOrden(request, orden.id, { metodo_pago: 'EFECTIVO', total_pagado: 90 }, admin);
+    expect(resFactura.ok()).toBeTruthy();
+    const factura = await resFactura.json();
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="ordenes"]').click();
+    await expect(page.locator('#ordenesTableBody')).toContainText(orden.numero, { timeout: 15000 });
+
+    const fila = page.locator('#ordenesTableBody tr', { hasText: orden.numero });
+    await fila.getByRole('button', { name: 'Factura' }).click();
+
+    await expect(page.locator('#modalPreviewFactura')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#previewFacturaNumero')).toContainText(String(factura.numero_factura || factura.id));
+  });
+});
+
+test.describe('Tab Servicios — búsqueda server-side, link a la orden y totales dinámicos (tarea 5.3)', () => {
+  test('el buscador filtra server-side y el total dinámico refleja lo filtrado', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    const nombreUnico = `PWTEST vacuna especial ${Date.now()}`;
+    await anexarServicioOrden(request, orden.id, { tipo_servicio: 'CONSULTA', nombre_servicio: nombreUnico, precio_unitario: 50 }, admin);
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="servicios"]').click();
+    await expect(page.locator('#serviciosFeed')).toContainText(nombreUnico, { timeout: 15000 });
+    await expect(page.locator('#serviciosTotales')).toContainText('50');
+
+    await page.fill('#servFiltroTexto', 'nombre que no existe en ningún servicio');
+    await page.waitForResponse(
+      (r) => r.url().includes('/api/servicios/') && r.url().includes('search='),
+      { timeout: 10000 }
+    );
+    await expect(page.locator('#serviciosFeed')).not.toContainText(nombreUnico);
+    await expect(page.locator('#serviciosTotales')).toHaveText('');
+  });
+
+  test('el detalle de un servicio ofrece "Ver orden" y navega a la orden que lo contiene', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    const nombreServicio = `PWTEST servicio con orden ${Date.now()}`;
+    await anexarServicioOrden(request, orden.id, { tipo_servicio: 'CONSULTA', nombre_servicio: nombreServicio, precio_unitario: 40 }, admin);
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="servicios"]').click();
+    await expect(page.locator('#serviciosFeed')).toContainText(nombreServicio, { timeout: 15000 });
+
+    await page.locator('.serv-row', { hasText: nombreServicio }).click();
+    await page.getByRole('button', { name: 'Ver orden' }).click();
+    await expect(page.locator('#sec-orden-abierta')).toBeVisible();
+    await expect(page.locator('#avHeaderTitleText')).toContainText(orden.numero);
+  });
+});
+
+test.describe('Tab Notas — agregar y "Cargar más" (tarea 5.4)', () => {
+  test('una nota nueva aparece primera en la lista y "Cargar más" trae el resto', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const tag = `PWTESTNOTA${Date.now()}`;
+    // 21 notas viejas (page size del cliente es 20) para forzar "Cargar más".
+    for (let i = 0; i < 21; i++) {
+      await createTestNota(request, admin, { mascotaId: mascota.id, texto: `${tag}_vieja_${i}` });
+    }
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="notas"]').click();
+    // La más reciente de las viejas (índice 20) entra en la primera página.
+    await expect(page.locator('#notasList')).toContainText(`${tag}_vieja_20`, { timeout: 15000 });
+    // La más antigua (índice 0) queda paginada, todavía no visible.
+    await expect(page.locator('#notasList')).not.toContainText(`${tag}_vieja_0`);
+    await expect(page.locator('#btnNotasCargarMas')).toBeVisible();
+    await page.click('#btnNotasCargarMas');
+    await expect(page.locator('#notasList')).toContainText(`${tag}_vieja_0`);
+
+    // Nueva nota desde la ficha: aparece primera en la lista.
+    await page.getByRole('button', { name: '+ Nueva Nota' }).click();
+    await page.fill('#notaTextoInput', `${tag}_nueva`);
+    await page.locator('#formNota button[type="submit"]').click();
+    await expect(page.locator('#notasList .card-item').first()).toContainText(`${tag}_nueva`, { timeout: 10000 });
+  });
+});
+
+test.describe('Tab Facturación — pagadas vs pendientes, con totales y Abonar (tarea 5.5)', () => {
+  test('separa facturas pagadas de pendientes/parciales, con totales por sección y "Abonar" en las pendientes', async ({ page, request }) => {
+    const admin = await getAdminToken(request);
+    const prop = await createTestPropietario(request, {}, admin);
+    const mascota = await createTestMascota(request, prop.id);
+    const vet = await createTestVeterinario(request, admin);
+
+    const ordenPagada = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    await anexarServicioOrden(request, ordenPagada.id, { tipo_servicio: 'CONSULTA', nombre_servicio: 'Consulta pagada', precio_unitario: 100 }, admin);
+    await cerrarTestOrden(request, ordenPagada.id, admin);
+    const resPagada = await facturarOrden(request, ordenPagada.id, { metodo_pago: 'EFECTIVO', total_pagado: 100 }, admin);
+    expect(resPagada.ok()).toBeTruthy();
+
+    // Segunda orden: se anexa un servicio directo (sin línea CONSULTA) para
+    // que la factura resultante sólo se vincule por FacturaOrden -- es
+    // exactamente el caso que agrega la tarea 9.3 al endpoint.
+    const ordenPendiente = await createTestOrden(request, { propietarioId: prop.id, mascotaId: mascota.id, veterinarioId: vet.id }, admin);
+    await anexarServicioOrden(request, ordenPendiente.id, { tipo_servicio: 'CONSULTA', nombre_servicio: 'Consulta pendiente', precio_unitario: 80 }, admin);
+    await cerrarTestOrden(request, ordenPendiente.id, admin);
+    const resPendiente = await facturarOrden(request, ordenPendiente.id, { total_pagado: 0 }, admin);
+    expect(resPendiente.ok()).toBeTruthy();
+    const facturaPendiente = await resPendiente.json();
+
+    await loginUI(page, ADMIN_CREDENTIALS.username, ADMIN_CREDENTIALS.password);
+    await gotoSection(page, 'sec-consultorio');
+    await seleccionarMascotaEnLista(page, mascota.nombre);
+    await page.locator('.pet-nav-item[data-tab="facturacion"]').click();
+
+    await expect(page.locator('#facPagadasBody')).toContainText('100', { timeout: 15000 });
+    await expect(page.locator('#facPendientesBody')).toContainText('80');
+    await expect(page.locator('#facTotalPagadas')).toContainText('100');
+    await expect(page.locator('#facTotalPendientes')).toContainText('80');
+    // La sección "Pagadas" no ofrece "Abonar" (ya está saldada).
+    await expect(page.locator('#facPagadasBody').getByRole('button', { name: 'Abonar' })).toHaveCount(0);
+
+    await page.locator('#facPendientesBody').getByRole('button', { name: 'Abonar' }).click();
+    await expect(page.locator('#modal-abono')).toBeVisible();
+    await expect(page.locator('#abonoFacturaId')).toHaveValue(String(facturaPendiente.id));
+
+    // Abonar el total: al cerrar el modal, el tab se refresca solo y la
+    // factura pasa de "Pendientes" a "Pagadas" sin salir de la ficha.
+    await page.fill('#abonoMonto', '80');
+    await page.selectOption('#abonoMetodoPago', { index: 1 });
+    await page.locator('#form-abono button[type="submit"]').click();
+    await expect(page.locator('#modal-abono')).toBeHidden({ timeout: 10000 });
+    await expect(page.locator('#facPendientesBody')).not.toContainText('80', { timeout: 10000 });
+    await expect(page.locator('#facTotalPagadas')).toContainText('180');
   });
 });

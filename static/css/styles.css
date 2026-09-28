@@ -1282,6 +1282,54 @@ form {
 .pet-resumen-alert-icon { flex-shrink: 0; display: inline-flex; margin-top: 1px; }
 .pet-resumen-alert-icon svg { width: 18px; height: 18px; }
 
+/* --- RESUMEN: cards de dashboard (ficha-animal-ordenes-servicios, tarea 5.1) ---
+   Última orden, próxima cita, peso actual, totales -- cada una es una tarjeta
+   chica con label/valor/acción opcional, mismo lenguaje visual que .serv-row. */
+.resumen-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+}
+.resumen-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: flex-start;
+    padding: 0.9rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+.resumen-card-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.resumen-card-sub { font-size: 0.8rem; color: var(--text-secondary); }
+.resumen-card--alert {
+    border-color: var(--warning);
+    background: var(--warning-subtle);
+}
+.resumen-card--alert .resumen-card-label { color: var(--warning-dark); }
+
+/* --- FACTURACIÓN de la ficha: pagadas / pendientes-parciales (tarea 5.5) --- */
+.fact-section h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: 1rem;
+    margin: 0 0 0.6rem;
+    color: var(--text-primary);
+}
+.fact-total {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--secondary-dark, var(--secondary));
+}
+
 /* --- PESTAÑA "SERVICIOS": historia unificada del paciente (Tarea 09) --- */
 .serv-registrar-picker {
     display: flex;

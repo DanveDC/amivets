@@ -123,6 +123,8 @@ document.getElementById('form-abono')?.addEventListener('submit', async (e) => {
         showNotification('Abono registrado con éxito.', 'success');
         closeModal('modal-abono');
         cargarHistorialFacturas();
+        // Avisa a otras vistas con saldos a la vista (tab Facturación de la ficha).
+        document.dispatchEvent(new CustomEvent('abono-registrado', { detail: { facturaId: parseInt(facturaId) } }));
         // Refresh the preview modal with updated data
         abrirPreviewFactura(parseInt(facturaId));
     } catch (err) {
