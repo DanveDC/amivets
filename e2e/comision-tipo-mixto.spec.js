@@ -307,6 +307,9 @@ test.describe('Comisión por tipo — pantallas', () => {
 
     await loginAdmin(page);
     await gotoSection(page, 'sec-catalogo');
+    // Filtrar por nombre: la lista trae como mucho 500 filas (catalogo.js) y la
+    // base de e2e acumula más, así que un servicio recién creado puede no estar.
+    await page.fill('#catalogoSearch', cat.nombre);
     await page.locator(`.cat-item[data-id="${cat.id}"]`).click();
     await page.click('#btnCatEditar');
     await expect(page.locator('#modalCatalogoServicio')).toBeVisible();
