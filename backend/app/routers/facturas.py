@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import date
 from io import BytesIO
@@ -340,7 +340,12 @@ def listar_abonos(
     if not factura:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    return db.query(Abono).filter(Abono.factura_id == factura_id).all()
+    return (
+        db.query(Abono)
+        .options(joinedload(Abono.orden))
+        .filter(Abono.factura_id == factura_id)
+        .all()
+    )
 
 
 @router.get("/{factura_id}/abonos/{abono_id}/pdf")

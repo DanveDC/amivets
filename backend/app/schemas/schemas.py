@@ -1185,23 +1185,6 @@ class AbonoResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    @model_validator(mode='before')
-    @classmethod
-    def _adjuntar_orden_numero(cls, data):
-        """Resuelve `orden_numero` desde `Abono.orden.numero` cuando `data`
-        es el modelo ORM (from_attributes). Si `data` ya es un dict (ej.
-        construcción manual), se deja tal cual -- el caller es responsable
-        de mandar `orden_numero` si lo necesita."""
-        if isinstance(data, dict):
-            return data
-        orden = getattr(data, 'orden', None)
-        if orden is not None and getattr(orden, 'numero', None):
-            try:
-                data.orden_numero = orden.numero
-            except Exception:
-                pass
-        return data
-
 
 # ========== DASHBOARD DE FACTURACIÓN (facturacion-metodos-gestores-saldo) ==========
 class GestorPagoResponse(BaseModel):
@@ -1254,6 +1237,7 @@ class LiquidacionPreviewItem(BaseModel):
     factura_id: int
     fecha_consulta: datetime
     tarifa_aplicada: Decimal
+    # orden_numero sale de la @property Abono.orden_numero.
 
 
 class LiquidacionPreviewResponse(BaseModel):

@@ -873,6 +873,12 @@ class Abono(Base):
     factura = relationship("Factura", back_populates="abonos")
     orden = relationship("OrdenServicio")
 
+    @property
+    def orden_numero(self) -> Optional[str]:
+        """Número de la orden vinculada; AbonoResponse lo lee con
+        from_attributes."""
+        return self.orden.numero if self.orden is not None else None
+
     def __repr__(self):
         return f"<Abono {self.numero_abono} - {self.monto}>"
 
