@@ -904,6 +904,10 @@
 }
 .cat-master-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; padding: 0 14px; }
 .cat-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; max-height: 70vh; overflow-y: auto; }
+/* paginacion-catalogo: sin esto el `display:inline-flex` de .av-btn le gana
+   a [hidden] (mismo problema que .av-search más arriba) y "Cargar más"
+   queda visible aunque el atributo hidden esté puesto. */
+#catalogoCargarMas[hidden] { display: none; }
 
 .cat-item {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px;

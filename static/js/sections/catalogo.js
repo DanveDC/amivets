@@ -17,9 +17,24 @@ import { getRole } from '../core/session.js';
 // ESTADO DEL PANEL MAESTRO-DETALLE
 // ============================================================
 
-let listaCache = [];          // último /catalogo?... resuelto
+let listaCache = [];          // acumulado de todas las páginas cargadas hasta ahora
 let selectedId = null;
 let materialesCache = [];     // inventario filtrado a tipo_item === 'MATERIAL'
+
+// ============================================================
+// PAGINACIÓN "CARGAR MÁS" (paginacion-catalogo) — antes se pedía todo de
+// una con ?limit=500 y, pasado ese techo, el resto del catálogo no
+// aparecía salvo que se lo buscara por nombre. Página de PAGE_SIZE_CATALOGO,
+// que avanza con `skip`; buscar o cambiar de categoría resetea a la
+// primera página. `_generacionCatalogo` evita que una respuesta vieja
+// (de un filtro ya reemplazado) pise una más nueva -- mismo patrón que
+// `_generacionPorCobrar` en sections/facturacion.js.
+// ============================================================
+const PAGE_SIZE_CATALOGO = 100;
+let catalogoSkip = 0;
+let catalogoHayMasPaginas = false;
+let catalogoCargandoMas = false;
+let _generacionCatalogo = 0;
 
 const formatMoney = (n) => `$ ${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -50,26 +65,70 @@ export async function cargarCategoriasSelect() {
 // LISTA MAESTRA
 // ============================================================
 
-export async function cargarCatalogo() {
+function catalogoFiltrosActuales() {
     const q = (document.getElementById('catalogoSearch')?.value || '').trim();
     const cat = document.getElementById('catalogoCategoriaFilter')?.value || '';
-    let url = '/catalogo?solo_activos=false&limit=500';
+    return { q, cat };
+}
+
+// Contador real para los filtros actuales (GET /catalogo/contador): la
+// lista pagina con skip/limit y `listaCache` solo tiene lo cargado hasta
+// ahora, no alcanza para contar. Se pide aparte para no cambiar la forma
+// de la respuesta de la lista (paginacion-catalogo).
+async function actualizarContadorCatalogo(generacion, q, cat) {
+    const contador = document.getElementById('catalogoContador');
+    if (!contador) return;
+    try {
+        let url = '/catalogo/contador';
+        const params = [];
+        if (q) params.push(`q=${encodeURIComponent(q)}`);
+        if (cat) params.push(`categoria=${encodeURIComponent(cat)}`);
+        if (params.length) url += `?${params.join('&')}`;
+        const info = await fetchAPI(url);
+        if (generacion !== _generacionCatalogo) return; // filtro reemplazado mientras cargaba
+        contador.textContent = `${info.activos} activos${info.inactivos ? ` · ${info.inactivos} inactivos` : ''}`;
+    } catch (err) {
+        // El contador es un detalle secundario: si falla no rompe la lista.
+        console.error('Error cargando el contador del catálogo:', err);
+    }
+}
+
+async function cargarPaginaCatalogo(generacion, reset) {
+    const { q, cat } = catalogoFiltrosActuales();
+    let url = `/catalogo?solo_activos=false&limit=${PAGE_SIZE_CATALOGO}&skip=${catalogoSkip}`;
     if (q) url += `&q=${encodeURIComponent(q)}`;
     if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
 
     const lista = document.getElementById('catalogoLista');
-    const contador = document.getElementById('catalogoContador');
+    const btnCargarMas = document.getElementById('catalogoCargarMas');
     if (!lista) return;
-    lista.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+
+    if (reset) {
+        lista.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+        // Por si quedaba un "cargar más" a mitad de camino de un filtro
+        // anterior (ver comentario de cargarCatalogo sobre catalogoCargandoMas):
+        // el botón vuelve a su estado de reposo, no al que dejó esa carga vieja.
+        if (btnCargarMas) { btnCargarMas.hidden = true; btnCargarMas.disabled = false; btnCargarMas.textContent = 'Cargar más'; }
+    } else {
+        catalogoCargandoMas = true;
+        if (btnCargarMas) { btnCargarMas.disabled = true; btnCargarMas.textContent = 'Cargando…'; }
+    }
 
     try {
         const items = await fetchAPI(url);
-        listaCache = Array.isArray(items) ? items : [];
-        const activos = listaCache.filter(s => s.activo).length;
-        if (contador) contador.textContent = `${activos} activos${listaCache.length !== activos ? ` · ${listaCache.length - activos} inactivos` : ''}`;
+        if (generacion !== _generacionCatalogo) return; // superseded por otro filtro mientras cargaba
+
+        const pagina = Array.isArray(items) ? items : [];
+        listaCache = reset ? pagina : listaCache.concat(pagina);
+        catalogoSkip += pagina.length;
+        catalogoHayMasPaginas = pagina.length === PAGE_SIZE_CATALOGO;
+
+        if (reset) await actualizarContadorCatalogo(generacion, q, cat);
+        if (generacion !== _generacionCatalogo) return; // por si el filtro cambió durante el contador
 
         if (listaCache.length === 0) {
             lista.innerHTML = '<p class="rp-empty-text">Sin resultados.</p>';
+            if (btnCargarMas) btnCargarMas.hidden = true;
             renderDetalleVacio();
             return;
         }
@@ -88,16 +147,48 @@ export async function cargarCatalogo() {
             btn.addEventListener('click', () => seleccionarServicio(Number(btn.dataset.id)));
         });
 
-        // Si el servicio seleccionado sigue en la lista filtrada, mantiene
-        // selección; si no, selecciona el primero (o vacío si no hay).
-        if (selectedId && listaCache.some(s => s.id === selectedId)) {
-            cargarDetalle(selectedId);
-        } else {
-            seleccionarServicio(listaCache[0].id);
+        if (btnCargarMas) btnCargarMas.hidden = !catalogoHayMasPaginas;
+
+        if (reset) {
+            // Si el servicio seleccionado sigue en la lista filtrada, mantiene
+            // selección; si no, selecciona el primero (o vacío si no hay).
+            if (selectedId && listaCache.some(s => s.id === selectedId)) {
+                cargarDetalle(selectedId);
+            } else {
+                seleccionarServicio(listaCache[0].id);
+            }
         }
+        // "Cargar más" (reset=false) nunca toca la selección ni el detalle
+        // ya abierto -- solo agrega filas al final de la lista.
     } catch (err) {
+        if (generacion !== _generacionCatalogo) return;
         lista.innerHTML = `<p class="rp-empty-text">Error: ${escapeHtml(err.message)}</p>`;
+    } finally {
+        if (generacion === _generacionCatalogo) {
+            catalogoCargandoMas = false;
+            if (btnCargarMas) { btnCargarMas.disabled = false; btnCargarMas.textContent = 'Cargar más'; }
+        }
     }
+}
+
+export async function cargarCatalogo() {
+    // Carga inicial, nueva búsqueda o cambio de categoría: vuelve a la
+    // primera página y descarta lo acumulado hasta ahora.
+    catalogoSkip = 0;
+    catalogoHayMasPaginas = false;
+    // Si quedaba un "cargar más" en vuelo de un filtro anterior, su respuesta
+    // va a llegar con una generación vieja y salir por el chequeo de arriba
+    // sin pasar por el `finally` que limpia esta bandera -- se resetea acá
+    // para que un cambio de filtro nunca deje "cargar más" trabado en true.
+    catalogoCargandoMas = false;
+    listaCache = [];
+    const generacion = ++_generacionCatalogo;
+    await cargarPaginaCatalogo(generacion, true);
+}
+
+async function cargarMasCatalogo() {
+    if (catalogoCargandoMas || !catalogoHayMasPaginas) return;
+    await cargarPaginaCatalogo(_generacionCatalogo, false);
 }
 
 function seleccionarServicio(id) {
@@ -815,6 +906,7 @@ export function init() {
         _modalWired = true;
         document.getElementById('catalogoCategoria')?.addEventListener('change', toggleCategoriaNueva);
         document.getElementById('catalogoTipoComision')?.addEventListener('change', toggleCamposComision);
+        document.getElementById('catalogoCargarMas')?.addEventListener('click', cargarMasCatalogo);
     }
     cargarCategoriasSelect();
     cargarCatalogo();

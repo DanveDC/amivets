@@ -126,6 +126,40 @@ def listar_servicios(
     return query.order_by(CatalogoServicio.nombre).offset(skip).limit(limit).all()
 
 
+@router.get("/contador")
+def contador_servicios(
+    categoria: Optional[str] = Query(None),
+    q: Optional[str] = Query(None),
+    solo_activos: bool = Query(False),
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
+    """Conteo de servicios para los mismos filtros de texto/categoría que
+    GET /catalogo/ (paginacion-catalogo): la lista pagina con skip/limit y
+    ya no alcanza para armar el contador "N activos · M inactivos" del
+    maestro-detalle. No cambia la forma de la lista -- endpoint aparte para
+    no romper a los otros callers de GET /catalogo/ (orden-abierta.js,
+    catalogo.js componentes/materiales, etc.) que siguen pidiendo hasta 500
+    de una.
+
+    `activos`/`inactivos` siempre reflejan el universo completo del filtro
+    de texto/categoria (sin importar `solo_activos`) para poder mostrar el
+    desglose; `total` respeta `solo_activos` igual que la lista."""
+    base = db.query(CatalogoServicio)
+
+    if categoria:
+        base = base.filter(CatalogoServicio.categoria == categoria)
+
+    if q:
+        base = base.filter(CatalogoServicio.nombre.ilike(f"%{q}%"))
+
+    activos = base.filter(CatalogoServicio.activo == True).count()
+    inactivos = base.filter(CatalogoServicio.activo == False).count()
+    total = activos if solo_activos else activos + inactivos
+
+    return {"activos": activos, "inactivos": inactivos, "total": total}
+
+
 _CAMPOS_COMISION = ("tipo_comision_servicio", "monto_fijo_servicio", "porcentaje_servicio")
 _SOLO_ADMIN_COMISION = "Solo un administrador puede configurar la comisión del servicio"
 
