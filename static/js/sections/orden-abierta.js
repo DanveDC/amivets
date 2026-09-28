@@ -31,6 +31,12 @@ import { showNotification, openModal, closeModal, debounce, escapeHtml, submitWi
 import { money, totalServicios, ESTADO_TOMA_PILL, estadoTomaLabel, agruparPorPaquete } from '../core/format.js';
 import { showSection } from '../core/router.js';
 import { getRole } from '../core/session.js';
+// Relación cíclica segura con consultorio.js (que importa abrirOrden de este
+// módulo): mostrarFicha sólo se usa dentro del handler de "← Volver a la
+// ficha" (ficha-animal-ordenes-servicios, decisión 11 del design), nunca en
+// la evaluación del módulo -- mismo patrón ya documentado en consultorio.js
+// para facturacion.js/ordenes.js.
+import { mostrarFicha } from './consultorio.js';
 
 const ESTADO_LABEL_ORDEN = { ABIERTA: 'Abierta', EN_ATENCION: 'En atención', CERRADA: 'Cerrada', ANULADA: 'Anulada' };
 
@@ -119,7 +125,17 @@ function pintarPaciente(orden) {
     const el = document.getElementById('oaPatient');
     if (!el) return;
     const iniciales = (orden.mascota_nombre || orden.propietario_nombre || '?').slice(0, 2).toUpperCase();
+    // "← Volver a la ficha" (ficha-animal-ordenes-servicios, decisión 11):
+    // sólo tiene sentido si la orden tiene un paciente -- una venta de
+    // mostrador (sin mascota_id) no tiene ficha a la que volver.
+    const btnVolverFicha = orden.mascota_id
+        ? `<button type="button" class="av-btn" id="btnOaVolverFicha" title="Volver a la ficha del paciente">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            Volver a la ficha
+        </button>`
+        : '';
     el.innerHTML = `
+        ${btnVolverFicha}
         <div class="oa-patient-avatar">${iniciales}</div>
         <div class="oa-patient-main">
             <div class="oa-patient-namerow">
@@ -139,6 +155,10 @@ function pintarPaciente(orden) {
             Anexar servicio
         </button>`;
     document.getElementById('btnOaAnexarInline')?.addEventListener('click', abrirAnexarPanel);
+    document.getElementById('btnOaVolverFicha')?.addEventListener('click', () => {
+        showSection('sec-consultorio');
+        mostrarFicha(orden.mascota_id);
+    });
 }
 
 async function pintarServicios(orden) {

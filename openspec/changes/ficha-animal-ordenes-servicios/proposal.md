@@ -36,10 +36,11 @@ La sección actual "Historia clínica" (sec-consultorio) tiene varios problemas 
 - **Barra de navegación vertical (tabs)**:
   1. **Resumen** — Dashboard: última orden, próxima cita, peso actual, alertas
   2. **Órdenes de servicio** — Lista de TODAS las órdenes del animal (tabla con buscador/filtros)
-  3. **Servicios e insumos** — Vista plana de todos los servicios aplicados (buscador + filtros por tipo, fecha, estado, orden)
-  4. **Notas** — Lista cronológica de todas las notas del animal (con formulario para agregar)
-  5. **Facturación** — Facturas pagadas + pendientes/abiertas (con botones de acción)
-  6. **Evolución peso** — Gráfica (ya existe)
+  3. **Consultas** — Se conserva como tab propio (regresión restaurada): NO es un punto de alta (eso vive en "Órdenes de servicio"), solo ofrece por fila las acciones de reparación de datos legacy que ya existían (Facturar / Ir a la orden / Agregar honorario a la orden / Ver consulta) para consultas que quedaron sin orden o con la línea de honorario faltante
+  4. **Servicios e insumos** — Vista plana de todos los servicios aplicados (buscador + filtros por tipo, fecha, estado, orden)
+  5. **Notas** — Lista cronológica de todas las notas del animal (con formulario para agregar)
+  6. **Facturación** — Facturas pagadas + pendientes/abiertas (con botones de acción)
+  7. **Evolución peso** — Gráfica (ya existe, dentro del tab Resumen)
 
 ### Cambios en botones y acciones
 

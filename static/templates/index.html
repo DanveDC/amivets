@@ -1480,32 +1480,42 @@
                     </div>
 
                     <!-- Columna Derecha: Historial Clínico -->
-                    <div style="flex: 2;">
-                        <div id="patientWrapper" style="display: none;">
-                            <div class="pet-profile-container">
-                                <div class="pet-content-header">
-                                    <div>
-                                        <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                                            <span id="displayNombreMascota"
-                                                style="color: var(--primary); font-size: 1.5rem;"></span>
-                                            <button class="btn-secondary btn-sm" id="btnEditarMascota"
-                                                title="Editar datos básicos">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-                                            </button>
-                                            <button class="btn-secondary btn-sm" id="btnTransferirMascota"
-                                                title="Transferir a otro tutor">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H9a4 4 0 0 0-4 4v10"/><path d="m8 21-4-4 4-4"/><path d="M4 17h11a4 4 0 0 0 4-4V3"/></svg>
-                                            </button>
-                                            <button class="btn-secondary btn-sm" id="btnEliminarMascota"
-                                                title="Eliminar mascota"
-                                                style="color: var(--accent); border-color: rgba(244,63,94,0.3);">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                                            </button>
-                                        </h3>
-                                        <p id="displayInfoMascota"
-                                            style="color: var(--text-secondary); margin: 0; font-size: 0.85rem;"></p>
+                    <div style="flex: 2; min-width: 0;">
+                        <div id="patientWrapper">
+                            <div class="pet-profile-container" id="petProfileContainer" style="display: none;">
+                                <div class="pet-content-header ficha-header">
+                                    <div class="ficha-header-left">
+                                        <!-- ficha-animal-ordenes-servicios: Vista 1 (listado) / Vista 2
+                                             (ficha) son mutuamente excluyentes dentro de sec-consultorio;
+                                             este botón vuelve a Vista 1 restaurando scroll y búsqueda. -->
+                                        <button type="button" class="btn-secondary btn-sm ficha-btn-volver"
+                                            id="btnVolverALista" title="Volver a la lista">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+                                            Volver a la lista
+                                        </button>
+                                        <div>
+                                            <h3 style="margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                                <span id="displayNombreMascota"
+                                                    style="color: var(--primary); font-size: 1.5rem;"></span>
+                                                <button class="btn-secondary btn-sm" id="btnEditarMascota"
+                                                    title="Editar datos básicos">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                                </button>
+                                                <button class="btn-secondary btn-sm" id="btnTransferirMascota"
+                                                    title="Transferir a otro tutor">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H9a4 4 0 0 0-4 4v10"/><path d="m8 21-4-4 4-4"/><path d="M4 17h11a4 4 0 0 0 4-4V3"/></svg>
+                                                </button>
+                                                <button class="btn-secondary btn-sm" id="btnEliminarMascota"
+                                                    title="Eliminar mascota"
+                                                    style="color: var(--accent); border-color: rgba(244,63,94,0.3);">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                                                </button>
+                                            </h3>
+                                            <p id="displayInfoMascota"
+                                                style="color: var(--text-secondary); margin: 0; font-size: 0.85rem;"></p>
+                                        </div>
                                     </div>
-                                    <div class="actions" style="display:flex; gap:0.5rem; align-items:center;">
+                                    <div class="actions ficha-header-actions" style="display:flex; gap:0.5rem; align-items:center;">
                                         <button class="btn-primary" id="btnFichaNuevaOrden">+ Orden de servicio</button>
                                         <div class="actions" id="petTabActions" style="display:flex; gap:0.5rem;"></div>
                                     </div>
@@ -1550,6 +1560,13 @@
                                             </span>
                                             <span>Órdenes de servicio</span>
                                             <span class="count" id="count-ordenes">0</span>
+                                        </div>
+                                        <div class="pet-nav-item" data-tab="consultas">
+                                            <span class="icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 12.5-5 5"/><path d="m16 11-5 5"/><path d="M7 16.5c-1.35 0-2-1.35-2-2 0-2.5 4-2.5 4-2.5s0-4 2.5-4c.65 0 2 .65 2 2 0 2.5-6.5 6.5-6.5 6.5Z"/><path d="m8.5 8 2.5 2.5"/><path d="m10.5 10 5 5"/><path d="m12 11.5 5 5"/></svg>
+                                            </span>
+                                            <span>Consultas</span>
+                                            <span class="count" id="count-consultas">0</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="servicios">
                                             <span class="icon">

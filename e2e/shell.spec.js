@@ -697,7 +697,11 @@ test.describe('Shell — Historia clínica: tab "Órdenes de servicio" (orden-se
 
       const seccion = page.locator('#sec-consultorio');
       await expect(seccion.locator('#ordenesTableBody')).toContainText(orden.numero, { timeout: 15000 });
-      await seccion.getByRole('button', { name: 'Ver' }).click();
+      // exact:true -- ficha-animal-ordenes-servicios (slice 2) agregó el botón
+      // de header "Volver a la lista" dentro de #sec-consultorio; su nombre
+      // accesible matchea "Ver" como substring ("Vol-VER") si no se pide match
+      // exacto.
+      await seccion.getByRole('button', { name: 'Ver', exact: true }).click();
       await expect(page.locator('#sec-orden-abierta')).toBeVisible();
       await expect(page.locator('#oaMetaNumero')).toHaveText(orden.numero);
     } finally {

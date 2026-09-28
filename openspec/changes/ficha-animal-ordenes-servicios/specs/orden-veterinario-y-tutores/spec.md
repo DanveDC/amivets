@@ -8,16 +8,20 @@ Rediseñar la sección "Historia clínica" (`sec-consultorio`) como una "Ficha d
 
 ### Requirement: Ficha del animal — navegación de dos niveles Lista → Ficha
 
-El sistema SHALL presentar, dentro de `sec-consultorio`, dos vistas: un listado de pacientes (buscador, filtros por especie/sexo/estado reproductivo/raza) y la ficha del paciente seleccionado. Al no haber ningún paciente seleccionado, la columna de la ficha SHALL mostrar un estado vacío invitando a elegir un paciente. Al seleccionar un paciente desde la lista, la ficha SHALL cargar sus datos y activar el tab "Resumen" por defecto.
+El sistema SHALL presentar, dentro de `sec-consultorio`, dos vistas **mutuamente excluyentes**: Vista 1 (listado de pacientes, con buscador y filtros por especie/sexo/estado reproductivo/raza) y Vista 2 (la ficha del paciente seleccionado). Al seleccionar un paciente desde la lista, la Vista 1 SHALL ocultarse, la ficha SHALL cargar sus datos y activar el tab "Resumen" por defecto. La ficha SHALL ofrecer un botón "← Volver a la lista" que oculta la Vista 2, vuelve a mostrar la Vista 1 y restaura el término de búsqueda y la posición de scroll que tenía el listado antes de entrar a la ficha. Al no haber ningún paciente seleccionado (estado inicial de la sección), la Vista 2 SHALL mostrar un estado vacío invitando a elegir un paciente.
 
 #### Scenario: Seleccionar un paciente desde la lista
 - **WHEN** el usuario hace click en un paciente del listado de `sec-consultorio`
-- **THEN** la columna derecha muestra el header de la ficha (nombre, código, especie/raza/sexo, dueño) y el tab "Resumen" activo
-- **AND** el listado de la izquierda sigue visible para elegir otro paciente sin recargar la sección
+- **THEN** la Vista 1 (listado) se oculta y la columna de contenido muestra el header de la ficha (nombre, código, especie/raza/sexo, dueño) y el tab "Resumen" activo
+
+#### Scenario: Volver a la lista restaura búsqueda y scroll
+- **WHEN** el usuario, tras buscar un término y hacer scroll en el listado, entra a una ficha y luego hace click en "← Volver a la lista"
+- **THEN** la Vista 1 vuelve a mostrarse con el mismo término de búsqueda y la misma posición de scroll que tenía antes de entrar a la ficha
+- **AND** la Vista 2 (ficha) queda oculta
 
 #### Scenario: Sin paciente seleccionado
 - **WHEN** el usuario entra a `sec-consultorio` sin haber elegido un paciente todavía
-- **THEN** la columna derecha muestra el mensaje "Seleccione un paciente de la lista para ver su historial médico"
+- **THEN** la Vista 1 (listado) está visible y la columna de contenido de la ficha muestra el mensaje "Seleccione un paciente de la lista para ver su historial médico"
 
 ### Requirement: Header de la ficha con datos del animal y acciones
 
@@ -33,15 +37,13 @@ El header SHALL además mostrar un botón "+ Orden de servicio" que abre el pane
 - **WHEN** un usuario autenticado con un rol distinto de `admin`/`recepcionista`/`veterinario` (si existiera) llama a `PUT /api/mascotas/{id}`
 - **THEN** el backend responde 403, igual que hoy para el resto de los endpoints de `_ROLES_MASCOTAS`
 
-### Requirement: Tab "Órdenes de servicio" (reemplaza al tab "Consultas" en la ficha)
+### Requirement: Tab "Órdenes de servicio" (tab nuevo, junto al tab "Consultas")
 
-El tab, antes llamado "Consultas" y que mostraba `GET /api/consultas/?mascota_id={id}`, SHALL pasar a mostrar las órdenes de servicio del animal vía `GET /api/ordenes/?mascota_id={id}&limit=200`, con columnas Número, Estado, Fecha de apertura, Veterinario y Total, y con las acciones que ya ofrece la pantalla de la orden (`abrirOrden`, anexar servicio, facturar, ver factura) según su estado.
+La ficha SHALL ofrecer, junto al tab "Consultas" (ver requisito siguiente), un tab "Órdenes de servicio" que muestra las órdenes de servicio del animal vía `GET /api/ordenes/?mascota_id={id}&limit=200`, con columnas Número, Estado, Fecha de apertura, Veterinario y Total, y con las acciones que ya ofrece la pantalla de la orden (`abrirOrden`, anexar servicio, facturar, ver factura) según su estado.
 
 El tab SHALL ofrecer un buscador que use el parámetro `search` de `GET /api/ordenes/` (ver Requirement "Búsqueda de órdenes por texto libre"), un select de estado y un rango de fechas sobre `fecha_apertura`.
 
-El botón de acción del tab (antes "+ Nueva Consulta", que llamaba a `abrirFormularioConsulta()`) SHALL pasar a ser "+ Orden de servicio" y abrir el mismo panel inline que el botón del header.
-
-Por compatibilidad, un `switchPetTab('consultas')` residual SHALL seguir resolviendo al tab de órdenes (alias en `PET_TAB_LEGACY`), sin que esto implique mantener contenido de consultas en ese tab.
+El botón de acción del tab SHALL ser "+ Orden de servicio" y abrir el mismo panel inline que el botón del header — este tab es el único punto de alta de trabajo nuevo dentro de la ficha; NO SHALL ofrecer un botón "+ Nueva Consulta"/"Agregar consulta".
 
 #### Scenario: Ver las órdenes del animal
 - **WHEN** el usuario abre el tab "Órdenes de servicio" de la ficha
@@ -51,6 +53,32 @@ Por compatibilidad, un `switchPetTab('consultas')` residual SHALL seguir resolvi
 #### Scenario: Ya no hay botón de "Agregar consulta" en este tab
 - **WHEN** el usuario abre el tab "Órdenes de servicio"
 - **THEN** el botón de acción del tab dice "+ Orden de servicio", no "+ Nueva Consulta"
+
+### Requirement: Tab "Consultas" — se conserva para las acciones de reparación de datos legacy
+
+El tab "Consultas" (`data-tab="consultas"`) SHALL seguir existiendo como tab propio de la ficha, junto al tab "Órdenes de servicio", mostrando `GET /api/consultas/?mascota_id={id}` con las mismas columnas y filtros que ya tenía (Fecha, Motivo, Diagnóstico, Signos, Pago, buscador por veterinario/fecha/estado de pago). Este tab NO SHALL ofrecer un botón "+ Nueva Consulta"/"Agregar consulta" — la creación de historia clínica nueva pasa únicamente por "+ Orden de servicio" (tab "Órdenes de servicio" o header de la ficha).
+
+El propósito de mantener este tab es exclusivamente ofrecer, por fila, las acciones de reparación de datos legacy que ya existían para consultas que quedaron en un estado inconsistente (creadas antes de que `orden_id` fuera obligatorio, o con su línea de honorario borrada):
+- Si la consulta no tiene ninguna orden asociada (ni por su línea CONSULTA ni por sus servicios), la fila SHALL ofrecer "Facturar" para facturar el honorario directamente.
+- Si la consulta tiene una orden asociada, la fila SHALL ofrecer "Ir a la orden"; si además a esa orden le falta la línea del honorario (`honorario_en_orden` es `false` y `precio_consulta > 0`), la fila SHALL ofrecer también "Agregar honorario a la orden".
+- Si la consulta ya fue facturada (`factura_id` presente), la fila SHALL ofrecer "Facturado" (link a la factura) en lugar de las acciones anteriores.
+- Toda fila SHALL ofrecer además "Ver consulta"/"Completa" para abrir el detalle completo (`verConsultaCompleta`).
+
+No SHALL existir un alias `PET_TAB_LEGACY.consultas -> 'ordenes'`: `switchPetTab('consultas')` SHALL activar el tab "Consultas" descripto acá, no el tab "Órdenes de servicio".
+
+#### Scenario: Consulta sin ninguna orden ofrece "Facturar"
+- **WHEN** el usuario abre el tab "Consultas" de una mascota con una consulta sin orden asociada
+- **THEN** la fila de esa consulta muestra el botón "Facturar" y no muestra "Ir a la orden"
+- **AND** al confirmar, se genera una factura con una sola línea (el honorario) por `precio_consulta`
+
+#### Scenario: A la orden de la consulta le falta el honorario
+- **WHEN** el usuario abre el tab "Consultas" de una mascota con una consulta cuya orden no tiene la línea de honorario (`honorario_en_orden = false`) pero sí tiene `precio_consulta > 0`
+- **THEN** la fila muestra "Ir a la orden" y "Agregar honorario a la orden"
+- **AND** al confirmar "Agregar honorario a la orden", la orden pasa a listar ese honorario entre sus pendientes de facturar y el botón deja de mostrarse
+
+#### Scenario: El tab Consultas no ofrece alta de consulta nueva
+- **WHEN** el usuario abre el tab "Consultas"
+- **THEN** no hay ningún botón "+ Nueva Consulta"/"Agregar consulta" en el tab
 
 ### Requirement: Botón "+ Orden de servicio" — panel inline, no modal
 
@@ -134,6 +162,6 @@ La ficha SHALL ofrecer un tab que muestre las facturas del animal (`GET /api/fac
 
 1. El header y el landing de la ficha ya no ofrecen un botón "Agregar consulta"/"Nueva consulta"; en su lugar ofrecen "+ Orden de servicio", que abre un panel inline (no un modal).
 2. `abrirFormularioConsulta`, `handleConsultaSubmit`, `verConsultaCompleta`, `initConsultaAbierta`, `modalConsulta` y `cargarConsultas` siguen funcionando sin cambios para Panel del día, Citas pendientes, Reportes y Facturación.
-3. El tab "Órdenes de servicio" (antes "Consultas") muestra las órdenes del animal, no sus consultas.
+3. El tab "Órdenes de servicio" (nuevo) muestra las órdenes del animal; el tab "Consultas" se conserva junto a él, sin botón de alta, solo con las acciones de reparación legacy (Facturar / Ir a la orden / Agregar honorario a la orden / Ver consulta).
 4. `GET /api/ordenes/` y `GET /api/servicios/` aceptan `search`; `GET /api/facturas/mascota/{id}` incluye facturas vinculadas solo por orden y acepta `estado`.
 5. Los permisos de Editar/Transferir/Eliminar mascota y de crear orden coinciden con las reglas reales del backend (`admin`/`recepcionista`/`veterinario`), sin restricciones de UI inventadas.

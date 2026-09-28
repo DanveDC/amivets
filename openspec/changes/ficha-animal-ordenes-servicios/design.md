@@ -28,13 +28,13 @@
 **Goals:**
 1. Navegación de dos niveles (Lista ↔ Ficha) con estado persistente
 2. Header de ficha rico con datos del animal + acciones
-3. 6 tabs integrados (Resumen, Órdenes, Servicios, Notas, Facturación, Peso)
+3. 7 tabs integrados (Resumen, Órdenes, Consultas, Servicios, Notas, Facturación, Peso) — "Consultas" se conserva como tab propio, sin botón de alta, solo para las acciones de reparación legacy (Facturar/Ir a la orden/Agregar honorario)
 4. Tab Órdenes: tabla completa con filtros, crear orden desde ficha
 5. Tab Servicios: vista plana con filtros combinados
 6. Tab Notas: lista + formulario agregar
 7. Tab Facturación: pagadas + pendientes con acciones
 8. Tab Resumen: dashboard informativo
-9. Eliminar los botones "Agregar consulta" del header/landing de la ficha, usar "+ Orden de servicio" (panel inline, sin modal nuevo). Los demás usos de "agregar consulta" (Panel del día, Citas pendientes) no se tocan.
+9. Eliminar los botones "Agregar consulta" del header/landing de la ficha, usar "+ Orden de servicio" (panel inline, sin modal nuevo). Los demás usos de "agregar consulta" (Panel del día, Citas pendientes, y las acciones de reparación por fila del tab Consultas) no se tocan.
 
 **Non-Goals:**
 - Cambiar APIs backend (ya tienen filtros por mascota_id)
@@ -341,8 +341,8 @@ const confirmarNuevaOrdenDesdeFicha = async () => {
 
 **En `consultorio.js`:**
 - En `seleccionarMascota()`, cambiar el wiring de `btnAction.onclick` (hoy llama `abrirFormularioConsulta()`) por `abrirPanelNuevaOrden()`.
-- En el tab (hoy `consultas`, pasa a llamarse `ordenes`), cambiar el botón de acción de "+ Nueva Consulta" (`btnRegistrarConsulta`, que llama `abrirFormularioConsulta()`) por "+ Orden de servicio" (`abrirPanelNuevaOrden()`).
-- Mantener `consultas` como alias de tab legacy hacia `ordenes` en `PET_TAB_LEGACY` (mismo patrón que ya usa el mapa para `historia`/`peso`/etc.), por si queda algún `switchPetTab('consultas')` colgado en HTML generado dinámicamente.
+- Se agrega un tab nuevo `ordenes` (con su propio botón "+ Orden de servicio" → `abrirPanelNuevaOrden()`), junto al tab `consultas` existente, que SIGUE existiendo tal cual estaba (mismo render, mismos filtros, mismas acciones por fila) — es el único lugar de la ficha que conserva las acciones de reparación de datos legacy por consulta (Facturar / Ir a la orden / Agregar honorario a la orden). Lo único que se le quita al tab `consultas` es su botón de alta "+ Nueva Consulta" (`btnRegistrarConsulta`): ese botón se elimina sin reemplazo en este tab, porque la alta pasa a `ordenes`.
+- **No** se usa `PET_TAB_LEGACY` para mapear `consultas -> ordenes`: son dos tabs reales y distintos que coexisten. `PET_TAB_LEGACY` conserva únicamente los alias preexistentes no relacionados con este cambio (`historia`/`peso`/`vacunas`/etc.).
 
 **En HTML (index.html):**
 - `#modalConsulta` (línea ~320) y `#modalCita` (línea ~400) son `<div>` de nivel superior, no están anidados dentro de `sec-consultorio` — no hay nada que remover ahí; ambos siguen en uso por los flujos que se mantienen.
