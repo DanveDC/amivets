@@ -11,14 +11,30 @@
 import { fetchAPI } from '../core/api.js';
 import { showNotification, openModal, closeModal, escapeHtml } from '../core/ui.js';
 import { gatePrecioInput, getUsuariosMap } from './historial-precios.js';
+import { getRole } from '../core/session.js';
 
 // ============================================================
 // ESTADO DEL PANEL MAESTRO-DETALLE
 // ============================================================
 
-let listaCache = [];          // último /catalogo?... resuelto
+let listaCache = [];          // acumulado de todas las páginas cargadas hasta ahora
 let selectedId = null;
 let materialesCache = [];     // inventario filtrado a tipo_item === 'MATERIAL'
+
+// ============================================================
+// PAGINACIÓN "CARGAR MÁS" (paginacion-catalogo) — antes se pedía todo de
+// una con ?limit=500 y, pasado ese techo, el resto del catálogo no
+// aparecía salvo que se lo buscara por nombre. Página de PAGE_SIZE_CATALOGO,
+// que avanza con `skip`; buscar o cambiar de categoría resetea a la
+// primera página. `_generacionCatalogo` evita que una respuesta vieja
+// (de un filtro ya reemplazado) pise una más nueva -- mismo patrón que
+// `_generacionPorCobrar` en sections/facturacion.js.
+// ============================================================
+const PAGE_SIZE_CATALOGO = 100;
+let catalogoSkip = 0;
+let catalogoHayMasPaginas = false;
+let catalogoCargandoMas = false;
+let _generacionCatalogo = 0;
 
 const formatMoney = (n) => `$ ${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -49,26 +65,70 @@ export async function cargarCategoriasSelect() {
 // LISTA MAESTRA
 // ============================================================
 
-export async function cargarCatalogo() {
+function catalogoFiltrosActuales() {
     const q = (document.getElementById('catalogoSearch')?.value || '').trim();
     const cat = document.getElementById('catalogoCategoriaFilter')?.value || '';
-    let url = '/catalogo?solo_activos=false&limit=500';
+    return { q, cat };
+}
+
+// Contador real para los filtros actuales (GET /catalogo/contador): la
+// lista pagina con skip/limit y `listaCache` solo tiene lo cargado hasta
+// ahora, no alcanza para contar. Se pide aparte para no cambiar la forma
+// de la respuesta de la lista (paginacion-catalogo).
+async function actualizarContadorCatalogo(generacion, q, cat) {
+    const contador = document.getElementById('catalogoContador');
+    if (!contador) return;
+    try {
+        let url = '/catalogo/contador';
+        const params = [];
+        if (q) params.push(`q=${encodeURIComponent(q)}`);
+        if (cat) params.push(`categoria=${encodeURIComponent(cat)}`);
+        if (params.length) url += `?${params.join('&')}`;
+        const info = await fetchAPI(url);
+        if (generacion !== _generacionCatalogo) return; // filtro reemplazado mientras cargaba
+        contador.textContent = `${info.activos} activos${info.inactivos ? ` · ${info.inactivos} inactivos` : ''}`;
+    } catch (err) {
+        // El contador es un detalle secundario: si falla no rompe la lista.
+        console.error('Error cargando el contador del catálogo:', err);
+    }
+}
+
+async function cargarPaginaCatalogo(generacion, reset) {
+    const { q, cat } = catalogoFiltrosActuales();
+    let url = `/catalogo?solo_activos=false&limit=${PAGE_SIZE_CATALOGO}&skip=${catalogoSkip}`;
     if (q) url += `&q=${encodeURIComponent(q)}`;
     if (cat) url += `&categoria=${encodeURIComponent(cat)}`;
 
     const lista = document.getElementById('catalogoLista');
-    const contador = document.getElementById('catalogoContador');
+    const btnCargarMas = document.getElementById('catalogoCargarMas');
     if (!lista) return;
-    lista.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+
+    if (reset) {
+        lista.innerHTML = '<p class="rp-empty-text">Cargando…</p>';
+        // Por si quedaba un "cargar más" a mitad de camino de un filtro
+        // anterior (ver comentario de cargarCatalogo sobre catalogoCargandoMas):
+        // el botón vuelve a su estado de reposo, no al que dejó esa carga vieja.
+        if (btnCargarMas) { btnCargarMas.hidden = true; btnCargarMas.disabled = false; btnCargarMas.textContent = 'Cargar más'; }
+    } else {
+        catalogoCargandoMas = true;
+        if (btnCargarMas) { btnCargarMas.disabled = true; btnCargarMas.textContent = 'Cargando…'; }
+    }
 
     try {
         const items = await fetchAPI(url);
-        listaCache = Array.isArray(items) ? items : [];
-        const activos = listaCache.filter(s => s.activo).length;
-        if (contador) contador.textContent = `${activos} activos${listaCache.length !== activos ? ` · ${listaCache.length - activos} inactivos` : ''}`;
+        if (generacion !== _generacionCatalogo) return; // superseded por otro filtro mientras cargaba
+
+        const pagina = Array.isArray(items) ? items : [];
+        listaCache = reset ? pagina : listaCache.concat(pagina);
+        catalogoSkip += pagina.length;
+        catalogoHayMasPaginas = pagina.length === PAGE_SIZE_CATALOGO;
+
+        if (reset) await actualizarContadorCatalogo(generacion, q, cat);
+        if (generacion !== _generacionCatalogo) return; // por si el filtro cambió durante el contador
 
         if (listaCache.length === 0) {
             lista.innerHTML = '<p class="rp-empty-text">Sin resultados.</p>';
+            if (btnCargarMas) btnCargarMas.hidden = true;
             renderDetalleVacio();
             return;
         }
@@ -87,16 +147,48 @@ export async function cargarCatalogo() {
             btn.addEventListener('click', () => seleccionarServicio(Number(btn.dataset.id)));
         });
 
-        // Si el servicio seleccionado sigue en la lista filtrada, mantiene
-        // selección; si no, selecciona el primero (o vacío si no hay).
-        if (selectedId && listaCache.some(s => s.id === selectedId)) {
-            cargarDetalle(selectedId);
-        } else {
-            seleccionarServicio(listaCache[0].id);
+        if (btnCargarMas) btnCargarMas.hidden = !catalogoHayMasPaginas;
+
+        if (reset) {
+            // Si el servicio seleccionado sigue en la lista filtrada, mantiene
+            // selección; si no, selecciona el primero (o vacío si no hay).
+            if (selectedId && listaCache.some(s => s.id === selectedId)) {
+                cargarDetalle(selectedId);
+            } else {
+                seleccionarServicio(listaCache[0].id);
+            }
         }
+        // "Cargar más" (reset=false) nunca toca la selección ni el detalle
+        // ya abierto -- solo agrega filas al final de la lista.
     } catch (err) {
+        if (generacion !== _generacionCatalogo) return;
         lista.innerHTML = `<p class="rp-empty-text">Error: ${escapeHtml(err.message)}</p>`;
+    } finally {
+        if (generacion === _generacionCatalogo) {
+            catalogoCargandoMas = false;
+            if (btnCargarMas) { btnCargarMas.disabled = false; btnCargarMas.textContent = 'Cargar más'; }
+        }
     }
+}
+
+export async function cargarCatalogo() {
+    // Carga inicial, nueva búsqueda o cambio de categoría: vuelve a la
+    // primera página y descarta lo acumulado hasta ahora.
+    catalogoSkip = 0;
+    catalogoHayMasPaginas = false;
+    // Si quedaba un "cargar más" en vuelo de un filtro anterior, su respuesta
+    // va a llegar con una generación vieja y salir por el chequeo de arriba
+    // sin pasar por el `finally` que limpia esta bandera -- se resetea acá
+    // para que un cambio de filtro nunca deje "cargar más" trabado en true.
+    catalogoCargandoMas = false;
+    listaCache = [];
+    const generacion = ++_generacionCatalogo;
+    await cargarPaginaCatalogo(generacion, true);
+}
+
+async function cargarMasCatalogo() {
+    if (catalogoCargandoMas || !catalogoHayMasPaginas) return;
+    await cargarPaginaCatalogo(_generacionCatalogo, false);
 }
 
 function seleccionarServicio(id) {
@@ -151,16 +243,34 @@ async function cargarDetalle(id) {
             cargarMaterialesCache(),
             fetchAPI(`/catalogo/${id}/costo`),
         ]);
+        // plantillas-paquete-catalogo: componentes y disponibilidad solo hacen
+        // falta para un paquete -- para el resto de los servicios se ahorran
+        // las dos llamadas.
+        let paquete = null;
+        let disponibilidad = null;
+        if (servicio.es_paquete) {
+            [paquete, disponibilidad] = await Promise.all([
+                fetchAPI(`/catalogo/${id}/componentes`),
+                fetchAPI(`/catalogo/${id}/disponibilidad`),
+            ]);
+        }
         if (id !== selectedId) return; // superseded por otra selección mientras cargaba
-        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales, costo);
+        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales, costo, paquete, disponibilidad);
     } catch (err) {
         detalle.innerHTML = `<p class="rp-empty-text">Error al cargar el servicio: ${escapeHtml(err.message)}</p>`;
     }
 }
 
-function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo) {
+function pillComision(s) {
+    if (s.tipo_comision_servicio === 'FIJO') return `<span class="av-pill" data-cat-comision>Comisión ${formatMoney(s.monto_fijo_servicio)} fijo</span>`;
+    if (s.tipo_comision_servicio === 'PORCENTAJE') return `<span class="av-pill" data-cat-comision>Comisión ${Number(s.porcentaje_servicio)}%</span>`;
+    return '';
+}
+
+function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo, paquete = null, disponibilidad = null) {
     const detalle = document.getElementById('catalogoDetalle');
     if (!detalle) return;
+    const esAdmin = getRole() === 'admin';
 
     // Costo desde GET /catalogo/{id}/costo (catalogo-servicios-configurable):
     // precio por UNIDAD BASE del material (envase / contenido). Antes se
@@ -204,6 +314,77 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
                 </div>`;
         }).join('');
 
+    // plantillas-paquete-catalogo: "Componentes del paquete" (solo si
+    // `servicio.es_paquete`) e "Insumos y stock" (agregación de la propia
+    // receta + la de cada componente activo, design D4). Edición solo admin.
+    const filasComponentes = !paquete || paquete.componentes.length === 0
+        ? '<tr><td colspan="5" class="rp-empty-text">Sin componentes todavía.</td></tr>'
+        : paquete.componentes.map((c, idx) => `
+            <tr data-componente-row-id="${c.id}" style="${c.activo ? '' : 'opacity:0.55;'}">
+                <td>${escapeHtml(c.nombre)}${c.activo ? '' : ' <span class="av-pill av-pill--neutral" style="font-size:10px;">inactivo</span>'}</td>
+                <td>
+                    ${esAdmin
+                        ? `<input type="number" class="cat-cantidad-input paquete-cantidad" value="${Number(c.cantidad)}" step="0.001" min="0.001" aria-label="Cantidad de ${escapeHtml(c.nombre)}">`
+                        : Number(c.cantidad)}
+                </td>
+                <td class="rp-num">${formatMoney(c.subtotal)}</td>
+                ${esAdmin ? `
+                <td style="white-space:nowrap;">
+                    <button type="button" class="cat-icon-btn paquete-subir" title="Subir" aria-label="Subir ${escapeHtml(c.nombre)}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+                    <button type="button" class="cat-icon-btn paquete-bajar" title="Bajar" aria-label="Bajar ${escapeHtml(c.nombre)}" ${idx === paquete.componentes.length - 1 ? 'disabled' : ''}>↓</button>
+                </td>
+                <td style="text-align:right;">
+                    <button type="button" class="cat-icon-btn paquete-quitar" title="Quitar" aria-label="Quitar ${escapeHtml(c.nombre)}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </td>` : '<td></td><td></td>'}
+            </tr>`).join('');
+
+    const seccionPaquete = !servicio.es_paquete ? '' : `
+        <div class="cat-hr"></div>
+        <div class="cat-detail-section">
+            <div class="cat-detail-section-head">
+                <span style="font-size:14px; font-weight:600;">Componentes del paquete</span>
+                <span style="font-size:12px; color:var(--text-muted);">total del paquete ${formatMoney(paquete?.total_paquete ?? servicio.precio_ref)}</span>
+                <div class="av-spacer"></div>
+                ${esAdmin ? '<button type="button" class="av-btn" id="btnCatAgregarComponente">+ Agregar componente</button>' : ''}
+            </div>
+            ${esAdmin ? `
+            <div id="catAgregarComponenteRow" class="cat-agregar-row" hidden>
+                <select id="catComponenteSelect" aria-label="Servicio del catálogo"><option value="">Seleccionar…</option></select>
+                <input type="number" id="catComponenteCantidad" step="0.001" min="0.001" value="1" placeholder="Cantidad" aria-label="Cantidad" style="width:100px;">
+                <button type="button" class="av-btn av-btn--primary" id="btnCatConfirmarComponente">Agregar</button>
+                <span id="catComponenteError" class="rp-empty-text" role="alert" style="padding:0; display:none;"></span>
+            </div>` : ''}
+            <table class="rp-table cat-receta-table">
+                <thead><tr><th>Servicio</th><th>Cantidad</th><th>Subtotal</th><th colspan="2"></th></tr></thead>
+                <tbody id="catPaqueteComponentesBody">${filasComponentes}</tbody>
+            </table>
+        </div>`;
+
+    const filasInsumosStock = !disponibilidad || disponibilidad.insumos.length === 0
+        ? '<tr><td colspan="4" class="rp-empty-text">Sin insumos en la receta.</td></tr>'
+        : disponibilidad.insumos.map((i) => `
+            <tr>
+                <td>${escapeHtml(i.nombre)}</td>
+                <td class="rp-num">${i.requerido} ${escapeHtml(i.unidad)}</td>
+                <td class="rp-num">${i.disponible} ${escapeHtml(i.unidad)}</td>
+                <td class="rp-num${i.faltante > 0 ? ' av-text-danger' : ''}">${i.faltante}</td>
+            </tr>`).join('');
+
+    const seccionDisponibilidad = !servicio.es_paquete ? '' : `
+        <div class="cat-hr"></div>
+        <div class="cat-detail-section">
+            <div class="cat-detail-section-head">
+                <span style="font-size:14px; font-weight:600;">Insumos y stock</span>
+                <span style="font-size:12px; ${disponibilidad && !disponibilidad.suficiente ? 'color:var(--accent);' : 'color:var(--text-muted);'}">${disponibilidad?.suficiente ? 'Stock suficiente para el paquete completo' : 'Stock insuficiente para algún insumo'}</span>
+            </div>
+            <table class="rp-table cat-receta-table">
+                <thead><tr><th>Material</th><th>Requerido</th><th>Disponible</th><th>Faltante</th></tr></thead>
+                <tbody>${filasInsumosStock}</tbody>
+            </table>
+        </div>`;
+
     detalle.innerHTML = `
         <div class="cat-detail-head">
             <div class="cat-detail-heading">
@@ -212,6 +393,8 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
                     <span class="av-pill">${escapeHtml(servicio.categoria)}</span>
                     <span class="av-pill ${servicio.activo ? 'av-pill--ok' : 'av-pill--neutral'}">${servicio.activo ? 'Activo' : 'Inactivo'}</span>
                     ${servicio.precio_variable ? '<span class="av-pill av-pill--warn">Precio variable</span>' : ''}
+                    ${servicio.es_paquete ? '<span class="av-pill av-pill--info">PAQUETE</span>' : ''}
+                    ${pillComision(servicio)}
                 </div>
             </div>
             <div class="cat-detail-precio">
@@ -222,6 +405,9 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
             <button type="button" class="av-btn" id="btnCatEditar">Editar</button>
             ${servicio.activo ? '<button type="button" class="av-btn" style="color:var(--accent); border-color:var(--accent);" id="btnCatDesactivar">Desactivar</button>' : ''}
         </div>
+
+        ${seccionPaquete}
+        ${seccionDisponibilidad}
 
         <div class="cat-hr"></div>
 
@@ -329,6 +515,130 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
         }
     });
     document.getElementById('btnCatConfirmarInsumo')?.addEventListener('click', () => agregarReceta(servicio.id));
+
+    if (servicio.es_paquete && esAdmin) wirePaqueteComponentes(servicio.id);
+}
+
+// ============================================================
+// COMPONENTES DEL PAQUETE (plantillas-paquete-catalogo) — solo admin edita;
+// veterinario/otros ven la sección de renderDetalle en modo lectura (sin estos
+// listeners, porque los botones de edición ni se pintan).
+// ============================================================
+
+function wirePaqueteComponentes(paqueteId) {
+    const body = document.getElementById('catPaqueteComponentesBody');
+    body?.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-componente-row-id]');
+        if (!row) return;
+        const rowId = row.dataset.componenteRowId;
+        if (e.target.closest('.paquete-quitar')) return quitarComponentePaquete(rowId);
+        if (e.target.closest('.paquete-subir')) return moverComponentePaquete(paqueteId, row, -1);
+        if (e.target.closest('.paquete-bajar')) return moverComponentePaquete(paqueteId, row, 1);
+    });
+    body?.addEventListener('change', (e) => {
+        const inp = e.target.closest('.paquete-cantidad');
+        if (!inp) return;
+        const row = inp.closest('[data-componente-row-id]');
+        if (row) actualizarCantidadComponentePaquete(row.dataset.componenteRowId, inp.value);
+    });
+
+    document.getElementById('btnCatAgregarComponente')?.addEventListener('click', async () => {
+        const row = document.getElementById('catAgregarComponenteRow');
+        if (!row) return;
+        row.hidden = !row.hidden;
+        if (!row.hidden) await cargarComponentesDisponiblesSelect();
+    });
+    document.getElementById('btnCatConfirmarComponente')?.addEventListener('click', () => agregarComponentePaqueteUI(paqueteId));
+}
+
+function showComponenteError(msg) {
+    const el = document.getElementById('catComponenteError');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.display = msg ? 'inline' : 'none';
+}
+
+// Candidatos del <select> "Agregar componente": activos, que no sean ellos
+// mismos un paquete (un nivel solo, design D1) y que no sean CONSULTA (design
+// D5) -- el backend igual valida todo esto, esto solo evita un 422 obvio.
+async function cargarComponentesDisponiblesSelect() {
+    const select = document.getElementById('catComponenteSelect');
+    if (!select) return;
+    try {
+        const servicios = await fetchAPI('/catalogo?solo_activos=true&limit=500') || [];
+        const candidatos = servicios.filter(s =>
+            !s.es_paquete && (s.categoria || '').toUpperCase() !== 'CONSULTA' && s.id !== selectedId
+        );
+        select.innerHTML = '<option value="">Seleccionar…</option>' + candidatos.map(s =>
+            `<option value="${s.id}">${escapeHtml(s.nombre)} (${escapeHtml(s.categoria)})</option>`
+        ).join('');
+    } catch (err) {
+        select.innerHTML = '<option value="">Error al cargar servicios</option>';
+    }
+}
+
+async function agregarComponentePaqueteUI(paqueteId) {
+    const componenteId = parseInt(document.getElementById('catComponenteSelect')?.value, 10);
+    const cantidad = parseFloat(document.getElementById('catComponenteCantidad')?.value);
+    showComponenteError('');
+    if (!componenteId) { showComponenteError('Elegí un servicio.'); return; }
+    if (!(cantidad > 0)) { showComponenteError('Ingresá una cantidad mayor a 0.'); return; }
+    try {
+        await fetchAPI(`/catalogo/${paqueteId}/componentes`, {
+            method: 'POST',
+            body: JSON.stringify({ componente_id: componenteId, cantidad }),
+        });
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showComponenteError('Error: ' + err.message);
+    }
+}
+
+async function quitarComponentePaquete(rowId) {
+    try {
+        await fetchAPI(`/catalogo/componentes/${rowId}`, { method: 'DELETE' });
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showNotification('Error al quitar componente: ' + err.message, 'error');
+    }
+}
+
+async function actualizarCantidadComponentePaquete(rowId, valor) {
+    const cantidad = parseFloat(valor);
+    if (!(cantidad > 0)) { showNotification('La cantidad debe ser mayor a 0.', 'error'); return; }
+    try {
+        await fetchAPI(`/catalogo/componentes/${rowId}`, { method: 'PUT', body: JSON.stringify({ cantidad }) });
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showNotification('Error al actualizar cantidad: ' + err.message, 'error');
+    }
+}
+
+// Reordenar (design D5, "Reordenar componentes"): el front intercambia la
+// `posicion` de la fila con su vecino con dos PUT -- no hay un endpoint de
+// "mover" dedicado.
+async function moverComponentePaquete(paqueteId, row, delta) {
+    const vecino = delta < 0 ? row.previousElementSibling : row.nextElementSibling;
+    if (!vecino || !vecino.dataset.componenteRowId) return;
+    const filaId = row.dataset.componenteRowId;
+    const vecinoId = vecino.dataset.componenteRowId;
+    try {
+        const [listado] = await Promise.all([listarComponentesPaqueteUI(paqueteId)]);
+        const filaActual = listado.componentes.find(c => String(c.id) === filaId);
+        const filaVecina = listado.componentes.find(c => String(c.id) === vecinoId);
+        if (!filaActual || !filaVecina) return;
+        await Promise.all([
+            fetchAPI(`/catalogo/componentes/${filaId}`, { method: 'PUT', body: JSON.stringify({ posicion: filaVecina.posicion }) }),
+            fetchAPI(`/catalogo/componentes/${vecinoId}`, { method: 'PUT', body: JSON.stringify({ posicion: filaActual.posicion }) }),
+        ]);
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showNotification('Error al reordenar: ' + err.message, 'error');
+    }
+}
+
+function listarComponentesPaqueteUI(paqueteId) {
+    return fetchAPI(`/catalogo/${paqueteId}/componentes`);
 }
 
 // ============================================================
@@ -434,6 +744,43 @@ function toggleCategoriaNueva() {
     }
 }
 
+// Override de comisión por item (comision-tipo-mixto-encargado), admin-only
+// como el precio: a los demás roles el grupo ni se les muestra.
+function toggleCamposComision() {
+    const tipo = document.getElementById('catalogoTipoComision')?.value;
+    const monto = document.getElementById('catalogoMontoFijoComision');
+    const porcentaje = document.getElementById('catalogoPorcentajeComision');
+    if (monto) monto.hidden = tipo !== 'FIJO';
+    if (porcentaje) porcentaje.hidden = tipo !== 'PORCENTAJE';
+}
+
+function cargarComisionModal(s) {
+    const group = document.getElementById('catalogoComisionGroup');
+    if (group) group.hidden = getRole() !== 'admin';
+    document.getElementById('catalogoTipoComision').value = s?.tipo_comision_servicio || 'HEREDA';
+    document.getElementById('catalogoMontoFijoComision').value = s?.monto_fijo_servicio ?? '';
+    document.getElementById('catalogoPorcentajeComision').value = s?.porcentaje_servicio ?? '';
+    toggleCamposComision();
+}
+
+/** Campos de comisión del payload, o un string con el error. */
+function payloadComision() {
+    const tipo = document.getElementById('catalogoTipoComision').value;
+    const leer = (idInput) => {
+        const texto = document.getElementById(idInput).value.trim();
+        return texto === '' ? null : Number(texto);
+    };
+    const monto = tipo === 'FIJO' ? leer('catalogoMontoFijoComision') : null;
+    const porcentaje = tipo === 'PORCENTAJE' ? leer('catalogoPorcentajeComision') : null;
+    if (tipo === 'FIJO' && (monto === null || Number.isNaN(monto) || monto < 0)) {
+        return 'Indicá un monto fijo de comisión válido.';
+    }
+    if (tipo === 'PORCENTAJE' && (porcentaje === null || Number.isNaN(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
+        return 'El porcentaje de comisión tiene que estar entre 0 y 100.';
+    }
+    return { tipo_comision_servicio: tipo, monto_fijo_servicio: monto, porcentaje_servicio: porcentaje };
+}
+
 export async function abrirModalServicio(id = null) {
     document.getElementById('catalogoServicioId').value = '';
     document.getElementById('formCatalogoServicio').reset();
@@ -447,6 +794,13 @@ export async function abrirModalServicio(id = null) {
     if (precioInput) { precioInput.disabled = false; precioInput.classList.remove('is-locked'); }
     if (precioHint) precioHint.hidden = true;
     if (motivoGroup) motivoGroup.hidden = true;
+    cargarComisionModal(null);
+
+    // plantillas-paquete-catalogo: "Es paquete" es admin-only (design D5),
+    // igual que el grupo de comisión de arriba.
+    const esPaqueteGroup = document.getElementById('catalogoEsPaqueteGroup');
+    if (esPaqueteGroup) esPaqueteGroup.hidden = getRole() !== 'admin';
+    document.getElementById('catalogoEsPaquete').checked = false;
 
     if (id) {
         try {
@@ -459,6 +813,8 @@ export async function abrirModalServicio(id = null) {
             document.getElementById('catalogoPrecioVariable').checked = s.precio_variable;
             document.getElementById('catalogoArea').value = s.area_id ? String(s.area_id) : '';
             document.getElementById('catalogoAdjunto').value = s.requiere_adjunto === true ? 'si' : (s.requiere_adjunto === false ? 'no' : '');
+            document.getElementById('catalogoEsPaquete').checked = !!s.es_paquete;
+            cargarComisionModal(s);
             gatePrecioInput({ inputId: 'catalogoPrecioRef', hintId: 'catalogoPrecioRefHint', motivoGroupId: 'catalogoMotivoGroup' });
         } catch (err) {
             showNotification('Error cargando servicio: ' + err.message, 'error');
@@ -494,6 +850,22 @@ export async function guardarServicio(e) {
     if (!areaGroup?.hidden) {
         const area = document.getElementById('catalogoArea').value;
         payload.area_id = area ? Number(area) : null;
+    }
+    // plantillas-paquete-catalogo: "Es paquete" solo se manda si el grupo es
+    // visible (admin) -- el backend igual es admin-only, esto evita mandar
+    // `es_paquete=false` de un rol que ni ve el checkbox y "cambiar" el valor
+    // sin querer si algún día backend deja de ser idempotente en el mismo valor.
+    const esPaqueteGroup = document.getElementById('catalogoEsPaqueteGroup');
+    if (!esPaqueteGroup?.hidden) {
+        payload.es_paquete = document.getElementById('catalogoEsPaquete').checked;
+    }
+    if (!document.getElementById('catalogoComisionGroup')?.hidden) {
+        const comision = payloadComision();
+        if (typeof comision === 'string') {
+            showNotification(comision, 'warning');
+            return;
+        }
+        Object.assign(payload, comision);
     }
     try {
         if (id) {
@@ -533,6 +905,8 @@ export function init() {
     if (!_modalWired) {
         _modalWired = true;
         document.getElementById('catalogoCategoria')?.addEventListener('change', toggleCategoriaNueva);
+        document.getElementById('catalogoTipoComision')?.addEventListener('change', toggleCamposComision);
+        document.getElementById('catalogoCargarMas')?.addEventListener('click', cargarMasCatalogo);
     }
     cargarCategoriasSelect();
     cargarCatalogo();

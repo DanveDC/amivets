@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
+from datetime import date
 from io import BytesIO
 
 from app.core.database import get_db
 from app.schemas.schemas import (
     FacturaCreate, FacturaUpdate, FacturaResponse, AbonoCreate, AbonoResponse,
-    FacturaDesdeConsulta, DetalleFacturaCreate,
+    FacturaDesdeConsulta, DetalleFacturaCreate, GestorPagoResponse,
+    SaldoPendienteOrdenResponse,
 )
-from app.models.models import Factura, Abono, Consulta, Usuario
+from app.models.models import Factura, Abono, Consulta, Usuario, OrdenServicio, FacturaOrden
 from app.services.facturacion_service import FacturacionService
 from app.services.pdf_service import PDFService
 from app.routers.usuarios import require_roles
@@ -110,6 +112,57 @@ def crear_factura_desde_consulta(
     return FacturacionService.crear_factura(db, factura_create)
 
 
+@router.get("/hoy", response_model=List[FacturaResponse])
+def facturas_hoy(
+    skip: int = 0,
+    limit: int = 100,
+    estado: Optional[str] = None,
+    propietario_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
+):
+    """Facturas emitidas hoy (fecha_emision de hoy, UTC del servidor)."""
+    return FacturacionService.obtener_hoy(db, skip, limit, estado, propietario_id)
+
+
+@router.get("/gestores-pagos", response_model=List[GestorPagoResponse])
+def gestores_pagos(
+    desde: str,
+    hasta: str,
+    db: Session = Depends(get_db),
+    # Solo admin: expone info financiera sensible (cuánto se le paga a cada
+    # encargado), a diferencia del resto del router.
+    _: Usuario = Depends(require_roles("admin")),
+):
+    """Totales a pagar por gestor/encargado en un rango (`desde`, `hasta`,
+    YYYY-MM-DD), desde liquidaciones de comisión ya congeladas."""
+    try:
+        d_desde = date.fromisoformat(desde)
+        d_hasta = date.fromisoformat(hasta)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Formato de fecha inválido. Use YYYY-MM-DD",
+        )
+    if d_hasta < d_desde:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="'hasta' no puede ser anterior a 'desde'",
+        )
+    return FacturacionService.obtener_pagos_gestores(db, d_desde, d_hasta)
+
+
+@router.get("/orden/{orden_id}/saldo-pendiente", response_model=SaldoPendienteOrdenResponse)
+def saldo_pendiente_orden(
+    orden_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
+):
+    """Saldo pendiente de cobro de una orden (por su factura vinculada o,
+    si está CERRADA sin factura, por sus ítems sin facturar)."""
+    return FacturacionService.obtener_saldo_pendiente_orden(db, orden_id)
+
+
 @router.get("/{factura_id}", response_model=FacturaResponse)
 def obtener_factura(
     factura_id: int,
@@ -193,13 +246,40 @@ def obtener_items_pendientes(
 @router.get("/mascota/{mascota_id}", response_model=List[FacturaResponse])
 def obtener_facturas_mascota(
     mascota_id: int,
+    estado: Optional[str] = None,
     db: Session = Depends(get_db),
     _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
-    """Obtiene facturas asociadas a una mascota a través de sus consultas"""
+    """Facturas de una mascota, vía sus consultas o vía la orden que las originó.
+
+    Hallazgo de revisión (ficha-animal-ordenes-servicios): esto sólo buscaba
+    `JOIN Consulta ON Factura.consulta_id == Consulta.id` -- una factura de una
+    orden SIN línea de consulta (venta de mostrador, servicio directo/estética
+    facturado con `POST /ordenes/{id}/facturar`) se vincula sólo por
+    `FacturaOrden.orden_id`, y nunca aparecía acá. Se agrega esa segunda vía y
+    se deduplica por id. `estado` es opcional (csv, ej. "PAGADA" o
+    "PENDIENTE,PARCIAL") para separar pagadas de pendientes sin traer todo el
+    historial dos veces.
+    """
     from app.models.models import Consulta, Factura
-    facturas = db.query(Factura).join(Consulta, Factura.consulta_id == Consulta.id).filter(Consulta.mascota_id == mascota_id).all()
-    return facturas
+
+    por_consulta = db.query(Factura.id).join(Consulta, Factura.consulta_id == Consulta.id).filter(
+        Consulta.mascota_id == mascota_id
+    )
+    por_orden = db.query(Factura.id).join(FacturaOrden, FacturaOrden.factura_id == Factura.id).join(
+        OrdenServicio, OrdenServicio.id == FacturaOrden.orden_id
+    ).filter(OrdenServicio.mascota_id == mascota_id)
+
+    ids = {row[0] for row in por_consulta.all()} | {row[0] for row in por_orden.all()}
+    if not ids:
+        return []
+
+    q = db.query(Factura).filter(Factura.id.in_(ids))
+    if estado:
+        estados = [e.strip().upper() for e in estado.split(",") if e.strip()]
+        if estados:
+            q = q.filter(Factura.estado.in_(estados))
+    return q.order_by(Factura.fecha_emision.desc()).all()
 
 
 @router.post("/{factura_id}/abonar", response_model=AbonoResponse, status_code=status.HTTP_201_CREATED)
@@ -209,7 +289,9 @@ def registrar_abono(
     db: Session = Depends(get_db),
     _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
-    """Registra un pago parcial (abono) sobre una factura"""
+    """Registra un pago parcial (abono) sobre una factura. `orden_id` es
+    opcional (facturacion-metodos-gestores-saldo): si viene, vincula el abono
+    además a la orden pagada -- no reemplaza a factura_id."""
     factura = db.query(Factura).filter(Factura.id == factura_id).first()
     if not factura:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
@@ -231,12 +313,31 @@ def registrar_abono(
             detail=f"El monto ({monto}) supera el saldo pendiente ({saldo})"
         )
 
+    if abono_data.orden_id:
+        orden = db.query(OrdenServicio).filter(OrdenServicio.id == abono_data.orden_id).first()
+        if not orden:
+            raise HTTPException(status_code=404, detail="Orden no encontrada")
+        if orden.estado not in ("CERRADA", "FACTURADA"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"La orden {orden.numero} está {orden.estado}; solo se puede abonar CERRADA o FACTURADA."
+            )
+        # Si la orden ya tiene una factura vinculada, tiene que ser esta
+        # misma: un abono no puede apuntar a una factura y a la orden de otra.
+        vinculo = db.query(FacturaOrden).filter(FacturaOrden.orden_id == orden.id).first()
+        if vinculo and vinculo.factura_id != factura_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"La orden {orden.numero} está facturada con otra factura (#{vinculo.factura_id})."
+            )
+
     count_abonos = db.query(Abono).filter(Abono.factura_id == factura_id).count()
     numero_abono = f"AB-{factura.numero_factura}-{count_abonos + 1:03d}"
 
     nuevo_abono = Abono(
         numero_abono=numero_abono,
         factura_id=factura_id,
+        orden_id=abono_data.orden_id,
         monto=abono_data.monto,
         metodo_pago=abono_data.metodo_pago,
         notas=abono_data.notas
@@ -266,7 +367,12 @@ def listar_abonos(
     if not factura:
         raise HTTPException(status_code=404, detail="Factura no encontrada")
 
-    return db.query(Abono).filter(Abono.factura_id == factura_id).all()
+    return (
+        db.query(Abono)
+        .options(joinedload(Abono.orden))
+        .filter(Abono.factura_id == factura_id)
+        .all()
+    )
 
 
 @router.get("/{factura_id}/abonos/{abono_id}/pdf")

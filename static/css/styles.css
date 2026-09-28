@@ -1142,6 +1142,129 @@ form {
     flex: 1;
 }
 
+/* --- PANEL INLINE "NUEVA ORDEN DE SERVICIO" (ficha-animal-ordenes-servicios) ---
+   NO es un modal: mismo lenguaje visual que .oa-anexar-panel de orden-abierta.js
+   (cabecera + cuerpo con borde), pero ancho completo de la columna de
+   contenido en vez de aside lateral. */
+.ficha-nueva-orden-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+}
+/* Hallazgo de revisión conocido (mismo que .oa-anexar-panel, .av-search,
+   #catalogoCargarMas): con display:flex de base, [hidden] no le gana solo. */
+.ficha-nueva-orden-panel[hidden] { display: none; }
+.ficha-nop-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.ficha-nop-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    max-width: 480px;
+}
+.ficha-nop-body label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.ficha-nop-body select,
+.ficha-nop-body textarea {
+    font: inherit;
+    font-weight: 400;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.ficha-nop-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+/* --- FICHA HEADER (ficha-animal-ordenes-servicios) ---
+   .pet-content-header ya define el layout base (flex, space-between); estas
+   clases sólo agregan el bloque del botón "Volver a la lista" + nombre/meta
+   como grupo, para que en mobile (ver @media más abajo) el header entero
+   pueda envolver en líneas sin romper .pet-content-header existente. */
+.ficha-header-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-width: 0;
+}
+.ficha-btn-volver {
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* --- RESPONSIVE: Ficha del animal (ficha-animal-ordenes-servicios, tarea 11.5) ---
+   A ancho de celular, Vista 1 (listado) y Vista 2 (ficha) dejan de ser
+   columnas lado a lado (.consultorio-layout) y el riel de tabs verticales
+   (.pet-sidebar) colapsa a una fila horizontal con su propio scroll interno
+   -- nunca scroll horizontal de la página. */
+@media (max-width: 860px) {
+    .consultorio-layout {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    .patient-list-sidebar {
+        flex: 1 1 auto;
+        width: 100%;
+        height: auto;
+        max-height: 45vh;
+    }
+    .pet-layout {
+        flex-direction: column !important;
+    }
+    .pet-sidebar {
+        width: 100% !important;
+        flex-direction: row !important;
+        overflow-x: auto;
+        gap: 0.5rem !important;
+        padding-bottom: 0.25rem;
+    }
+    .pet-nav-item {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        margin-bottom: 0 !important;
+    }
+    .ficha-header {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    .ficha-header-left {
+        flex-wrap: wrap;
+    }
+    .ficha-header-actions {
+        width: 100%;
+        justify-content: flex-start !important;
+    }
+    .pet-content-body {
+        padding: 1.25rem !important;
+        overflow-x: auto;
+    }
+    .ficha-nop-body {
+        max-width: 100%;
+    }
+    .serv-filtros {
+        padding: 0.75rem;
+    }
+}
+
 /* --- RESUMEN: franja de alertas del paciente (Tarea 09) --- */
 .pet-resumen-alert {
     display: flex;
@@ -1158,6 +1281,54 @@ form {
 }
 .pet-resumen-alert-icon { flex-shrink: 0; display: inline-flex; margin-top: 1px; }
 .pet-resumen-alert-icon svg { width: 18px; height: 18px; }
+
+/* --- RESUMEN: cards de dashboard (ficha-animal-ordenes-servicios, tarea 5.1) ---
+   Última orden, próxima cita, peso actual, totales -- cada una es una tarjeta
+   chica con label/valor/acción opcional, mismo lenguaje visual que .serv-row. */
+.resumen-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+}
+.resumen-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-items: flex-start;
+    padding: 0.9rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+.resumen-card-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.resumen-card-sub { font-size: 0.8rem; color: var(--text-secondary); }
+.resumen-card--alert {
+    border-color: var(--warning);
+    background: var(--warning-subtle);
+}
+.resumen-card--alert .resumen-card-label { color: var(--warning-dark); }
+
+/* --- FACTURACIÓN de la ficha: pagadas / pendientes-parciales (tarea 5.5) --- */
+.fact-section h3 {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: 1rem;
+    margin: 0 0 0.6rem;
+    color: var(--text-primary);
+}
+.fact-total {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--secondary-dark, var(--secondary));
+}
 
 /* --- PESTAÑA "SERVICIOS": historia unificada del paciente (Tarea 09) --- */
 .serv-registrar-picker {
@@ -1880,6 +2051,7 @@ button:active:not(:disabled) {
 .status-pill--ok    { color: var(--secondary); }
 .status-pill--warn  { color: var(--warning-dark); }
 .status-pill--muted { color: var(--text-muted); }
+.status-pill--info  { color: var(--info-dark, var(--primary)); }
 
 /* Destructive row action — quiet red ghost */
 .btn-row-danger {

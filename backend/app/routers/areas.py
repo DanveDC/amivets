@@ -117,6 +117,34 @@ def listar_gestores(area_id: int, db: Session = Depends(get_db), _: Usuario = De
     ]
 
 
+@router.get("/{area_id}/gestores-activos")
+def listar_gestores_activos(
+    area_id: int,
+    db: Session = Depends(get_db),
+    # asignacion-directa-servicio-gestor, decisión 7: admin y veterinario son
+    # los roles que confirman servicios (fila 9 de la matriz) y necesitan
+    # poblar el selector "elegir gestor" de la orden abierta. Se prefiere un
+    # endpoint nuevo a abrirle `listar_gestores` (arriba) al veterinario:
+    # aquel devuelve inactivos y `role` para la pantalla de admin, y abrirlo
+    # cambiaría el contrato de otra pantalla.
+    _: Usuario = Depends(require_roles("admin", "veterinario")),
+):
+    """Gestores activos de un área, candidatos para la asignación directa al
+    confirmar una orden. Solo `{usuario_id, username}`, ordenados por
+    username."""
+    area = db.query(AreaServicio).filter(AreaServicio.id == area_id).first()
+    if not area:
+        raise HTTPException(status_code=404, detail="Área no encontrada")
+    filas = (
+        db.query(GestorArea, Usuario)
+        .join(Usuario, Usuario.id == GestorArea.usuario_id)
+        .filter(GestorArea.area_id == area_id, Usuario.is_active == True)  # noqa: E712
+        .order_by(Usuario.username)
+        .all()
+    )
+    return [{"usuario_id": u.id, "username": u.username} for _, u in filas]
+
+
 @router.post(
     "/{area_id}/gestores",
     response_model=GestorAreaResponse,

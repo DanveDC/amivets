@@ -13,9 +13,8 @@
 //     dentro de handlers, nunca en la evaluación del módulo.
 
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
-import { ICONS, showNotification, openModal, closeModal, debounce, escapeHtml } from '../core/ui.js';
+import { ICONS, showNotification, openModal, closeModal, debounce, escapeHtml, submitWithLoading } from '../core/ui.js';
 import { createPrettySelect, initSearchableSelect } from '../core/select.js';
-import { cargarFacturasMascota } from './facturacion.js';
 import { cargarBadgeOrdenes } from './citas-pendientes.js';
 // Relación cíclica segura con hoy.js (hoy.js importa de este módulo). Sólo se usa
 // dentro de un handler ("+ Servicio directo" en la pestaña Servicios).
@@ -370,9 +369,8 @@ export const confirmEliminarMascota = async (id, nombre) => {
         try {
             await fetchAPI(`/mascotas/${id}`, { method: 'DELETE' });
             alert("Mascota eliminada con éxito.");
-            document.getElementById('patientWrapper').style.display = 'none';
-            document.getElementById('emptyPatientWrapper').style.display = 'flex';
             setCurrentMascotaId(null);
+            mostrarLista();
             initConsultorio();
         } catch (error) {
             alert(error.message);
@@ -1399,8 +1397,8 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
         }
         tableBody.innerHTML = consultas.map(c => {
             const fecha = c.fecha_consulta ? new Date(c.fecha_consulta).toLocaleDateString() : 'N/D';
-            const motivo = c.motivo || 'Sin motivo';
-            const diagn = c.diagnostico || '-';
+            const motivo = escapeHtml(c.motivo || 'Sin motivo');
+            const diagn = escapeHtml(c.diagnostico || '-');
             const peso = c.peso ? parseFloat(c.peso).toFixed(2) : '-';
             const temp = c.temperatura ? parseFloat(c.temperatura).toFixed(2) : '-';
 
@@ -1445,7 +1443,73 @@ const cargarConsultas = async (mascotaId, extraParams = {}) => {
     }
 };
 
+// ============ NAVEGACIÓN DE DOS VISTAS (ficha-animal-ordenes-servicios) ============
+// sec-consultorio tiene dos vistas mutuamente excluyentes: Vista 1 (listado +
+// filtros + estado vacío) y Vista 2 (ficha del paciente: header + tabs). El
+// DOM de la lista (#consultorioMascotasList, buscador, filtros) nunca se
+// destruye -- sólo se oculta/muestra -- así que el scroll y el término de
+// búsqueda sobreviven solos; sólo el scroll se restaura a mano porque algunos
+// navegadores lo resetean al pasar por display:none en un ancestro.
+let currentView = 'lista'; // 'lista' | 'ficha'
+let listaScrollPosition = 0;
+
+const _mostrarVistaFicha = () => {
+    if (currentView === 'ficha') return;
+    currentView = 'ficha';
+    const listaCol = document.querySelector('.patient-list-sidebar');
+    const listaScroll = document.getElementById('consultorioMascotasList');
+    if (listaScroll) listaScrollPosition = listaScroll.scrollTop;
+    if (listaCol) listaCol.hidden = true;
+    const profile = document.getElementById('petProfileContainer');
+    const empty = document.getElementById('emptyPatientWrapper');
+    if (empty) empty.style.display = 'none';
+    if (profile) profile.style.display = 'flex';
+};
+
+// "← Volver a la lista" (header de la ficha): vuelve a Vista 1 restaurando el
+// scroll de la lista; el término de búsqueda y los filtros ya estaban intactos
+// porque su DOM nunca se tocó. También cierra el panel "Nueva orden" si había
+// quedado abierto (mismo criterio que al cambiar de paciente).
+export const mostrarLista = () => {
+    if (currentView === 'lista') return;
+    currentView = 'lista';
+    cerrarPanelNuevaOrden();
+    const listaCol = document.querySelector('.patient-list-sidebar');
+    if (listaCol) listaCol.hidden = false;
+    const profile = document.getElementById('petProfileContainer');
+    const empty = document.getElementById('emptyPatientWrapper');
+    if (profile) profile.style.display = 'none';
+    if (empty) empty.style.display = 'flex';
+    const listaScroll = document.getElementById('consultorioMascotasList');
+    if (listaScroll) {
+        // Alternar [hidden] (display:none) en un ancestro destruye el layer de
+        // scroll de #consultorioMascotasList -- Chromium descarta su scrollTop
+        // al re-mostrarlo. Forzar un reflow síncrono (leer offsetHeight) ANTES
+        // de reasignar scrollTop es lo que hace que la restauración sobreviva.
+        void listaScroll.offsetHeight;
+        listaScroll.scrollTop = listaScrollPosition;
+    }
+};
+
+// Punto de entrada usado por orden-abierta.js ("← Volver a la ficha"): navega
+// a Vista 2 con el paciente de la orden. seleccionarMascotaBasica ya resuelve
+// nombre/especie/código desde el id -- mismo camino que hoy.js/agenda.js/
+// citas-pendientes.js.
+export const mostrarFicha = (mascotaId) => {
+    _mostrarVistaFicha();
+    seleccionarMascotaBasica(mascotaId);
+};
+
+// Generación de la selección de paciente: si se elige otro antes de que
+// termine el fetch del anterior, la respuesta vieja no pinta el header.
+let _seleccionMascotaGen = 0;
+
 const seleccionarMascota = async (id, nombre, especie, codigo) => {
+    const gen = ++_seleccionMascotaGen;
+    // El panel de nueva orden es del paciente anterior: si quedaba abierto,
+    // mostraba su nombre mientras la orden se creaba para el nuevo.
+    cerrarPanelNuevaOrden();
+    _mostrarVistaFicha();
     setCurrentMascotaId(id);
 
     // UI placeholder while loading full data
@@ -1456,29 +1520,9 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
     // Set default tab to Resumen (Tarea 09: funde historia + peso + alertas)
     switchPetTab('resumen');
 
-    // Load full data to show breed and reproductive status
-    try {
-        const m = await fetchAPI(`/mascotas/${id}`);
-        document.getElementById('displayNombreMascota').textContent = m.nombre;
-        document.getElementById('displayInfoMascota').innerHTML = `
-            ${m.especie} ${m.raza ? `(${m.raza})` : ''}
-            ${m.codigo_historia ? `- ID: ${m.codigo_historia}` : ''}
-            <br>
-            <span style="font-size: 0.85rem; color: var(--primary);">
-                ${m.sexo || ''} | ${m.estado_reproductivo || 'Reprod: N/D'}
-            </span>
-        `;
-    } catch (e) {
-        console.warn("Could not load full pet details", e);
-    }
-
-    // Mostrar layout
-    document.getElementById('emptyPatientWrapper').style.display = 'none';
-    document.getElementById('patientWrapper').style.display = 'block';
-
-    actualizarCountsPet(id);
-
-    // Bind Edit/Delete/Transfer buttons
+    // Bind Edit/Delete/Transfer buttons ANTES del await: enlazados después, una
+    // respuesta lenta del paciente anterior los re-enlazaba a él mientras el
+    // header ya mostraba al nuevo (Eliminar borraba al paciente equivocado).
     const btnEdit = document.getElementById('btnEditarMascota');
     const btnDel = document.getElementById('btnEliminarMascota');
     const btnTrans = document.getElementById('btnTransferirMascota');
@@ -1486,11 +1530,32 @@ const seleccionarMascota = async (id, nombre, especie, codigo) => {
     if (btnDel) btnDel.onclick = () => confirmEliminarMascota(id, nombre);
     if (btnTrans) btnTrans.onclick = () => abrirTransferirMascota(id, nombre);
 
-    const btnAction = document.getElementById('btnActionAdd');
-    if (btnAction) btnAction.onclick = () => {
-        document.getElementById('consultaMascotaId').value = id;
-        abrirFormularioConsulta();
-    };
+    // Load full data to show breed and reproductive status
+    try {
+        const m = await fetchAPI(`/mascotas/${id}`);
+        if (gen !== _seleccionMascotaGen) return;
+        document.getElementById('displayNombreMascota').textContent = m.nombre;
+        document.getElementById('displayInfoMascota').innerHTML = `
+            ${escapeHtml(m.especie || '')} ${m.raza ? `(${escapeHtml(m.raza)})` : ''}
+            ${m.codigo_historia ? `- ID: ${escapeHtml(m.codigo_historia)}` : ''}
+            <br>
+            <span style="font-size: 0.85rem; color: var(--primary);">
+                ${escapeHtml(m.sexo || '')} | ${escapeHtml(m.estado_reproductivo || 'Reprod: N/D')}
+            </span>
+        `;
+    } catch (e) {
+        console.warn("Could not load full pet details", e);
+    }
+    if (gen !== _seleccionMascotaGen) return;
+
+    actualizarCountsPet(id);
+
+    // El botón "+ Orden de servicio" del header (#btnFichaNuevaOrden) es fijo
+    // y se enlaza una sola vez a nivel de módulo (ver abrirPanelNuevaOrden más
+    // abajo); no depende de cada seleccionarMascota() como el viejo
+    // #btnActionAdd (que además vivía dentro de #petTabActions y se perdía en
+    // cada cambio de tab, ver hallazgo de revisión, ficha-animal-ordenes-
+    // servicios).
 
     // Removed non-existent setTimeout(updatePetNavArrows, 500);
 };
@@ -1515,8 +1580,12 @@ const seleccionarMascotaBasica = async (id) => {
 // se funden en "Resumen". Este mapa mantiene vivos los onclick/llamadas viejas.
 const PET_TAB_LEGACY = {
     historia: 'resumen',
-    peso: 'resumen',
-    ordenes: 'resumen',
+    // ficha-animal-ordenes-servicios, tarea 5.6.1: "peso" pasa de alias de
+    // "resumen" (cuando la gráfica vivía embebida ahí) a ser un tab real y
+    // propio -- mismo criterio que la restauración de "consultas" en slice 2
+    // (ver nota en el case 'ordenes' de switchPetTab). Un alias acá haría que
+    // clickear el nuevo nav-item data-tab="peso" siguiera cayendo en
+    // "resumen".
     vacunas: 'servicios',
     desparasitaciones: 'servicios',
     hospitalizaciones: 'servicios',
@@ -1540,17 +1609,30 @@ const switchPetTab = (rawTabName) => {
 
     switch (tabName) {
         case 'resumen':
+            // ficha-animal-ordenes-servicios, tarea 5.1: cards de dashboard
+            // (última orden/próxima cita/peso actual/totales) arriba del
+            // resumen clínico existente (alertas/constantes/historia). La
+            // gráfica de peso se movió a su propio tab ("peso", tarea 5.6.1).
             contentArea.innerHTML = `
+                <div id="resumenCards"></div>
                 <div id="resumenAlertas"></div>
                 <div id="resumenConstantes"></div>
-                <div id="historiaResumen" style="width: 100%; text-align: left;"></div>
-                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-top: 1.25rem;">
+                <div id="historiaResumen" style="width: 100%; text-align: left;"></div>`;
+            renderResumenTab();
+            renderResumenCards();
+            break;
+        case 'peso':
+            // Tab nuevo (ficha-animal-ordenes-servicios, tarea 5.6.1): la
+            // gráfica de evolución de peso, antes embebida dentro de
+            // "Resumen", pasa a ser su propio tab -- reusa loadWeightChart()
+            // sin cambios de comportamiento.
+            contentArea.innerHTML = `
+                <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem;">
                     <h3 style="margin-top: 0; color: var(--text-primary); text-align: center; font-size: 1.05rem;">Evolución de Peso</h3>
                     <div id="chartContainer" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
                         <canvas id="weightChart"></canvas>
                     </div>
                 </div>`;
-            renderResumenTab();
             setTimeout(loadWeightChart, 100);
             break;
         case 'servicios':
@@ -1561,13 +1643,71 @@ const switchPetTab = (rawTabName) => {
             document.getElementById('btnServiciosRegistrar').onclick = (e) => toggleRegistrarPicker(e.currentTarget);
             cargarServiciosPet(currentMascotaId);
             break;
+        case 'ordenes':
+            // ficha-animal-ordenes-servicios: tab nuevo, junto a "Consultas"
+            // -- la ficha muestra las ÓRDENES del animal (contenedor real de
+            // trabajo/cobro). El tab "Consultas" (más abajo) se conserva para
+            // las acciones de reparación de datos legacy (Facturar / Ir a la
+            // orden / Agregar honorario) sobre consultas que quedaron sin
+            // orden o con la línea de honorario faltante. abrirFormularioConsulta()
+            // sigue existiendo para Panel del día/Citas pendientes; acá el botón
+            // de alta pasa a ser "+ Orden de servicio" (panel inline, no modal).
+            actionsArea.innerHTML = `<button class="btn-primary" id="btnOrdenesNuevaOrden">+ Orden de servicio</button>`;
+            document.getElementById('btnOrdenesNuevaOrden').onclick = () => abrirPanelNuevaOrden();
+            contentArea.innerHTML = `
+                <form id="ordenesFiltros" class="serv-filtros" role="search" aria-label="Filtrar órdenes del paciente">
+                    <div class="serv-filtro-field serv-filtro-field--grow">
+                        <label for="ordFiltroTexto">Buscar</label>
+                        <input type="text" id="ordFiltroTexto" placeholder="Número, motivo o veterinario...">
+                    </div>
+                    <div class="serv-filtro-field">
+                        <label for="ordFiltroEstado">Estado</label>
+                        <select id="ordFiltroEstado">
+                            <option value="">Todos</option>
+                            <option value="ABIERTA">ABIERTA</option>
+                            <option value="EN_ATENCION">EN_ATENCION</option>
+                            <option value="CERRADA">CERRADA</option>
+                            <option value="FACTURADA">FACTURADA</option>
+                            <option value="ANULADA">ANULADA</option>
+                        </select>
+                    </div>
+                    <div class="serv-filtro-field">
+                        <label for="ordFiltroDesde">Desde</label>
+                        <input type="date" id="ordFiltroDesde">
+                    </div>
+                    <div class="serv-filtro-field">
+                        <label for="ordFiltroHasta">Hasta</label>
+                        <input type="date" id="ordFiltroHasta">
+                    </div>
+                    <div class="serv-filtro-actions">
+                        <button type="submit" class="btn-primary btn-sm">Filtrar</button>
+                        <button type="button" class="btn-secondary btn-sm" id="ordFiltroLimpiar">Limpiar</button>
+                    </div>
+                </form>
+                <table class="consultas-table">
+                    <thead>
+                        <tr><th>Orden</th><th>Estado</th><th>Fecha</th><th>Veterinario</th><th style="text-align:right;">Total</th><th style="text-align:right;">Acciones</th></tr>
+                    </thead>
+                    <tbody id="ordenesTableBody"></tbody>
+                </table>`;
+            document.getElementById('ordenesFiltros').addEventListener('submit', (e) => {
+                e.preventDefault();
+                cargarOrdenesTab(currentMascotaId);
+            });
+            document.getElementById('ordFiltroLimpiar').addEventListener('click', () => {
+                ['ordFiltroTexto', 'ordFiltroEstado', 'ordFiltroDesde', 'ordFiltroHasta']
+                    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+                cargarOrdenesTab(currentMascotaId);
+            });
+            cargarOrdenesTab(currentMascotaId);
+            break;
         case 'consultas':
-            actionsArea.innerHTML = `<button class="btn-primary" id="btnRegistrarConsulta">+ Nueva Consulta</button>`;
-            document.getElementById('btnRegistrarConsulta').onclick = () => {
-                if (!currentMascotaId) return;
-                document.getElementById('consultaMascotaId').value = currentMascotaId;
-                abrirFormularioConsulta();
-            };
+            // ficha-animal-ordenes-servicios (regresión restaurada): este tab
+            // NO es un punto de alta -- la creación de historia clínica pasa
+            // por "+ Orden de servicio" (tab "ordenes"). Sin botón "+ Nueva
+            // Consulta" acá a propósito; sólo se conservan las acciones de
+            // reparación por fila (Facturar / Ir a la orden / Agregar
+            // honorario a la orden / Ver consulta) para consultas legacy.
             contentArea.innerHTML = `
                 <div id="consultasFilterBar" style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.75rem; padding:0.75rem; background:var(--surface-hover); border-radius:8px; border:1px solid var(--border);">
                     <input type="text" id="filtroConsultaVet" placeholder="Veterinario..." style="flex:1; min-width:120px; padding:0.4rem 0.6rem; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
@@ -1606,32 +1746,238 @@ const switchPetTab = (rawTabName) => {
             cargarRecetasPet(currentMascotaId);
             break;
         case 'facturacion':
+            // ficha-animal-ordenes-servicios, tarea 5.5: dos secciones
+            // (Pagadas / Pendientes-Parciales) en vez de una sola tabla --
+            // usa el filtro `estado` de GET /facturas/mascota/{id} agregado
+            // en el backend (tarea 9.3), que ya incluye facturas vinculadas
+            // solo por orden (ventas de mostrador / servicio directo).
             contentArea.innerHTML = `
-                <div class="card" style="padding: 1rem; border: none; box-shadow: none;">
-                    <h3 style="font-size: 1.1rem; margin-bottom: 1rem; color: #374151;">Historial de Cobros del Paciente</h3>
+                <div class="fact-section">
+                    <h3>Pagadas <span class="fact-total" id="facTotalPagadas">$0.00</span></h3>
                     <div class="table-container">
                         <table class="consultas-table" style="width: 100%;">
-                            <thead>
-                                <tr>
-                                    <th># Factura</th>
-                                    <th>Fecha</th>
-                                    <th>Estado</th>
-                                    <th>Total</th>
-                                    <th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="petFacturasTableBody">
-                                <tr><td colspan="5" style="text-align:center;">Cargando...</td></tr>
-                            </tbody>
+                            <thead><tr><th># Factura</th><th>Fecha</th><th style="text-align:right;">Total</th><th style="text-align:right;">Acciones</th></tr></thead>
+                            <tbody id="facPagadasBody"><tr><td colspan="4" style="text-align:center;">Cargando...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="fact-section" style="margin-top:1.5rem;">
+                    <h3>Pendientes / Parciales <span class="fact-total" id="facTotalPendientes">$0.00</span></h3>
+                    <div class="table-container">
+                        <table class="consultas-table" style="width: 100%;">
+                            <thead><tr><th># Factura</th><th>Fecha</th><th style="text-align:right;">Total</th><th style="text-align:right;">Saldo</th><th style="text-align:right;">Acciones</th></tr></thead>
+                            <tbody id="facPendientesBody"><tr><td colspan="5" style="text-align:center;">Cargando...</td></tr></tbody>
                         </table>
                     </div>
                 </div>`;
-            cargarFacturasMascota(currentMascotaId);
+            cargarFacturacionTab(currentMascotaId);
             break;
         default:
             contentArea.innerHTML = `<div class="empty-state">Módulo <b>${tabName}</b> en desarrollo.</div>`;
     }
 };
+
+// ===========================================================================
+// PESTAÑA "ÓRDENES DE SERVICIO" (ficha-animal-ordenes-servicios) — reemplaza
+// al viejo tab "Consultas": la ficha muestra las órdenes del animal (GET
+// /api/ordenes/?mascota_id&limit=200), no sus consultas sueltas. Los flujos
+// de consulta (abrirFormularioConsulta, verConsultaCompleta, etc.) siguen
+// intactos para Panel del día/Citas pendientes -- no se tocan acá.
+// ===========================================================================
+
+const ESTADO_ORDEN_PILL = {
+    ABIERTA: 'status-pill--warn',
+    EN_ATENCION: 'status-pill--info',
+    CERRADA: 'status-pill--muted',
+    FACTURADA: 'status-pill--ok',
+    ANULADA: 'status-pill--muted',
+};
+
+// Generación de carga del tab: si el usuario cambia de paciente o de tab
+// antes de que responda el fetch anterior, esa respuesta vieja no debe pisar
+// la tabla del paciente/tab nuevo (mismo patrón que _generacionPorCobrar en
+// facturacion.js).
+let _ordenesTabGen = 0;
+
+const cargarOrdenesTab = async (mascotaId) => {
+    const tbody = document.getElementById('ordenesTableBody');
+    if (!tbody || !mascotaId) return;
+    const gen = ++_ordenesTabGen;
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>';
+
+    const params = new URLSearchParams({ mascota_id: mascotaId, limit: 200 });
+    const texto = document.getElementById('ordFiltroTexto')?.value.trim();
+    const estado = document.getElementById('ordFiltroEstado')?.value;
+    const desde = document.getElementById('ordFiltroDesde')?.value;
+    const hasta = document.getElementById('ordFiltroHasta')?.value;
+    if (texto) params.set('search', texto);
+    if (estado) params.set('estado', estado);
+    if (desde) params.set('fecha_desde', desde);
+    if (hasta) params.set('fecha_hasta', hasta);
+
+    try {
+        const ordenes = await fetchAPI(`/ordenes/?${params.toString()}`);
+        if (gen !== _ordenesTabGen) return; // respuesta vieja: el usuario ya cambió de tab/paciente
+        if (!ordenes || ordenes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No hay órdenes para este paciente.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = ordenes.map(_renderOrdenRow).join('');
+        // Acciones por estado (tarea 5.2.3): delegación sobre data-accion en
+        // vez de onclick inline -- evita tener que exponer en window.* las
+        // funciones que reusan flujos internos de orden-abierta.js.
+        tbody.querySelectorAll('[data-accion-orden]').forEach(btn => {
+            btn.addEventListener('click', () => _accionOrdenDesdeFicha(btn.dataset.accionOrden, Number(btn.dataset.ordenId)));
+        });
+    } catch (e) {
+        if (gen !== _ordenesTabGen) return;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--accent);">Error al cargar órdenes: ${escapeHtml(e.message)}</td></tr>`;
+    }
+};
+
+// Acciones por estado de la orden (tarea 5.2.3, spec "Tab Órdenes de
+// servicio"): "Ver" siempre; "+ Servicio" si ABIERTA/EN_ATENCION; "Facturar"
+// si CERRADA; "Factura" si FACTURADA. Reusan el flujo real de
+// orden-abierta.js (anexar/facturar viven ahí, no se duplican acá) navegando
+// a la orden y disparando el botón correspondiente -- ningún modal nuevo.
+const _renderOrdenRow = (o) => {
+    const pillClass = ESTADO_ORDEN_PILL[o.estado] || 'status-pill--muted';
+    const acciones = [`<button class="btn-primary btn-sm" onclick="abrirOrden(${o.id})">Ver</button>`];
+    if (o.estado === 'ABIERTA' || o.estado === 'EN_ATENCION') {
+        acciones.push(`<button type="button" class="btn-secondary btn-sm" data-accion-orden="anexar" data-orden-id="${o.id}">+ Servicio</button>`);
+    }
+    if (o.estado === 'CERRADA') {
+        acciones.push(`<button type="button" class="btn-secondary btn-sm" data-accion-orden="facturar" data-orden-id="${o.id}">Facturar</button>`);
+    }
+    if (o.estado === 'FACTURADA') {
+        acciones.push(`<button type="button" class="btn-secondary btn-sm" data-accion-orden="ver-factura" data-orden-id="${o.id}">Factura</button>`);
+    }
+    return `
+        <tr>
+            <td>${escapeHtml(o.numero)}</td>
+            <td><span class="status-pill ${pillClass}">${escapeHtml(o.estado)}</span></td>
+            <td>${_fmtFecha(o.fecha_apertura)}</td>
+            <td>${escapeHtml(o.veterinario_nombre || 'Sin asignar')}</td>
+            <td style="text-align:right;">${_money(o.total)}</td>
+            <td style="text-align:right;">${acciones.join(' ')}</td>
+        </tr>`;
+};
+
+const _accionOrdenDesdeFicha = async (accion, ordenId) => {
+    if (!ordenId) return;
+    if (accion === 'anexar') {
+        // "+ Servicio" -> navega a la orden y abre el panel "Anexar
+        // servicio" real (#btnOaAnexarInline), el mismo que usa el botón
+        // "Anexar servicio" de la propia pantalla de la orden.
+        await abrirOrden(ordenId);
+        document.getElementById('btnOaAnexarInline')?.click();
+    } else if (accion === 'facturar') {
+        // "Facturar" -> navega a la orden y dispara su botón "Facturar
+        // orden" real (#btnOaFacturar), que abre #modalFacturarOrden con la
+        // vista previa armada por el servidor (orden-servicio-carrito,
+        // decisión 9). No se duplica esa lógica acá.
+        await abrirOrden(ordenId);
+        document.getElementById('btnOaFacturar')?.click();
+    } else if (accion === 'ver-factura') {
+        // "Factura" (orden FACTURADA) -> resuelve la factura vinculada
+        // (GET /facturas/orden/{id}/saldo-pendiente ya expone factura_id) y
+        // reusa el preview de factura existente (facturacion.js).
+        try {
+            const data = await fetchAPI(`/facturas/orden/${ordenId}/saldo-pendiente`);
+            if (data && data.factura_id) {
+                window.abrirPreviewFactura?.(data.factura_id);
+            } else {
+                showNotification('No se encontró la factura vinculada a esta orden.', 'warning');
+            }
+        } catch (e) {
+            showNotification('No se pudo abrir la factura: ' + e.message, 'error');
+        }
+    }
+};
+
+// ===========================================================================
+// PANEL INLINE "NUEVA ORDEN DE SERVICIO" (ficha-animal-ordenes-servicios,
+// decisión 9 del design). Reemplaza SOLO el uso de abrirFormularioConsulta()
+// en el header/landing de la ficha -- esa función sigue existiendo intacta
+// para Panel del día y Citas pendientes. NO es un modal: es un panel dentro
+// del área de contenido de la ficha (#fichaNuevaOrdenPanel), a ancho
+// completo, mismo lenguaje visual que #oaAnexarPanel de orden-abierta.js.
+// ===========================================================================
+
+const abrirPanelNuevaOrden = async () => {
+    if (!currentMascotaId) return;
+    const panel = document.getElementById('fichaNuevaOrdenPanel');
+    if (!panel) return;
+
+    const label = document.getElementById('fnoPacienteLabel');
+    if (label) {
+        const nombre = document.getElementById('displayNombreMascota')?.textContent || `#${currentMascotaId}`;
+        label.textContent = nombre;
+    }
+    const motivo = document.getElementById('fnoMotivo');
+    if (motivo) motivo.value = '';
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    try {
+        const vets = await fetchAPI('/usuarios/veterinarios');
+        const select = document.getElementById('fnoVeterinario');
+        if (select) {
+            select.innerHTML = '<option value="">Seleccione veterinario</option>' +
+                (vets || []).map(v => `<option value="${v.id}">${escapeHtml(v.username)}</option>`).join('');
+        }
+    } catch (e) {
+        showNotification('No se pudieron cargar los veterinarios: ' + e.message, 'error');
+    }
+};
+
+const cerrarPanelNuevaOrden = () => {
+    const panel = document.getElementById('fichaNuevaOrdenPanel');
+    if (panel) panel.hidden = true;
+};
+
+const confirmarNuevaOrdenDesdeFicha = async () => {
+    if (!currentMascotaId) return;
+    const veterinarioId = parseInt(document.getElementById('fnoVeterinario')?.value, 10);
+    if (!veterinarioId) {
+        showNotification('Elegí un veterinario para la orden.', 'warning');
+        return;
+    }
+    try {
+        // OrdenServicioCreate.propietario_id es obligatorio -- se resuelve
+        // desde la mascota de la ficha (mismo criterio que
+        // hoy.js::abrirNuevaOrdenFlow/confirmarAbrirOrden).
+        const m = await fetchAPI(`/mascotas/${currentMascotaId}`);
+        if (!m.propietario_id) {
+            showNotification('Este paciente no tiene un propietario asociado; no se puede abrir la orden.', 'error');
+            return;
+        }
+        const orden = await fetchAPI('/ordenes/', {
+            method: 'POST',
+            body: JSON.stringify({
+                propietario_id: m.propietario_id,
+                mascota_id: currentMascotaId,
+                veterinario_id: veterinarioId,
+                motivo_visita: document.getElementById('fnoMotivo')?.value || null,
+            }),
+        });
+        cerrarPanelNuevaOrden();
+        showNotification(`Orden ${orden.numero} creada.`, 'success');
+        abrirOrden(orden.id); // navega a sec-orden-abierta para anexar servicios
+    } catch (e) {
+        showNotification('No se pudo crear la orden: ' + e.message, 'error');
+    }
+};
+
+// Wiring de los controles estáticos del panel (existen en el DOM desde el
+// boot, no dependen de ningún tab): se enlazan una sola vez a nivel de
+// módulo, mismo patrón que #formAgregarServicio/#addServicioTipo más abajo.
+document.getElementById('btnVolverALista')?.addEventListener('click', mostrarLista);
+document.getElementById('btnFichaNuevaOrden')?.addEventListener('click', abrirPanelNuevaOrden);
+document.getElementById('btnFnoCancelar')?.addEventListener('click', cerrarPanelNuevaOrden);
+// submitWithLoading deshabilita el botón mientras corre: sin eso un doble click
+// creaba dos órdenes (mismo patrón que confirmarAbrirOrden en hoy.js).
+document.getElementById('btnFnoCrear')?.addEventListener('click', (e) => submitWithLoading(e.currentTarget, confirmarNuevaOrdenDesdeFicha));
 
 const renderHistoriaTab = async () => {
     const res = document.getElementById('historiaResumen');
@@ -1724,6 +2070,99 @@ const renderResumenTab = async () => {
         }
     } catch (e) {
         alertBox.innerHTML = '';
+    }
+};
+
+// Cards de dashboard del tab Resumen (ficha-animal-ordenes-servicios, tarea
+// 5.1): última orden (con "Ver"), próxima cita, peso actual (con "Ver
+// gráfica" -> tab "peso"), alertas del paciente y total facturado. Reusa
+// endpoints ya existentes (/ordenes, /citas, /peso-history, /mascotas) -- no
+// hay un endpoint de "resumen" dedicado. Guard de generación: si el usuario
+// cambia de paciente o de tab antes de que responda el Promise.all, la
+// respuesta vieja no debe pintar el dashboard del paciente/tab nuevo (mismo
+// patrón que _ordenesTabGen).
+let _resumenCardsGen = 0;
+
+const renderResumenCards = async () => {
+    const box = document.getElementById('resumenCards');
+    if (!box || !currentMascotaId) return;
+    const gen = ++_resumenCardsGen;
+    const mascotaId = currentMascotaId;
+    box.innerHTML = '<p class="serv-feed-msg">Cargando resumen…</p>';
+
+    try {
+        const ahoraISO = new Date().toISOString();
+        const [ordenes, citas, pesos, mascota] = await Promise.all([
+            fetchAPI(`/ordenes/?mascota_id=${mascotaId}&limit=50`).catch(() => []),
+            fetchAPI(`/citas/?mascota_id=${mascotaId}&estado=PENDIENTE&fecha_inicio=${encodeURIComponent(ahoraISO)}&limit=1`).catch(() => []),
+            fetchAPI(`/mascotas/${mascotaId}/peso-history`).catch(() => []),
+            fetchAPI(`/mascotas/${mascotaId}`).catch(() => null),
+        ]);
+        if (gen !== _resumenCardsGen) return; // respuesta vieja: paciente/tab ya cambió
+
+        const ordenadas = (ordenes || []).slice().sort((a, b) => new Date(b.fecha_apertura) - new Date(a.fecha_apertura));
+        const ultimaOrden = ordenadas[0];
+        const proximaCita = (citas || [])[0];
+        const ultimoPeso = (pesos || []).length ? pesos[pesos.length - 1] : null;
+        const totalFacturado = ordenadas
+            .filter(o => o.estado === 'FACTURADA')
+            .reduce((sum, o) => sum + Number(o.total || 0), 0);
+        const cantFacturadas = ordenadas.filter(o => o.estado === 'FACTURADA').length;
+
+        const cardUltimaOrden = ultimaOrden
+            ? `<div class="resumen-card">
+                <span class="resumen-card-label">Última orden</span>
+                <strong>${escapeHtml(ultimaOrden.numero)}</strong>
+                <span class="status-pill ${ESTADO_ORDEN_PILL[ultimaOrden.estado] || 'status-pill--muted'}">${escapeHtml(ultimaOrden.estado)}</span>
+                <span class="resumen-card-sub">${_fmtFecha(ultimaOrden.fecha_apertura)} · ${_money(ultimaOrden.total)}</span>
+                <button type="button" class="btn-secondary btn-sm" onclick="abrirOrden(${ultimaOrden.id})">Ver</button>
+               </div>`
+            : `<div class="resumen-card">
+                <span class="resumen-card-label">Última orden</span>
+                <span class="resumen-card-sub">Este paciente todavía no tiene órdenes de servicio.</span>
+               </div>`;
+
+        const cardProximaCita = proximaCita
+            ? `<div class="resumen-card">
+                <span class="resumen-card-label">Próxima cita</span>
+                <strong>${new Date(proximaCita.fecha_cita).toLocaleString()}</strong>
+                <span class="resumen-card-sub">${escapeHtml(proximaCita.tipo || 'Cita')}</span>
+               </div>`
+            : `<div class="resumen-card">
+                <span class="resumen-card-label">Próxima cita</span>
+                <span class="resumen-card-sub">Sin citas pendientes agendadas.</span>
+               </div>`;
+
+        const cardPeso = ultimoPeso
+            ? `<div class="resumen-card">
+                <span class="resumen-card-label">Peso actual</span>
+                <strong>${Number(ultimoPeso.peso).toFixed(1)} kg</strong>
+                <span class="resumen-card-sub">${_fmtFecha(ultimoPeso.fecha)}</span>
+                <button type="button" class="btn-secondary btn-sm" onclick="switchPetTab('peso')">Ver gráfica</button>
+               </div>`
+            : `<div class="resumen-card">
+                <span class="resumen-card-label">Peso actual</span>
+                <span class="resumen-card-sub">Sin registros de peso.</span>
+               </div>`;
+
+        const cardTotales = `<div class="resumen-card">
+                <span class="resumen-card-label">Total facturado</span>
+                <strong>${_money(totalFacturado)}</strong>
+                <span class="resumen-card-sub">${cantFacturadas} orden${cantFacturadas === 1 ? '' : 'es'} facturada${cantFacturadas === 1 ? '' : 's'}</span>
+               </div>`;
+
+        const alertaTexto = mascota && mascota.observaciones && mascota.observaciones.trim();
+        const cardAlertas = alertaTexto
+            ? `<div class="resumen-card resumen-card--alert">
+                <span class="resumen-card-label">Alertas</span>
+                <span class="resumen-card-sub">${escapeHtml(alertaTexto)}</span>
+               </div>`
+            : '';
+
+        box.innerHTML = `<div class="resumen-cards-grid">${cardUltimaOrden}${cardProximaCita}${cardPeso}${cardTotales}${cardAlertas}</div>`;
+    } catch (e) {
+        if (gen !== _resumenCardsGen) return;
+        box.innerHTML = '<p class="serv-feed-msg serv-feed-msg--error">No se pudo cargar el resumen del paciente.</p>';
     }
 };
 
@@ -1831,6 +2270,7 @@ export const cargarServiciosPet = async (mascotaId) => {
             </div>
         </form>
 
+        <div id="serviciosTotales" class="resumen-card-sub" style="margin-bottom:0.5rem;"></div>
         <div id="serviciosFeed" class="serv-feed" aria-live="polite"></div>`;
 
     // Wiring de filtros.
@@ -1843,7 +2283,12 @@ export const cargarServiciosPet = async (mascotaId) => {
             .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
         cargarServiciosFeed();
     });
-    document.getElementById('servFiltroTexto').addEventListener('input', debounce(_renderServiciosFeedFromState, 200));
+    // tarea 5.3.1: el buscador ahora pega contra el `search` del backend
+    // (ilike sobre nombre_servicio, agregado en el router junto al resto de
+    // los filtros -- ver Requirement "Búsqueda de servicios por nombre")
+    // combinado con el resto de los filtros, en vez de filtrar sólo lo ya
+    // traído en el cliente.
+    document.getElementById('servFiltroTexto').addEventListener('input', debounce(cargarServiciosFeed, 300));
 
     // Wiring del selector "+ Registrar".
     document.querySelectorAll('.serv-registrar-opt').forEach(btn => {
@@ -1853,18 +2298,25 @@ export const cargarServiciosPet = async (mascotaId) => {
     await cargarServiciosFeed();
 };
 
+// Generación del feed de Servicios: con el buscador (debounce por tecla) o un
+// cambio de paciente, una respuesta vieja podía pisar la del filtro nuevo.
+let _serviciosFeedGen = 0;
+
 export const cargarServiciosFeed = async () => {
     const box = document.getElementById('serviciosFeed');
     const mascotaId = _serviciosState.mascotaId;
     if (!box || !mascotaId) return;
+    const gen = ++_serviciosFeedGen;
     box.innerHTML = '<p class="serv-feed-msg">Cargando servicios…</p>';
 
     const params = new URLSearchParams({ mascota_id: mascotaId, alcance: 'todos' });
+    const texto = document.getElementById('servFiltroTexto')?.value.trim();
     const tipo = document.getElementById('servFiltroTipo')?.value;
     const estado = document.getElementById('servFiltroEstado')?.value;
     const facturado = document.getElementById('servFiltroFacturado')?.value;
     const desde = document.getElementById('servFiltroDesde')?.value;
     const hasta = document.getElementById('servFiltroHasta')?.value;
+    if (texto) params.set('search', texto);
     if (tipo) params.set('tipo_servicio', tipo);
     if (estado) params.set('estado', estado);
     if (facturado) params.set('facturado', facturado);
@@ -1873,26 +2325,41 @@ export const cargarServiciosFeed = async () => {
 
     try {
         const data = await fetchAPI(`/servicios/?${params.toString()}`);
+        if (gen !== _serviciosFeedGen || mascotaId !== _serviciosState.mascotaId) return;
         _serviciosState.raw = Array.isArray(data) ? data : [];
         _renderServiciosFeedFromState();
     } catch (e) {
+        if (gen !== _serviciosFeedGen) return;
         box.innerHTML = `<p class="serv-feed-msg serv-feed-msg--error">${ICONS.xCircle} No se pudieron cargar los servicios. ${e.message || ''}</p>`;
     }
 };
 
-// Aplica solo el filtro de texto (cliente) sobre lo ya traído y pinta la lista.
+// Pinta lo ya traído del servidor (los filtros, incluido `search`, ya se
+// aplicaron server-side en cargarServiciosFeed -- tarea 5.3.1). También
+// recalcula los totales dinámicos (tarea 5.3.3): cantidad de servicios y
+// suma de sus subtotales sobre lo que quedó tras filtrar.
 const _renderServiciosFeedFromState = () => {
     const box = document.getElementById('serviciosFeed');
+    const totalesBox = document.getElementById('serviciosTotales');
     if (!box) return;
-    const q = (document.getElementById('servFiltroTexto')?.value || '').trim().toLowerCase();
-    let items = _serviciosState.raw;
-    if (q) items = items.filter(s => (s.nombre_servicio || '').toLowerCase().includes(q));
+    const items = _serviciosState.raw;
+
+    if (totalesBox) {
+        // Mismo criterio que el total de la orden (totalServicios): los
+        // CANCELADO se listan pero no suman.
+        const suma = items
+            .filter((it) => it.estado !== 'CANCELADO')
+            .reduce((s, it) => s + (Number(it.cantidad || 0) * Number(it.precio_unitario || 0)), 0);
+        totalesBox.textContent = items.length
+            ? `${items.length} servicio${items.length === 1 ? '' : 's'} · ${_money(suma)}`
+            : '';
+    }
 
     if (!items.length) {
         box.innerHTML = `
             <div class="empty-state">
                 <div class="icon">${ICONS.clipboard}</div>
-                <p>${_serviciosState.raw.length ? 'Ningún servicio coincide con los filtros.' : 'Este paciente todavía no tiene servicios registrados.'}</p>
+                <p>Este paciente todavía no tiene servicios que coincidan con los filtros.</p>
             </div>`;
         return;
     }
@@ -2046,11 +2513,17 @@ const _renderServicioDetalle = async (s) => {
     const consultaLink = s.consulta_id
         ? `<button type="button" class="btn-secondary btn-sm" onclick="verConsultaCompleta(${s.consulta_id}, ${mascotaId})">Abrir consulta #${s.consulta_id}</button>`
         : '<span class="serv-detail-tag">Servicio directo (sin consulta)</span>';
+    // tarea 5.3.2: link a la orden que contiene este servicio (orden_id ya
+    // viene en ServicioConsultaResponse -- ServicioConsultaBase).
+    const ordenLink = s.orden_id
+        ? `<button type="button" class="btn-secondary btn-sm" onclick="abrirOrden(${s.orden_id})">Ver orden</button>`
+        : '';
 
     return `
         <div class="serv-detail-head">
             <span class="serv-badge serv-badge--${meta.cls}">${meta.label}</span>
             <span class="serv-detail-title">${s.nombre_servicio || meta.label}</span>
+            ${ordenLink}
             ${consultaLink}
         </div>
         ${cuerpo}`;
@@ -2099,6 +2572,18 @@ document.addEventListener('av:servicio-directo-creado', () => {
         cargarServiciosFeed();
         actualizarCountsPet(_serviciosState.mascotaId);
     }
+});
+
+// toma-exclusiva-servicio-gestor, decisión 3: panel del veterinario -- avisa
+// con un toast cuando un gestor toma o libera un servicio de una orden suya.
+// core/notificaciones.js emite este evento desde el mismo polling de la
+// campana (sin WebSockets); acá solo se muestra el aviso -- no hay una
+// pantalla propia de "mis órdenes" en este módulo para refrescar (esa vista
+// es el Panel del día, filtrado por veterinario_id, en sections/hoy.js).
+document.addEventListener('av:notificacion-empuje', (e) => {
+    const nf = e.detail;
+    if (!nf) return;
+    showNotification(nf.cuerpo || nf.titulo || 'Un servicio de tu orden cambió de estado.', 'info');
 });
 
 const buildClinicoForm = (type) => {
@@ -2333,14 +2818,14 @@ const renderNotaCard = (n) => {
     const role = localStorage.getItem('role');
     const puedeModificar = role === 'admin' || n.usuario_id === currentUserId;
     const fecha = new Date(n.fecha_creacion).toLocaleString();
-    const editada = n.fecha_edicion ? `<span style="font-style:italic; color:var(--text-muted);"> (editada ${new Date(n.fecha_edicion).toLocaleString()}${n.editado_por_username ? ' por ' + n.editado_por_username : ''})</span>` : '';
+    const editada = n.fecha_edicion ? `<span style="font-style:italic; color:var(--text-muted);"> (editada ${new Date(n.fecha_edicion).toLocaleString()}${n.editado_por_username ? ' por ' + escapeHtml(n.editado_por_username) : ''})</span>` : '';
 
     return `
         <div class="card-item" id="nota-${n.id}" style="border-left: 4px solid var(--primary);">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem;">
                 <div>
                     <span class="badge" style="background:var(--primary-subtle); color:var(--primary);">${NOTA_CATEGORIA_LABELS[n.categoria] || n.categoria}</span>
-                    <span style="font-size:0.85rem; color:var(--text-secondary); margin-left:0.5rem;">${fecha} · <b>${n.autor || 'Desconocido'}</b>${editada}</span>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); margin-left:0.5rem;">${fecha} · <b>${escapeHtml(n.autor || 'Desconocido')}</b>${editada}</span>
                 </div>
                 ${puedeModificar ? `
                 <div class="row-actions">
@@ -2348,8 +2833,37 @@ const renderNotaCard = (n) => {
                     <button class="btn-secondary btn-sm btn-row-danger" onclick="borrarNota(${n.id})" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Borrar</button>
                 </div>` : ''}
             </div>
-            <div class="nota-texto" style="margin-top:0.5rem; white-space:pre-wrap;">${n.texto}</div>
+            <div class="nota-texto" style="margin-top:0.5rem; white-space:pre-wrap;">${escapeHtml(n.texto || '')}</div>
         </div>`;
+};
+
+// Paginación del tab Notas (tarea 5.4.3): GET /api/notas/mascota/{id} no
+// tiene skip/limit en el backend (siempre devuelve la lista completa) -- en
+// vez de sumar paginación al backend para un volumen de notas por paciente
+// que hoy es chico, "Cargar más" pagina EN EL CLIENTE sobre la lista ya
+// traída completa (ordenada más reciente primero). Documentado también en
+// tasks.md como la opción elegida entre las dos que planteaba el diseño.
+const NOTAS_PAGE_SIZE = 20;
+const _notasState = { mascotaId: null, ordenadas: [], shown: 0 };
+
+const _renderNotasList = () => {
+    const list = document.getElementById('notasList');
+    if (!list) return;
+    const { ordenadas, shown } = _notasState;
+    if (!ordenadas.length) {
+        list.innerHTML = `<div class="empty-state"><div class="icon">${ICONS.notePencil}</div><p>Todavía no hay notas para este paciente.<br>Usá "+ Nueva Nota" para registrar la primera.</p></div>`;
+        return;
+    }
+    const visibles = ordenadas.slice(0, shown);
+    const restantes = ordenadas.length - shown;
+    const masBtn = restantes > 0
+        ? `<button type="button" class="btn-secondary btn-sm btn-load-more" id="btnNotasCargarMas" style="margin-top:0.75rem;">Cargar más (${restantes} restante${restantes === 1 ? '' : 's'})</button>`
+        : '';
+    list.innerHTML = visibles.map(renderNotaCard).join('') + masBtn;
+    document.getElementById('btnNotasCargarMas')?.addEventListener('click', () => {
+        _notasState.shown = Math.min(_notasState.shown + NOTAS_PAGE_SIZE, _notasState.ordenadas.length);
+        _renderNotasList();
+    });
 };
 
 export const cargarNotasPet = async (mascotaId) => {
@@ -2358,13 +2872,12 @@ export const cargarNotasPet = async (mascotaId) => {
     cnt.innerHTML = buildNotaForm() + `<div id="notasList"><p style="text-align:center;color:var(--text-muted);">Cargando...</p></div>`;
     try {
         const data = await fetchAPI(`/notas/mascota/${mascotaId}`);
-        const list = document.getElementById('notasList');
-        if (!data.length) {
-            list.innerHTML = `<div class="empty-state"><div class="icon">${ICONS.notePencil}</div><p>Todavía no hay notas para este paciente.<br>Usá "+ Nueva Nota" para registrar la primera.</p></div>`;
-        } else {
-            // Más reciente primero en pantalla; el backend ya las entrega en orden cronológico ascendente.
-            list.innerHTML = data.slice().reverse().map(renderNotaCard).join('');
-        }
+        if (mascotaId !== currentMascotaId) return; // respuesta vieja: el paciente ya cambió
+        // Más reciente primero en pantalla; el backend ya las entrega en orden cronológico ascendente.
+        _notasState.mascotaId = mascotaId;
+        _notasState.ordenadas = data.slice().reverse();
+        _notasState.shown = Math.min(NOTAS_PAGE_SIZE, _notasState.ordenadas.length);
+        _renderNotasList();
     } catch (e) {
         document.getElementById('notasList').innerHTML = '<p>Error cargando notas.</p>';
     }
@@ -2377,7 +2890,7 @@ export const editarNota = (notaId) => {
     const textoActual = textoDiv.textContent;
     const targetId = `editNotaTexto-${notaId}`;
     textoDiv.innerHTML = `
-        <textarea class="form-control" rows="3" id="${targetId}">${textoActual}</textarea>
+        <textarea class="form-control" rows="3" id="${targetId}">${escapeHtml(textoActual)}</textarea>
         ${dictadoBotonHTML(targetId)}
         <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
             <button class="btn-primary btn-sm" onclick="guardarEdicionNota(${notaId})" style="padding:0.2rem 0.6rem; font-size:0.8rem;">Guardar</button>
@@ -2449,18 +2962,90 @@ const cargarRecetasPet = async (mascotaId) => {
 
 // Removida duplicación antigua de verConsultaCompleta
 
+// ===========================================================================
+// PESTAÑA "FACTURACIÓN" (ficha-animal-ordenes-servicios, tarea 5.5): dos
+// secciones -- Pagadas / Pendientes-Parciales -- usando el filtro `estado`
+// que se agregó a GET /facturas/mascota/{id} (tarea 9.3, que también incluye
+// facturas vinculadas solo por orden). "Abonar" reusa
+// facturacion.js::abrirModalAbono (modal existente, no uno nuevo) y "Ver
+// PDF" reusa facturacion.js::abrirPreviewFactura -- ambas ya están
+// expuestas en window.* por app.js.
+// ===========================================================================
+let _facturacionTabGen = 0;
+
+// Un abono registrado desde el modal (facturacion.js) cambia saldo y estado:
+// si la ficha tiene abierto el tab Facturación, se vuelve a pedir.
+document.addEventListener('abono-registrado', () => {
+    if (currentMascotaId && document.getElementById('facPagadasBody')) {
+        cargarFacturacionTab(currentMascotaId);
+    }
+});
+
+const cargarFacturacionTab = async (mascotaId) => {
+    const bodyPagadas = document.getElementById('facPagadasBody');
+    const bodyPendientes = document.getElementById('facPendientesBody');
+    if (!bodyPagadas || !bodyPendientes || !mascotaId) return;
+    const gen = ++_facturacionTabGen;
+
+    try {
+        const [pagadas, pendientes] = await Promise.all([
+            fetchAPI(`/facturas/mascota/${mascotaId}?estado=PAGADA&limit=100`),
+            fetchAPI(`/facturas/mascota/${mascotaId}?estado=PENDIENTE,PARCIAL&limit=100`),
+        ]);
+        if (gen !== _facturacionTabGen) return; // respuesta vieja: el usuario ya cambió de tab/paciente
+        _pintarFacturasSeccion(bodyPagadas, pagadas || [], true, 'facTotalPagadas');
+        _pintarFacturasSeccion(bodyPendientes, pendientes || [], false, 'facTotalPendientes');
+    } catch (e) {
+        if (gen !== _facturacionTabGen) return;
+        const msg = `<tr><td colspan="5" style="text-align:center; color:var(--accent);">Error al cargar facturas: ${escapeHtml(e.message)}</td></tr>`;
+        bodyPagadas.innerHTML = msg;
+        bodyPendientes.innerHTML = msg;
+    }
+};
+
+const _pintarFacturasSeccion = (tbody, facturas, esPagada, totalId) => {
+    if (!facturas.length) {
+        const colspan = esPagada ? 4 : 5;
+        tbody.innerHTML = `<tr><td colspan="${colspan}" style="text-align:center; color:var(--text-muted);">${esPagada ? 'Sin facturas pagadas todavía.' : 'Sin facturas pendientes o parciales.'}</td></tr>`;
+    } else {
+        tbody.innerHTML = facturas.map(f => {
+            const total = f.total ?? f.total_pagado ?? 0;
+            const saldo = f.saldo_pendiente ?? Math.max(0, Number(total) - Number(f.total_pagado || 0));
+            const acciones = [`<button type="button" class="btn-secondary btn-sm" onclick="abrirPreviewFactura(${f.id})">Ver PDF</button>`];
+            if (!esPagada) {
+                acciones.push(`<button type="button" class="btn-primary btn-sm" onclick="abrirModalAbono(${f.id}, ${Number(saldo)}, ${f.propietario_id})">Abonar</button>`);
+            }
+            const saldoCol = esPagada ? '' : `<td style="text-align:right;">${_money(saldo)}</td>`;
+            return `<tr>
+                <td><b>#${escapeHtml(String(f.numero_factura || f.id))}</b></td>
+                <td>${_fmtFecha(f.fecha_emision)}</td>
+                <td style="text-align:right;">${_money(total)}</td>
+                ${saldoCol}
+                <td style="text-align:right;">${acciones.join(' ')}</td>
+            </tr>`;
+        }).join('');
+    }
+    const totalEl = document.getElementById(totalId);
+    if (totalEl) totalEl.textContent = _money(facturas.reduce((sum, f) => sum + Number(f.total ?? f.total_pagado ?? 0), 0));
+};
+
 const actualizarCountsPet = async (mascotaId) => {
     try {
         const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
         // Tarea 09: la ficha tiene 6 pestañas. Los contadores por tipo clínico
         // se colapsan en "count-servicios" (feed unificado alcance=todos).
+        // ficha-animal-ordenes-servicios: "count-ordenes" cuenta órdenes (tab
+        // nuevo); "count-consultas" (restaurado) cuenta consultas sueltas
+        // -- ambos tabs conviven, cada uno con su propio contador.
         Promise.all([
+            fetchAPI(`/ordenes/?mascota_id=${mascotaId}&limit=200`).catch(() => []),
             fetchAPI(`/consultas/?mascota_id=${mascotaId}`).catch(() => []),
             fetchAPI(`/servicios/?mascota_id=${mascotaId}&alcance=todos`).catch(() => []),
             fetchAPI(`/facturas/mascota/${mascotaId}`).catch(() => []),
             fetchAPI(`/notas/mascota/${mascotaId}`).catch(() => [])
-        ]).then(([cons, serv, fac, notas]) => {
+        ]).then(([ordenes, cons, serv, fac, notas]) => {
+            setTxt('count-ordenes', ordenes?.length || 0);
             setTxt('count-consultas', cons?.length || 0);
             setTxt('count-servicios', serv?.length || 0);
             setTxt('count-facturas', fac?.length || 0);
@@ -2669,4 +3254,9 @@ export const cargarVeterinarios = async () => {
 // individuales de arriba): seleccionarMascota y seleccionarMascotaBasica no llevan
 // `export` inline porque se referencian por nombre dentro del módulo.
 export { seleccionarMascota, seleccionarMascotaBasica, switchPetTab, cargarConsultas, actualizarCountsPet };
+// mostrarLista/mostrarFicha ya se exportan arriba (const export) -- quedan acá
+// documentadas como parte de la superficie pública del módulo (navegación de
+// dos vistas, ficha-animal-ordenes-servicios): mostrarLista la usa
+// propietarios.js (verMascotasPropietario) y mostrarFicha la usa
+// orden-abierta.js ("← Volver a la ficha").
 export { initConsultorio as init };

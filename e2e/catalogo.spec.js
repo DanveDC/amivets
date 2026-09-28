@@ -80,7 +80,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     await expect(page.locator('#modalCatalogoServicio')).toBeHidden();
 
     // Contraste API: existe, activo, con los valores cargados.
-    const listRes = await request.get('/api/catalogo/?solo_activos=false&limit=500', { headers: authHeaders(S.token) });
+    const listRes = await request.get(`/api/catalogo/?solo_activos=false&q=${encodeURIComponent(nombre)}`, { headers: authHeaders(S.token) });
     const items = await listRes.json();
     const creado = items.find((s) => s.nombre === nombre);
     expect(creado, 'el servicio creado por UI debe aparecer en la API').toBeTruthy();
@@ -172,7 +172,7 @@ test.describe.serial('Catálogo de servicios — CRUD /api/catalogo', () => {
     expect(delRes.status()).toBe(204);
 
     // Ya no aparece con solo_activos=true (default).
-    const activosRes = await request.get('/api/catalogo/?limit=500', { headers: authHeaders(S.token) });
+    const activosRes = await request.get(`/api/catalogo/?q=${encodeURIComponent(S.servicioAPI.nombre)}`, { headers: authHeaders(S.token) });
     const activos = await activosRes.json();
     expect(activos.some((s) => s.id === S.servicioAPI.id)).toBe(false);
 

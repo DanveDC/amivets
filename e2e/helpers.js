@@ -503,15 +503,30 @@ async function anexarServicioOrden(request, ordenId, overrides = {}, token = nul
  * of status — callers check `.status()`-sensitive assertions themselves via
  * the raw response when needed; this helper is for the happy path. Throws on
  * rejection.
+ *
+ * `asignaciones` (asignacion-directa-servicio-gestor, decisión 2): array
+ * opcional de `{servicio_id, gestor_id}`. Sin ella (el default), el `POST` va
+ * SIN CUERPO -- mismo request que antes de este change, para no romper los
+ * ~10 call sites existentes que ya usan este helper.
  */
-async function confirmarServiciosOrden(request, ordenId, token = null) {
+async function confirmarServiciosOrden(request, ordenId, token = null, asignaciones = null) {
   const res = await request.post(`/api/ordenes/${ordenId}/confirmar`, {
     headers: token ? authHeaders(token) : {},
+    ...(asignaciones ? { data: { asignaciones } } : {}),
   });
   if (!res.ok()) {
     throw new Error(
       `[amivets-e2e] Failed to confirmar servicios of orden ${ordenId}: ${res.status()} ${await res.text()}`
     );
+  }
+  return res.json();
+}
+
+/** GET /api/areas/{id}/gestores-activos. Throws on rejection. */
+async function listarGestoresActivos(request, areaId, token) {
+  const res = await request.get(`/api/areas/${areaId}/gestores-activos`, { headers: authHeaders(token) });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to list gestores activos of área ${areaId}: ${res.status()} ${await res.text()}`);
   }
   return res.json();
 }
@@ -550,13 +565,13 @@ async function facturarOrden(request, ordenId, body = {}, token = null) {
 }
 
 /**
- * POST /api/caja-rapida/ventas (caja-rapida). `body` is
+ * POST /api/servicio-directo/ventas (servicio-directo). `body` is
  * { propietario_id?, metodo_pago, items: [{ tipo, id, cantidad, precio_unitario? }] }.
  * Returns the raw response — specs assert 201/404/409/422/403/401 on
  * `.status()` themselves. Without a token the request goes unauthenticated.
  */
-async function ventaRapida(request, body, token = null) {
-  return request.post('/api/caja-rapida/ventas', {
+async function cobrarServicioDirecto(request, body, token = null) {
+  return request.post('/api/servicio-directo/ventas', {
     headers: token ? authHeaders(token) : {},
     data: body,
   });
@@ -583,6 +598,15 @@ async function setPorcentajeEncargado(request, token, usuarioId, porcentaje) {
   });
 }
 
+/** PUT /api/comisiones/encargados/{id} { tipo_comision, monto_fijo, porcentaje }
+ *  (comision-tipo-mixto-encargado). Returns the raw response. */
+async function setComisionEncargado(request, token, usuarioId, { tipo_comision = null, monto_fijo = null, porcentaje = null } = {}) {
+  return request.put(`/api/comisiones/encargados/${usuarioId}`, {
+    headers: authHeaders(token),
+    data: { tipo_comision, monto_fijo, porcentaje },
+  });
+}
+
 /** GET /api/comisiones/?encargado_id=&desde=&hasta=. */
 async function controlComisiones(request, token, encargadoId, desde = null, hasta = null) {
   const params = { encargado_id: encargadoId };
@@ -599,9 +623,9 @@ async function liquidarComisiones(request, token, encargadoId, desde, hasta) {
   });
 }
 
-/** GET /api/caja-rapida/items?q= (caja-rapida). Returns the raw response. */
-async function buscarItemsCaja(request, q, token = null) {
-  return request.get(`/api/caja-rapida/items?q=${encodeURIComponent(q || '')}&limit=100`, {
+/** GET /api/servicio-directo/items?q= (servicio-directo). Returns the raw response. */
+async function buscarItemsServicioDirecto(request, q, token = null) {
+  return request.get(`/api/servicio-directo/items?q=${encodeURIComponent(q || '')}&limit=100`, {
     headers: token ? authHeaders(token) : {},
   });
 }
@@ -707,6 +731,92 @@ async function deleteTestCatalogoServicio(request, id, token = null) {
 }
 
 // ===========================================================================
+// Plantillas de paquete (plantillas-paquete-catalogo): es_paquete, componentes
+// del paquete, disponibilidad de insumos y anexo de paquete a una orden.
+// Mismo criterio del resto del archivo: "create"/"do" helpers throw loudly,
+// para que un contrato roto falle en la línea de setup, no 10 líneas después.
+// ===========================================================================
+
+/** PUT /api/catalogo/{id} { es_paquete }. Admin-only (design D5); pasa el
+ * token del rol que se quiere probar (para los 403 de veterinario/otros). */
+async function marcarPaquete(request, servicioId, esPaquete, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.put(`/api/catalogo/${servicioId}`, {
+    headers: authHeaders(authToken),
+    data: { es_paquete: esPaquete },
+  });
+  return res;
+}
+
+/** POST /api/catalogo/{paqueteId}/componentes { componente_id, cantidad }.
+ * Admin-only. Throws on rejection -- para setup; los specs que prueban el
+ * 404/422/409 llaman `request.post` directo. */
+async function agregarComponentePaquete(request, paqueteId, { componenteId, cantidad = 1 }, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.post(`/api/catalogo/${paqueteId}/componentes`, {
+    headers: authHeaders(authToken),
+    data: { componente_id: componenteId, cantidad },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to agregar componente ${componenteId} al paquete ${paqueteId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/** GET /api/catalogo/{paqueteId}/componentes. Throws on rejection. */
+async function listarComponentesPaquete(request, paqueteId, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.get(`/api/catalogo/${paqueteId}/componentes`, { headers: authHeaders(authToken) });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to listar componentes del paquete ${paqueteId}: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** GET /api/catalogo/{servicioId}/disponibilidad. Throws on rejection. */
+async function disponibilidadCatalogo(request, servicioId, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.get(`/api/catalogo/${servicioId}/disponibilidad`, { headers: authHeaders(authToken) });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to leer disponibilidad de ${servicioId}: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** POST /api/catalogo/{servicioId}/recetas { inventario_id, cantidad,
+ * unidad_medida }. Throws on rejection. `unidadMedida` default 'ml': el
+ * material de prueba de `createTestProduct` no fija `unidad_medida`, así que
+ * el caller debe pasar la misma unidad que le dio al material. */
+async function agregarRecetaCatalogo(request, servicioId, { inventarioId, cantidad, unidadMedida = 'ml' }, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.post(`/api/catalogo/${servicioId}/recetas`, {
+    headers: authHeaders(authToken),
+    data: { inventario_id: inventarioId, cantidad, unidad_medida: unidadMedida },
+  });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to agregar receta a ${servicioId}: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** POST /api/ordenes/{ordenId}/paquetes { catalogo_servicio_id }. Same
+ * "create" convention as anexarServicioOrden: throws on rejection. */
+async function anexarPaqueteOrden(request, ordenId, catalogoServicioId, token = null) {
+  const res = await request.post(`/api/ordenes/${ordenId}/paquetes`, {
+    headers: token ? authHeaders(token) : {},
+    data: { catalogo_servicio_id: catalogoServicioId },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to anexar paquete ${catalogoServicioId} to orden ${ordenId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+// ===========================================================================
 // Despacho y bandejas (/api/areas, /api/servicios/{id}/tomar,
 // /api/servicios/bandeja, /api/notificaciones) — Tarea 06, etapa 5.
 // ===========================================================================
@@ -765,6 +875,72 @@ async function createTestGestor(request, adminToken, overrides = {}) {
  * on `.status()` themselves, since several specs deliberately expect 403/409. */
 async function tomarServicio(request, servicioId, token) {
   return request.post(`/api/servicios/${servicioId}/tomar`, { headers: authHeaders(token) });
+}
+
+/**
+ * Limpieza de FK antes de borrar a gestores/veterinarios de prueba creados
+ * por un `describe.serial` de despacho (toma-exclusiva-servicio-gestor,
+ * hallazgo de revisión: sin esto, `deleteTestUser` filtraba el usuario en
+ * silencio). Compartida por `toma-exclusiva-servicio-gestor.spec.js` y
+ * `asignacion-directa-servicio-gestor.spec.js` (asignacion-directa-servicio-
+ * gestor, "Working-tree context"): las dos crean gestores Y un veterinario de
+ * prueba referenciados por FK SIN `ondelete` desde tablas que ningún endpoint
+ * limpia en todos los estados posibles:
+ *   - `servicios_consulta.asignado_a_id` / `.liberado_por_id` / `.
+ *     asignado_directo_a_id` (esta última, asignacion-directa-servicio-
+ *     gestor): no hay endpoint que las limpie en todos los estados posibles
+ *     (p.ej. un servicio EJECUTADO, o uno ya ASIGNADO con `liberado_por_id`
+ *     histórico) -- `/liberar` solo actúa sobre EN_PROCESO, y una asignación
+ *     directa que nadie tomó tampoco pasa por ahí.
+ *   - `ordenes_servicio.veterinario_id` (nullable) / `.abierta_por_id` (NOT
+ *     NULL, se reasigna al admin en vez de limpiarse) (hallazgo de esta
+ *     revisión, asignacion-directa-servicio-gestor: cada `createTestOrden`
+ *     con `veterinarioId` de estas dos unidades deja al veterinario de
+ *     prueba enganchado a TODAS las órdenes que abrió, y no hay endpoint que
+ *     desvincule una orden de su veterinario).
+ *   - `notificaciones.destinatario_id`: cada `confirmarServiciosOrden` /
+ *     `tomarServicio` de estas unidades les manda notificaciones (fan-out en
+ *     escritura, notificacion_service.py) y no existe un DELETE de
+ *     notificaciones.
+ *   - `gestor_area.usuario_id`: `agregarGestorArea` los deja de alta en el
+ *     área de prueba; `desactivarTestArea` desactiva el ÁREA, no borra la
+ *     fila de membresía del gestor.
+ * Al borrar el usuario, `usuarios.py::eliminar_usuario` hace `db.delete()`
+ * (hard delete real, a diferencia del resto del dominio que es soft-delete)
+ * y cualquiera de estas filas viola la FK: 409 que `deleteTestUser` traga a
+ * propósito (best-effort), y el usuario queda huérfano para siempre.
+ *
+ * Se resuelve a nivel de BD (no del modelo: son columnas de auditoría/
+ * relación que deben seguir sin `ondelete` para el resto del dominio) porque
+ * no existe un endpoint que las limpie fuera de tomar/liberar/confirmar/abrir
+ * orden. Acotado por ID: como los usuarios pasados son recién creados en el
+ * `beforeAll` de cada spec, filtrar por su ID nunca puede tocar una fila de
+ * otro spec. Best-effort: si el entorno no tiene Docker (CI sin acceso al
+ * daemon), el afterAll sigue igual y el leak conocido persiste, sin romper
+ * la corrida.
+ */
+function limpiarReferenciasDeGestor(...usuarioIds) {
+  const ids = usuarioIds.filter(Boolean);
+  if (!ids.length) return;
+  const { execFileSync } = require('child_process');
+  const lista = ids.join(',');
+  try {
+    execFileSync('docker', [
+      'exec', 'veterinaria_db', 'psql', '-U', 'vetuser', '-d', 'veterinaria_db', '-c',
+      `UPDATE servicios_consulta SET asignado_a_id = NULL WHERE asignado_a_id IN (${lista}); ` +
+      `UPDATE servicios_consulta SET liberado_por_id = NULL WHERE liberado_por_id IN (${lista}); ` +
+      `UPDATE servicios_consulta SET asignado_directo_a_id = NULL WHERE asignado_directo_a_id IN (${lista}); ` +
+      `UPDATE ordenes_servicio SET veterinario_id = NULL WHERE veterinario_id IN (${lista}); ` +
+      // abierta_por_id es NOT NULL (a diferencia de veterinario_id): no se
+      // puede limpiar a NULL, se reasigna al admin real (cuenta seed, nunca
+      // se borra) para no violar esa constraint.
+      `UPDATE ordenes_servicio SET abierta_por_id = (SELECT id FROM usuarios WHERE username = 'admin') WHERE abierta_por_id IN (${lista}); ` +
+      `DELETE FROM notificaciones WHERE destinatario_id IN (${lista}); ` +
+      `DELETE FROM gestor_area WHERE usuario_id IN (${lista});`,
+    ], { stdio: 'ignore' });
+  } catch (_) {
+    // best-effort cleanup, ver comentario de arriba.
+  }
 }
 
 /** GET /api/servicios/bandeja?area_id=&usuario_id=. Throws on rejection. */
@@ -1165,12 +1341,14 @@ module.exports = {
   anexarServicioConsulta,
   anexarServicioOrden,
   confirmarServiciosOrden,
+  listarGestoresActivos,
   pendientesFacturarOrden,
   facturarOrden,
-  ventaRapida,
-  buscarItemsCaja,
+  cobrarServicioDirecto,
+  buscarItemsServicioDirecto,
   setPorcentajeDefecto,
   setPorcentajeEncargado,
+  setComisionEncargado,
   controlComisiones,
   liquidarComisiones,
   facturarDesdeConsulta,
@@ -1178,11 +1356,18 @@ module.exports = {
   anularTestFactura,
   createTestCatalogoServicio,
   deleteTestCatalogoServicio,
+  marcarPaquete,
+  agregarComponentePaquete,
+  listarComponentesPaquete,
+  disponibilidadCatalogo,
+  agregarRecetaCatalogo,
+  anexarPaqueteOrden,
   createTestArea,
   desactivarTestArea,
   agregarGestorArea,
   createTestGestor,
   tomarServicio,
+  limpiarReferenciasDeGestor,
   listarBandeja,
   listarNotificaciones,
   pdfBufferValido,

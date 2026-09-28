@@ -5,7 +5,7 @@
 import { fetchAPI } from '../core/api.js';
 import { ICONS, openModal, closeModal, escapeHtml, escapeJsAttr, showNotification } from '../core/ui.js';
 import { showSection } from '../core/router.js';
-import { setOwnerFilter, abrirNuevaMascotaParaPropietario } from './consultorio.js';
+import { setOwnerFilter, abrirNuevaMascotaParaPropietario, mostrarLista } from './consultorio.js';
 
 // ============ PROPIETARIOS MODULE ============
 export const loadPropietarios = async (filter = '') => {
@@ -81,13 +81,10 @@ export const verMascotasPropietario = (propietarioId, nombre) => {
     // router al navegar) haga el único fetch, ya filtrado por propietario.
     setOwnerFilter(propietarioId);
 
-    // Si había una mascota abierta en el panel de detalle, ese panel se
-    // queda visible aunque cambiemos de sección — sin esto, "Mascotas" de
-    // otro propietario mostraba la mascota vieja en lugar de la lista.
-    const patientWrapper = document.getElementById('patientWrapper');
-    const emptyPatientWrapper = document.getElementById('emptyPatientWrapper');
-    if (patientWrapper) patientWrapper.style.display = 'none';
-    if (emptyPatientWrapper) emptyPatientWrapper.style.display = 'flex';
+    // Si había una ficha abierta (Vista 2), volver a Vista 1 (listado) antes
+    // de navegar -- sin esto, "Mascotas" de otro propietario mostraba la
+    // ficha vieja en lugar de la lista (ficha-animal-ordenes-servicios).
+    mostrarLista();
 
     // Navegación por el router del shell (oculta el resto con [hidden]).
     showSection('sec-consultorio');

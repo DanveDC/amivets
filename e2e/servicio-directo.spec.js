@@ -1,10 +1,10 @@
 // @ts-check
-// Caja rápida (caja-rapida): venta de mostrador sin registrar cliente.
+// Servicio directo (servicio-directo): venta de mostrador sin registrar cliente.
 //
-//   POST /api/caja-rapida/ventas → factura PAGADA en un solo paso; orden
+//   POST /api/servicio-directo/ventas → factura PAGADA en un solo paso; orden
 //        FACTURADA con origen CAJA_RAPIDA; sin propietario_id se factura a
 //        "Consumidor final".
-//   GET  /api/caja-rapida/items?q= → productos (PRODUCTO) y servicios sin área.
+//   GET  /api/servicio-directo/items?q= → productos (PRODUCTO) y servicios sin área.
 //
 // Cada test crea sus propios productos/servicios y anula las facturas que
 // deja, para devolver el stock y no ensuciar la base compartida.
@@ -28,8 +28,8 @@ const {
   deleteTestUser,
   loginAs,
   anularTestFactura,
-  ventaRapida,
-  buscarItemsCaja,
+  cobrarServicioDirecto,
+  buscarItemsServicioDirecto,
   gotoSection,
 } = require('./helpers');
 
@@ -39,7 +39,7 @@ async function stockOf(request, token, id) {
   return Number((await res.json()).stock_actual);
 }
 
-test.describe('Caja rápida — API', () => {
+test.describe('Servicio directo — API', () => {
   /** @type {string} */
   let token;
   /** Facturas a anular al final de cada test (devuelve stock). */
@@ -71,7 +71,7 @@ test.describe('Caja rápida — API', () => {
   }
 
   async function vender(request, body, t = token) {
-    const res = await ventaRapida(request, body, t);
+    const res = await cobrarServicioDirecto(request, body, t);
     if (res.status() === 201) {
       const json = await res.json();
       facturas.push(json.id);
@@ -250,7 +250,7 @@ test.describe('Caja rápida — API', () => {
   });
 
   test('la búsqueda trae productos y servicios vendibles, sin materiales ni servicios con área', async ({ request }) => {
-    const tag = testTag('cajaq');
+    const tag = testTag('directoq');
     const area = await createTestArea(request, token);
     limpiezas.push(() => desactivarTestArea(request, token, area.id));
     const p = await producto(request, { nombre: `${tag} producto` });
@@ -258,7 +258,7 @@ test.describe('Caja rápida — API', () => {
     const s = await servicio(request, { nombre: `${tag} servicio` });
     const sa = await servicio(request, { nombre: `${tag} con area`, area_id: area.id });
 
-    const res = await buscarItemsCaja(request, tag, token);
+    const res = await buscarItemsServicioDirecto(request, tag, token);
     expect(res.ok()).toBeTruthy();
     const items = await res.json();
     const claves = items.map((i) => `${i.tipo}:${i.id}`);
@@ -279,9 +279,9 @@ test.describe('Caja rápida — API', () => {
     const body = { metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 1 }] };
 
     expect((await vender(request, body, vetToken)).res.status()).toBe(403);
-    expect((await ventaRapida(request, body)).status()).toBe(401);
-    expect((await buscarItemsCaja(request, 'x')).status()).toBe(401);
-    expect((await buscarItemsCaja(request, 'x', vetToken)).status()).toBe(403);
+    expect((await cobrarServicioDirecto(request, body)).status()).toBe(401);
+    expect((await buscarItemsServicioDirecto(request, 'x')).status()).toBe(401);
+    expect((await buscarItemsServicioDirecto(request, 'x', vetToken)).status()).toBe(403);
 
     const { user: recep, token: recepToken } = await createTestRecepcionista(request, token);
     limpiezas.push(() => deleteTestUser(request, token, recep.id));
@@ -290,7 +290,7 @@ test.describe('Caja rápida — API', () => {
   });
 });
 
-test.describe('Caja rápida — pantalla', () => {
+test.describe('Servicio directo — pantalla', () => {
   /** @type {string} */
   let adminToken;
   let limpiezas = [];
@@ -312,69 +312,69 @@ test.describe('Caja rápida — pantalla', () => {
     await page.waitForURL('**/');
   }
 
-  async function recepcionistaEnCaja(page, request) {
+  async function recepcionistaEnServicioDirecto(page, request) {
     const { user } = await createTestRecepcionista(request, adminToken);
     limpiezas.push(() => deleteTestUser(request, adminToken, user.id));
     await loginUI(page, user.username, TEST_USER_PASSWORD);
-    await gotoSection(page, 'sec-caja-rapida');
-    await expect(page.locator('#sec-caja-rapida')).toBeVisible();
+    await gotoSection(page, 'sec-servicio-directo');
+    await expect(page.locator('#sec-servicio-directo')).toBeVisible();
   }
 
   async function agregarDesdeBuscador(page, nombre) {
-    await page.fill('#cajaBuscar', nombre);
-    const fila = page.locator('#cajaResultadosBody tr', { hasText: nombre });
+    await page.fill('#servicioDirectoBuscar', nombre);
+    const fila = page.locator('#servicioDirectoResultadosBody tr', { hasText: nombre });
     await expect(fila).toBeVisible({ timeout: 10000 });
     await fila.getByRole('button', { name: 'Agregar' }).click();
-    await expect(page.locator('#cajaCarritoBody tr', { hasText: nombre })).toBeVisible();
+    await expect(page.locator('#servicioDirectoCarritoBody tr', { hasText: nombre })).toBeVisible();
   }
 
   test('la recepcionista vende un producto en efectivo, ve la factura y el carrito queda vacío', async ({ page, request }) => {
-    const p = await createTestProduct(request, { nombre: testTag('cajaui'), precio_unitario: 320, stock_actual: 5 }, adminToken);
+    const p = await createTestProduct(request, { nombre: testTag('directoui'), precio_unitario: 320, stock_actual: 5 }, adminToken);
     limpiezas.push(() => deleteTestProduct(request, p.id, adminToken));
-    await recepcionistaEnCaja(page, request);
+    await recepcionistaEnServicioDirecto(page, request);
 
     await agregarDesdeBuscador(page, p.nombre);
-    await expect(page.locator('#cajaTotal')).toHaveText('$320.00');
+    await expect(page.locator('#servicioDirectoTotal')).toHaveText('$320.00');
 
-    const respuesta = page.waitForResponse((r) => r.url().includes('/api/caja-rapida/ventas') && r.request().method() === 'POST');
-    await page.locator('#btnCajaCobrar').click();
+    const respuesta = page.waitForResponse((r) => r.url().includes('/api/servicio-directo/ventas') && r.request().method() === 'POST');
+    await page.locator('#btnServicioDirectoEmitir').click();
     const factura = await (await respuesta).json();
     limpiezas.push(() => anularTestFactura(request, factura.id, adminToken));
 
-    await expect(page.locator('#cajaConfirmacion')).toBeVisible();
-    await expect(page.locator('#cajaFacturaNumero')).toContainText(factura.numero_factura);
+    await expect(page.locator('#servicioDirectoConfirmacion')).toBeVisible();
+    await expect(page.locator('#servicioDirectoFacturaNumero')).toContainText(factura.numero_factura);
     expect(factura.estado).toBe('PAGADA');
     expect(factura.metodo_pago).toBe('EFECTIVO');
 
-    await page.locator('#btnCajaNueva').click();
-    await expect(page.locator('#cajaVenta')).toBeVisible();
-    await expect(page.locator('#cajaCarritoBody')).toContainText('El carrito está vacío.');
-    await expect(page.locator('#btnCajaCobrar')).toBeDisabled();
+    await page.locator('#btnServicioDirectoNueva').click();
+    await expect(page.locator('#servicioDirectoVenta')).toBeVisible();
+    await expect(page.locator('#servicioDirectoCarritoBody')).toContainText('El carrito está vacío.');
+    await expect(page.locator('#btnServicioDirectoEmitir')).toBeDisabled();
   });
 
   test('si la venta falla por stock, se ve el error y el carrito conserva el ítem', async ({ page, request }) => {
-    const p = await createTestProduct(request, { nombre: testTag('cajaui'), stock_actual: 1 }, adminToken);
+    const p = await createTestProduct(request, { nombre: testTag('directoui'), stock_actual: 1 }, adminToken);
     limpiezas.push(() => deleteTestProduct(request, p.id, adminToken));
-    await recepcionistaEnCaja(page, request);
+    await recepcionistaEnServicioDirecto(page, request);
 
     await agregarDesdeBuscador(page, p.nombre);
-    await page.locator(`#cajaCarritoBody input[data-caja-cantidad]`).fill('3');
-    await page.locator('#btnCajaCobrar').click();
+    await page.locator(`#servicioDirectoCarritoBody input[data-servicio-directo-cantidad]`).fill('3');
+    await page.locator('#btnServicioDirectoEmitir').click();
 
     await expect(page.locator('.notification-toast', { hasText: /Stock insuficiente/ }).first()).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('#cajaConfirmacion')).toBeHidden();
-    await expect(page.locator('#cajaCarritoBody tr', { hasText: p.nombre })).toBeVisible();
-    await expect(page.locator('#cajaCarritoBody input[data-caja-cantidad]')).toHaveValue('3');
+    await expect(page.locator('#servicioDirectoConfirmacion')).toBeHidden();
+    await expect(page.locator('#servicioDirectoCarritoBody tr', { hasText: p.nombre })).toBeVisible();
+    await expect(page.locator('#servicioDirectoCarritoBody input[data-servicio-directo-cantidad]')).toHaveValue('3');
   });
 
-  test('un veterinario no ve la caja rápida en la barra lateral', async ({ page, request }) => {
+  test('un veterinario no ve Servicio directo en la barra lateral', async ({ page, request }) => {
     const vet = await createTestVeterinario(request, adminToken);
     limpiezas.push(() => deleteTestUser(request, adminToken, vet.id));
     await loginUI(page, vet.username, TEST_USER_PASSWORD);
     // En el lanzador la barra lateral está oculta, pero ya está armada: su
     // data-signature lista las secciones que el rol puede ver.
     await expect(page.locator('#avSidebar')).toHaveAttribute('data-signature', /^veterinario::/);
-    await expect(page.locator('#avSidebar')).not.toHaveAttribute('data-signature', /sec-caja-rapida/);
+    await expect(page.locator('#avSidebar')).not.toHaveAttribute('data-signature', /sec-servicio-directo/);
     await expect(page.locator('#avSidebar')).not.toHaveAttribute('data-signature', /sec-facturacion/);
   });
 });

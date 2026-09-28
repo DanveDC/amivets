@@ -22,7 +22,8 @@
 import { fetchAPI, API_BASE_URL } from '../core/api.js';
 import { showNotification, escapeHtml } from '../core/ui.js';
 import { haceCuanto, fechaLargaEsVE, fechaCorta } from '../core/format.js';
-import { tablaLineas, totales, descargarPdf, pct } from './comisiones.js';
+import { getUserId } from '../core/session.js';
+import { tablaLineas, totales, descargarPdf, describirComision } from './comisiones.js';
 
 const ESTADO_PILL = { ASIGNADO: 'av-pill--warn', EN_PROCESO: 'av-pill--info' };
 const ESTADO_LABEL = { ASIGNADO: 'Asignado', EN_PROCESO: 'En proceso' };
@@ -202,17 +203,23 @@ function pintarQueue() {
     }
     body.innerHTML = visibles.map(s => {
         const activo = s.estado === 'EN_PROCESO';
+        // Liberar (toma-exclusiva-servicio-gestor, decisión 1): solo tiene
+        // sentido para el que lo tomó -- la bandeja de un gestor puro ya solo
+        // le muestra lo suyo (ver design.md), pero se repite el chequeo por
+        // si esta fila la trae la vista de admin (usuario_id de otro).
+        const puedeLiberar = activo && s.asignado_a_id === getUserId();
         const accion = s.estado === 'ASIGNADO'
             ? `<button type="button" class="bg-btn-take" data-tomar="${s.id}">Tomar</button>`
             : `<button type="button" class="bg-btn-cargar" data-cargar="${s.id}">
                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
                  Cargar resultado
-               </button>`;
+               </button>${puedeLiberar ? `<button type="button" class="av-btn" data-liberar="${s.id}" style="height:30px; padding:0 10px; font-size:12.5px; margin-left:6px;">Liberar</button>` : ''}`;
         return `
             <tr class="${activo && s.id === _servicioActivoId ? 'bg-row--active' : ''}">
                 <td>
                     <span class="bg-svc-name">${escapeHtml(s.nombre_servicio || '—')}</span>
                     <span class="bg-svc-area">${escapeHtml(areaNombre(s.area_id))}</span>
+                    ${s.asignado_directo_a_id ? `<span class="av-pill av-pill--info">${escapeHtml(s.asignado_directo_a_id === getUserId() ? 'Asignado a vos' : `Asignado a ${s.asignado_directo_a_nombre || ''}`)}</span>` : ''}
                 </td>
                 <td>${escapeHtml(s._mascotaNombre)} <span style="color:var(--text-muted); font-size:12.5px;">· ${escapeHtml(s._mascotaEspecie || '')}</span></td>
                 <td>${ordenHtml(s._ordenNumero, s.orden_id)}</td>
@@ -228,6 +235,10 @@ function pintarQueue() {
         pintarQueue();
         pintarDetalle();
     }));
+    body.querySelectorAll('[data-liberar]').forEach(btn => btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        liberar(Number(btn.dataset.liberar));
+    }));
 }
 
 async function tomar(servicioId) {
@@ -238,6 +249,17 @@ async function tomar(servicioId) {
         await loadBandejaGestor();
     } catch (e) {
         showNotification('No se pudo tomar el servicio: ' + e.message, 'error');
+    }
+}
+
+async function liberar(servicioId) {
+    try {
+        await fetchAPI(`/servicios/${servicioId}/liberar`, { method: 'POST' });
+        showNotification('Servicio liberado.', 'success');
+        if (_servicioActivoId === servicioId) _servicioActivoId = null;
+        await loadBandejaGestor();
+    } catch (e) {
+        showNotification('No se pudo liberar el servicio: ' + e.message, 'error');
     }
 }
 
@@ -505,7 +527,7 @@ async function cargarMisComisiones() {
             fetchAPI('/comisiones/mias/liquidaciones'),
         ]);
         wrap.innerHTML = `
-            <p style="margin:0 0 0.75rem;">Tu porcentaje actual: <b>${pct(c.porcentaje_efectivo)}</b></p>
+            <p style="margin:0 0 0.75rem;">Tu comisión actual: <b>${describirComision(c.tipo_comision, c.monto_fijo, c.porcentaje_efectivo)}</b></p>
             <h4 style="margin: 0.5rem 0;">Pendiente de liquidar</h4>
             ${tablaLineas(c.pendientes, 'No tenés comisiones pendientes en este rango.')}
             <div id="bgComTotalesPendientes" style="margin:0.75rem 0 1.25rem;">${totales(c.totales_pendientes)}</div>

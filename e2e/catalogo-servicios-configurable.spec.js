@@ -43,7 +43,7 @@ test.describe('Catálogo configurable', () => {
     await page.locator('#formCatalogoServicio button[type="submit"]').click();
     await expect(page.locator('#modalCatalogoServicio')).toBeHidden({ timeout: 10000 });
 
-    const lista = await (await request.get(`/api/catalogo/?search=${encodeURIComponent(nombre)}`, { headers: authHeaders(admin) })).json();
+    const lista = await (await request.get(`/api/catalogo/?q=${encodeURIComponent(nombre)}`, { headers: authHeaders(admin) })).json();
     const creado = lista.find((s) => s.nombre === nombre);
     expect(creado).toBeTruthy();
     expect(creado.categoria).toBe(categoria);
@@ -71,6 +71,10 @@ test.describe('Catálogo configurable', () => {
 
     await loginAdmin(page);
     await gotoSection(page, 'sec-catalogo');
+    // paginacion-catalogo: la lista pagina de a 100 y ya no trae todo el
+    // catálogo de una -- sin este filtro, un servicio nuevo puede caer fuera
+    // de la primera página según dónde ordene alfabéticamente.
+    await page.fill('#catalogoSearch', s.nombre);
     await page.locator(`.cat-item[data-id="${s.id}"]`).click();
     await expect(page.locator('#catCostoInsumos')).toContainText('1,00');
     page.once('dialog', (d) => d.accept());

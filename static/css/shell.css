@@ -445,6 +445,12 @@
 .pd-table tbody tr:hover td { background: var(--surface-hover); }
 .pd-table .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .pd-order-link { font-weight: 500; color: var(--primary); }
+/* Fila expandible de servicios (toma-exclusiva-servicio-gestor, tarea 6.1):
+   no navega a ningún lado al hacer click, así que no hereda el cursor
+   pointer ni el hover de fila de .pd-table tbody tr. */
+.pd-table tbody tr.pd-order-services-row { cursor: default; }
+.pd-table tbody tr.pd-order-services-row:hover td { background: none; }
+.pd-order-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; border-radius: 4px; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ORDEN ABIERTA — sec-orden-abierta (tab:false, Decisión 3).
@@ -515,6 +521,13 @@
   font-family: inherit;
 }
 .oa-anexar-row:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+/* servicio-base-paquete-items: fila base destacada, items indentados,
+   subtotal del paquete al pie del grupo (colapsable al click en la base). */
+.oa-paquete-base:hover { filter: brightness(0.97); }
+.oa-paquete-item td { background: var(--surface); }
+.oa-paquete-item:hover td { background: var(--surface-hover); }
+.oa-paquete-subtotal td { border-top: 1px dashed var(--border); }
 
 .oa-side { display: flex; flex-direction: column; gap: 14px; }
 .oa-summary {
@@ -891,6 +904,10 @@
 }
 .cat-master-head { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; padding: 0 14px; }
 .cat-list { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; max-height: 70vh; overflow-y: auto; }
+/* paginacion-catalogo: sin esto el `display:inline-flex` de .av-btn le gana
+   a [hidden] (mismo problema que .av-search más arriba) y "Cargar más"
+   queda visible aunque el atributo hidden esté puesto. */
+#catalogoCargarMas[hidden] { display: none; }
 
 .cat-item {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 6px;
@@ -947,3 +964,13 @@
 .ar-lista .ar-vacio { border-style: dashed; color: var(--text-muted); }
 .ar-add-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .ar-add-row select { flex: 1; min-width: 200px; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+
+/* areas-y-gestores: sub-tabs "Áreas internas" / "Gestores externos" (gestor-externo-crud). */
+.ar-tabs { display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.ar-tab-btn { padding: 10px 16px; border: none; background: none; font-weight: 500; font-size: 13.5px; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.ar-tab-btn:hover { color: var(--text-primary); }
+.ar-tab-btn.active { color: var(--primary); font-weight: 600; border-bottom-color: var(--primary); }
+.ar-tab-content[hidden] { display: none; }
+.ar-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.ar-checklist li { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ar-checklist label { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; font-size: 0.9rem; }

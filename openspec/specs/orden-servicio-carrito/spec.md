@@ -20,7 +20,7 @@ The system SHALL create a service order from only a `propietario_id`, in state `
 
 ### Requirement: Agregar servicios al carrito
 
-The system SHALL add every service posted to `POST /api/ordenes/{id}/servicios` in state `SOLICITADO`, with or without an area, and MUST NOT change the order state, execute the service, or consume inventory at that moment. Adding services MUST be rejected on orders in `CERRADA`, `FACTURADA` or `ANULADA`.
+The system SHALL add every service posted to `POST /api/ordenes/{id}/servicios` in state `SOLICITADO`, with or without an area, and MUST NOT change the order state, execute the service, or consume inventory at that moment. The only exception is the consultation-fee line (`tipo_servicio='CONSULTA'`), which follows the no-dispatch shortcut described in "Atajo sin despacho al anexar CONSULTA directa". Adding services MUST be rejected on orders in `CERRADA`, `FACTURADA` or `ANULADA`.
 
 #### Scenario: Servicio sin área queda solicitado
 - **WHEN** se agrega a una orden `ABIERTA` un servicio cuyo catálogo no tiene área
@@ -32,6 +32,11 @@ The system SHALL add every service posted to `POST /api/ordenes/{id}/servicios` 
 - **THEN** el servicio queda en estado `SOLICITADO`
 - **AND** no se crea ninguna notificación a los gestores de esa área
 - **AND** el servicio no aparece en la bandeja de los gestores
+
+#### Scenario: La CONSULTA no pasa por el carrito
+- **WHEN** se agrega a una orden `ABIERTA` una línea con `tipo_servicio='CONSULTA'`
+- **THEN** la línea queda en estado `EJECUTADO`, no en `SOLICITADO`
+- **AND** la orden pasa a `EN_ATENCION`
 
 #### Scenario: Orden cerrada no acepta servicios
 - **WHEN** se agrega un servicio a una orden en estado `CERRADA`
@@ -51,17 +56,47 @@ The system SHALL return, in `GET /api/ordenes/{id}` and in the order listing, a 
 
 ### Requirement: Confirmar la orden
 
-The system SHALL, on `POST /api/ordenes/{id}/confirmar`, move every `SOLICITADO` service with an area to `ASIGNADO` and notify every active manager of that area (or the admins when the area has no managers), move every `SOLICITADO` service without an area to `EJECUTADO` (consuming its inventory), and move an `ABIERTA` order to `EN_ATENCION`. Confirming an order with no `SOLICITADO` services MUST succeed without changes.
+The system SHALL, on `POST /api/ordenes/{id}/confirmar`, move every `SOLICITADO` service with an area to `ASIGNADO`, move every `SOLICITADO` service without an area to `EJECUTADO` (consuming its inventory), and move an `ABIERTA` order to `EN_ATENCION`. Confirming an order with no `SOLICITADO` services MUST succeed without changes.
+
+The request body SHALL be optional and MAY carry, for each `SOLICITADO` service with an area, the id of a specific manager (`asignaciones: [{servicio_id, gestor_id}]`). A service without an entry SHALL be dispatched to its area for any manager, and the system SHALL notify every active manager of that area (or the admins when the area has no active managers). A service with an entry SHALL be dispatched directly to that manager, and the system SHALL notify only that manager.
+
+The chosen manager MUST be an active user who manages the service's area; an entry whose manager is not, or whose `servicio_id` is not a `SOLICITADO` service with an area of that order, MUST be rejected with 422 and the order and all its services MUST stay unchanged. Only `admin` and `veterinario` SHALL be able to confirm.
 
 #### Scenario: Confirmar despacha y pasa a atención
-- **WHEN** se confirma una orden `ABIERTA` que tiene un servicio `SOLICITADO` con área y otro sin área
+- **WHEN** se confirma una orden `ABIERTA` que tiene un servicio `SOLICITADO` con área y otro sin área, sin cuerpo
 - **THEN** el servicio con área queda `ASIGNADO` y cada gestor activo del área recibe una notificación
 - **AND** el servicio sin área queda `EJECUTADO`
 - **AND** la orden queda en estado `EN_ATENCION`
 
 #### Scenario: Servicio asignado visible en la bandeja
-- **WHEN** se confirma una orden con un servicio de un área
+- **WHEN** se confirma una orden con un servicio de un área, sin elegir gestor
 - **THEN** el servicio aparece en la bandeja de los gestores de esa área y un gestor puede tomarlo
+
+#### Scenario: Confirmar eligiendo un gestor
+- **WHEN** un veterinario confirma una orden indicando que el servicio "Ecografía" del área "Imagen" va al gestor A, gestor activo de "Imagen"
+- **THEN** el servicio queda `ASIGNADO` y asignado directamente a A
+- **AND** solo A recibe la notificación `SERVICIO_ASIGNADO`; los demás gestores de "Imagen" no reciben ninguna
+
+#### Scenario: Mezcla de despachos en la misma orden
+- **WHEN** se confirma una orden con dos servicios del mismo área, eligiendo gestor solo para el primero
+- **THEN** el primero queda asignado directamente a ese gestor y el segundo queda disponible para cualquier gestor del área
+
+#### Scenario: Gestor que no es del área
+- **WHEN** se confirma indicando como gestor a un usuario que no gestiona el área del servicio
+- **THEN** la respuesta es 422
+- **AND** ningún servicio de la orden cambia de estado y la orden no cambia
+
+#### Scenario: Gestor inactivo
+- **WHEN** se confirma indicando como gestor a un miembro del área cuya cuenta está inactiva
+- **THEN** la respuesta es 422 y la orden no cambia
+
+#### Scenario: Servicio que no se puede asignar
+- **WHEN** el cuerpo trae un `servicio_id` que no es un servicio `SOLICITADO` con área de esa orden
+- **THEN** la respuesta es 422 y la orden no cambia
+
+#### Scenario: Recepción no confirma
+- **WHEN** un usuario con rol `recepcionista` o `gestor` envía `POST /api/ordenes/{id}/confirmar`
+- **THEN** la respuesta es 403
 
 #### Scenario: Confirmar sin pendientes
 - **WHEN** se confirma una orden sin servicios `SOLICITADO`
@@ -144,3 +179,137 @@ The Historia clínica screen MUST NOT offer billing a consultation linked to an 
 #### Scenario: Navegar a la orden
 - **WHEN** el usuario pulsa "Ir a la orden" en una consulta
 - **THEN** se abre la pantalla de la orden a la que pertenece esa consulta
+
+### Requirement: Atajo sin despacho al anexar CONSULTA directa
+
+When a service with `tipo_servicio='CONSULTA'` is added through `POST /api/ordenes/{id}/servicios`, the system SHALL apply the no-dispatch shortcut immediately (no later confirmation needed), the same way the consultation line created by `POST /api/consultas/` does: state `EJECUTADO`, no area, assigned to the executing veterinarian, and the order moves from `ABIERTA` to `EN_ATENCION`. An order SHALL hold at most one live `CONSULTA` line.
+
+#### Scenario: Anexar CONSULTA directa a orden con veterinario asignado
+- **WHEN** se envía `POST /api/ordenes/{id}/servicios` con `tipo_servicio='CONSULTA'` y la orden tiene `veterinario_id` seteado
+- **THEN** el servicio se crea con:
+  - `estado = "EJECUTADO"`
+  - `area_id = NULL`
+  - `asignado_a_id = orden.veterinario_id`
+  - `ejecutado_at = timestamp actual`
+  - `consulta_id = NULL` (es honorario suelto, no vinculado a una consulta clínica)
+- **AND** la orden pasa a `EN_ATENCION` si estaba `ABIERTA`
+
+#### Scenario: Anexar CONSULTA directa a orden SIN veterinario asignado
+- **WHEN** se envía `POST /api/ordenes/{id}/servicios` con `tipo_servicio='CONSULTA'`, sin `veterinario_id` en el body, y la orden tiene `veterinario_id = NULL`
+- **THEN** la respuesta es 422 con error "La orden no tiene veterinario asignado; indique veterinario_id en el body o asigne uno a la orden"
+- **AND** la orden no cambia
+
+#### Scenario: Veterinario_id inválido en el body
+- **WHEN** se envía un `veterinario_id` que no existe o no es veterinario
+- **THEN** la respuesta es 400 con error "El veterinario_id indicado no corresponde a un usuario con rol veterinario"
+
+#### Scenario: Segunda CONSULTA en la misma orden
+- **WHEN** se intenta anexar otra línea `tipo_servicio='CONSULTA'` a una orden que ya tiene una viva
+- **THEN** la respuesta es 409 con error "La orden ya tiene una consulta. Una orden admite como máximo una consulta" (índice `uq_orden_una_consulta`)
+
+### Requirement: Campo veterinario_id opcional en OrdenServicioAnexarServicio
+
+The request schema `OrdenServicioAnexarServicio` SHALL include an optional `veterinario_id` that overrides the order's veterinarian for a `CONSULTA` line only; when omitted, the order's `veterinario_id` is used. It is ignored for any other service type.
+
+#### Scenario: Herencia implícita
+- **WHEN** no se envía `veterinario_id` en el body
+- **THEN** se usa `orden.veterinario_id`
+
+#### Scenario: Sobrescritura explícita
+- **WHEN** se envía `veterinario_id` en el body, distinto al de la orden
+- **THEN** el servicio se crea con `asignado_a_id` igual al valor provisto (validando que sea un veterinario)
+
+### Requirement: Response enriquecido con veterinario_nombre y area_nombre
+
+The response schema `ServicioConsultaResponse` SHALL expose `veterinario_nombre` (the username of `asignado_a`) and `area_nombre` (the area's name, or `"NINGUNO"` when `area_id` is NULL). The consultation line created by `POST /api/consultas/` SHALL also record the consultation's veterinarian as `asignado_a_id`, so it exposes `veterinario_nombre` too.
+
+#### Scenario: Ver línea CONSULTA anexada directo
+- **WHEN** se consulta `GET /api/ordenes/{id}` que tiene una línea CONSULTA anexada directamente
+- **THEN** la línea en `servicios[]` incluye:
+  - `veterinario_nombre` = username del veterinario que la ejecutó
+  - `area_nombre = "NINGUNO"`
+  - `estado_toma = "completada"`
+
+#### Scenario: Ver línea CONSULTA creada via POST /api/consultas/
+- **WHEN** se consulta una orden con consulta clínica (creada via flujo normal)
+- **THEN** la línea CONSULTA incluye `veterinario_nombre` del veterinario de la consulta y `area_nombre = "NINGUNO"`
+
+### Requirement: Paquete base e items adicionales
+
+A service of an order SHALL be able to act as a package base (`es_base = true`, e.g. a surgery or a hospitalization) or as an additional item anchored to a base of the same order (`servicio_padre_id` = the base's id). The hierarchy has a single level. It SHALL be defined only when attaching the service through `POST /api/ordenes/{id}/servicios` (fields `es_base` and `servicio_padre_id`, both optional); editing a service (`PATCH /api/servicios/{id}`) SHALL NOT change it. When attaching, the system MUST reject with 422 a base that has a padre, a padre that is not a base, a padre from another order, and a padre that itself has a padre; and with 404 a padre that does not exist, is deleted, or is `CANCELADO`. The database SHALL enforce that a base has no padre (`ck_servicio_base_sin_padre`); the other rules are enforced when attaching. A service with neither flag remains a loose service, as before.
+
+#### Scenario: Crear paquete e item
+- **WHEN** se anexa una cirugía con `es_base=true` y después una anestesia con `servicio_padre_id` igual al id de la cirugía
+- **THEN** ambos se crean, la anestesia queda como item adicional del paquete y el total de la orden suma los dos
+
+#### Scenario: Base con padre
+- **WHEN** se anexa un servicio con `es_base=true` y un `servicio_padre_id`
+- **THEN** la respuesta es 422
+
+#### Scenario: Padre que no es base
+- **WHEN** se anexa un item cuyo `servicio_padre_id` apunta a un servicio que no es base
+- **THEN** la respuesta es 422
+
+#### Scenario: Padre de otra orden
+- **WHEN** se anexa un item cuyo `servicio_padre_id` es un servicio base de otra orden
+- **THEN** la respuesta es 422
+
+#### Scenario: Padre borrado o cancelado
+- **WHEN** se anexa un item cuyo `servicio_padre_id` apunta a un servicio base borrado o `CANCELADO`
+- **THEN** la respuesta es 404
+
+#### Scenario: La edición no cambia la jerarquía
+- **WHEN** se hace `PATCH /api/servicios/{id}` enviando `es_base` o `servicio_padre_id`
+- **THEN** esos campos se ignoran y el servicio conserva su jerarquía
+
+### Requirement: Datos del paquete en la respuesta
+
+Each service in the order responses SHALL carry `es_base`, `servicio_padre_id` and `es_item_adicional` (true when it has a padre; a loose service is not an additional item). A base SHALL also carry `items_adicionales_count`, `subtotal_items_adicionales` and `subtotal_paquete` (its own subtotal plus its items'), counting only items that are neither deleted nor `CANCELADO`, the same criterion as the order total. Where the children are not loaded (list endpoints), those three fields are 0. The pending items to invoice for an order and the lines of an invoice SHALL carry `es_base` and `servicio_padre_id`.
+
+#### Scenario: Subtotales del paquete
+- **WHEN** una orden tiene una base de 50000 con dos items de 8000 y 12000
+- **THEN** en el detalle de la orden la base informa `items_adicionales_count` 2, `subtotal_items_adicionales` 20000 y `subtotal_paquete` 70000
+
+#### Scenario: Servicio suelto
+- **WHEN** un servicio no es base ni tiene padre
+- **THEN** `es_item_adicional` es false
+
+#### Scenario: Item cancelado
+- **WHEN** uno de los items del paquete se cancela
+- **THEN** deja de contar en `items_adicionales_count` y en los subtotales del paquete
+
+### Requirement: Paquetes agrupados en pantalla y en la factura
+
+The open order screen SHALL show each base with a "PAQUETE" badge, its items indented right below it and a "Subtotal paquete" row, and clicking a base SHALL collapse or expand its items. The attach panel SHALL offer an "es paquete base" checkbox and a "paquete padre" selector listing the order's live bases, mutually exclusive. The invoice-an-order modal, the invoice preview and the invoice PDF SHALL group lines the same way. An item whose base is not in the list shown (deleted, cancelled, or invoiced in another invoice) SHALL be shown as a loose service; no line is ever hidden. Totals SHALL not change: the order and invoice totals remain the sum of every line.
+
+#### Scenario: Ver una orden con paquete
+- **WHEN** una orden tiene una cirugía base con anestesia y materiales como items
+- **THEN** la tabla muestra la cirugía con el badge "PAQUETE", los dos items indentados debajo y el subtotal del paquete
+
+#### Scenario: Colapsar el paquete
+- **WHEN** se hace click en la fila de la base
+- **THEN** sus items y el subtotal se ocultan, y con otro click vuelven a verse
+
+#### Scenario: Base que ya no está
+- **WHEN** se borra una base que tiene un item vivo
+- **THEN** el item se sigue mostrando, como servicio suelto
+
+#### Scenario: Factura agrupada
+- **WHEN** se factura una orden con un paquete
+- **THEN** la vista previa y el PDF muestran las líneas agrupadas por paquete y el total es la suma de todas las líneas
+
+### Requirement: Un paquete del catálogo no se anexa como línea suelta
+
+Every endpoint that creates or re-points a service line from the catalog — `POST /api/ordenes/{id}/servicios`, `POST /api/consultas/{id}/servicios`, `POST /api/servicios/` and `PATCH /api/servicios/{id}` when it changes `catalogo_servicio_id` — MUST reject with 422 a `catalogo_servicio_id` that is a catalog item flagged as package (`es_paquete = true`), without creating or changing any line, and the error MUST point to `POST /api/ordenes/{id}/paquetes`. Requests without `catalogo_servicio_id`, or with a catalog item that is not a package, SHALL behave as before, including `es_base` and `servicio_padre_id`.
+
+#### Scenario: Anexar un paquete por el endpoint de servicios
+- **WHEN** se envía `POST /api/ordenes/{id}/servicios` con el `catalogo_servicio_id` de un paquete
+- **THEN** la respuesta es 422 y la orden no cambia
+
+#### Scenario: Otros caminos de alta
+- **WHEN** se envía el `catalogo_servicio_id` de un paquete a `POST /api/consultas/{id}/servicios`, a `POST /api/servicios/`, o en un `PATCH /api/servicios/{id}` de una línea existente
+- **THEN** la respuesta es 422 y no se crea ni se modifica ninguna línea
+
+#### Scenario: Paquete armado a mano sigue funcionando
+- **WHEN** se anexa un servicio de catálogo que no es paquete con `es_base=true` y después otro con `servicio_padre_id` igual a esa base
+- **THEN** ambos se crean como antes

@@ -16,7 +16,14 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.models import GestorArea, Notificacion, ServicioConsulta, Usuario
+from app.models.models import (
+    GestorArea,
+    GestorAreaExterno,
+    GestorExterno,
+    Notificacion,
+    ServicioConsulta,
+    Usuario,
+)
 
 
 def _titulo_servicio(servicio: ServicioConsulta) -> str:
@@ -24,14 +31,34 @@ def _titulo_servicio(servicio: ServicioConsulta) -> str:
 
 
 def notificar_asignacion(db: Session, servicio: ServicioConsulta) -> Optional[dict]:
-    """SOLICITADO -> ASIGNADO: notifica a cada gestor ACTIVO del área.
+    """SOLICITADO -> ASIGNADO: notifica al gestor elegido, o a cada gestor
+    ACTIVO del área si no se eligió ninguno.
 
-    Si el área no tiene ningún gestor activo (`GestorArea` + `Usuario.
-    is_active`), notifica a todos los admins con `SERVICIO_SIN_GESTOR` en su
-    lugar (decisión 5, defensa 2) y devuelve una advertencia para que el
-    llamador la sume a `advertencias[]` de la respuesta (defensa 1) --
-    reutiliza el canal que ya existe en `ServicioConsultaResponse.
-    advertencias`, no se inventa un mecanismo nuevo.
+    Asignación directa (asignacion-directa-servicio-gestor, decisión 3): si
+    `servicio.asignado_directo_a_id` está seteado (lo llenó
+    `orden_service.confirmar_servicios` al validar el gestor elegido), se
+    crea un único `SERVICIO_ASIGNADO` para ese usuario y se devuelve `None`
+    -- se lee del propio servicio, no de un parámetro nuevo, para que la
+    firma no cambie y el llamador no pueda desincronizar servicio y
+    notificación. Como ese gestor ya se validó activo antes de llegar acá, la
+    rama `SERVICIO_SIN_GESTOR` de abajo no aplica a un despacho directo.
+
+    Si no hay asignación directa (comportamiento de siempre): notifica a cada
+    gestor activo del área. Si el área no tiene ningún gestor activo
+    (`GestorArea` + `Usuario.is_active`), notifica a todos los admins con
+    `SERVICIO_SIN_GESTOR` en su lugar (decisión 5, defensa 2) y devuelve una
+    advertencia para que el llamador la sume a `advertencias[]` de la
+    respuesta (defensa 1) -- reutiliza el canal que ya existe en
+    `ServicioConsultaResponse.advertencias`, no se inventa un mecanismo nuevo.
+
+    gestor-externo-crud: en esta misma rama (sin asignación directa) también
+    se notifica a los gestores externos activos del área (`GestorAreaExterno`
+    -> `GestorExterno.activo`), haya o no gestores internos -- un área puede
+    tener solo externos, y la alerta `SERVICIO_SIN_GESTOR` a los admins se
+    mantiene igual en ese caso porque los externos no tienen portal para
+    operar la bandeja (spec, "Área solo con gestores externos"). La
+    asignación directa NUNCA notifica externos (spec, "Asignación directa no
+    notifica externos").
 
     No hace nada (devuelve None sin crear filas) si el servicio no tiene área:
     es el atajo sin despacho de la decisión 4, no hay a quién avisarle.
@@ -41,12 +68,27 @@ def notificar_asignacion(db: Session, servicio: ServicioConsulta) -> Optional[di
 
     titulo = _titulo_servicio(servicio)
 
+    if servicio.asignado_directo_a_id is not None:
+        db.add(
+            Notificacion(
+                destinatario_id=servicio.asignado_directo_a_id,
+                tipo="SERVICIO_ASIGNADO",
+                titulo=f"Nuevo servicio asignado: {titulo}",
+                cuerpo=f"Se te asignó '{titulo}'.",
+                orden_id=servicio.orden_id,
+                servicio_id=servicio.id,
+            )
+        )
+        return None
+
     gestores = (
         db.query(Usuario)
         .join(GestorArea, GestorArea.usuario_id == Usuario.id)
         .filter(GestorArea.area_id == servicio.area_id, Usuario.is_active == True)  # noqa: E712
         .all()
     )
+
+    _notificar_externos_area(db, servicio, titulo)
 
     if gestores:
         for gestor in gestores:
@@ -83,6 +125,107 @@ def notificar_asignacion(db: Session, servicio: ServicioConsulta) -> Optional[di
             "se notificó a los administradores."
         ),
     }
+
+
+def _notificar_externos_area(db: Session, servicio: ServicioConsulta, titulo: str) -> None:
+    """Notifica a cada gestor externo activo del área del servicio (gestor-
+    externo-crud). Llamada solo desde la rama sin asignación directa de
+    `notificar_asignacion` -- ver docstring de esa función."""
+    gestores_externos = (
+        db.query(GestorExterno)
+        .join(GestorAreaExterno, GestorAreaExterno.gestor_externo_id == GestorExterno.id)
+        .filter(GestorAreaExterno.area_id == servicio.area_id, GestorExterno.activo == True)  # noqa: E712
+        .all()
+    )
+    for gestor_externo in gestores_externos:
+        crear_notificacion_externa(db, gestor_externo, servicio, titulo)
+
+
+def crear_notificacion_externa(
+    db: Session, gestor_externo: GestorExterno, servicio: ServicioConsulta, titulo: Optional[str] = None
+) -> None:
+    """Crea la notificación `SERVICIO_ASIGNADO_EXTERNO` para un gestor
+    externo: `destinatario_id=NULL`, `gestor_externo_id` seteado (CHECK XOR
+    de `Notificacion`), canal `APP` -- sin portal propio todavía, esto solo
+    deja registro en BD (design.md, Non-Goals)."""
+    titulo = titulo or _titulo_servicio(servicio)
+    db.add(
+        Notificacion(
+            destinatario_id=None,
+            gestor_externo_id=gestor_externo.id,
+            tipo="SERVICIO_ASIGNADO_EXTERNO",
+            titulo=f"Nuevo servicio asignado: {titulo}",
+            cuerpo=f"Se despachó '{titulo}' a tu área.",
+            orden_id=servicio.orden_id,
+            servicio_id=servicio.id,
+            canal="APP",
+        )
+    )
+
+
+def _cuerpo_orden(servicio: ServicioConsulta) -> str:
+    """Armado defensivo del cuerpo con paciente/tutor/motivo/servicios
+    (toma-exclusiva-servicio-gestor, decisión 3): cualquiera de esas
+    relaciones puede ser None (venta de mostrador sin paciente, orden sin
+    tutor resuelto todavía) y esto no debe romper la notificación por eso.
+    """
+    orden = servicio.orden
+    paciente = servicio.mascota.nombre if servicio.mascota else "sin paciente"
+    tutor = "sin tutor"
+    if orden is not None and orden.propietario is not None:
+        tutor = f"{orden.propietario.nombre} {orden.propietario.apellido}"
+    motivo = (orden.motivo_visita if orden is not None else None) or "sin especificar"
+    numero = orden.numero if orden is not None else f"#{servicio.orden_id}"
+    servicios = [s.nombre_servicio for s in (orden.servicios if orden is not None else []) if s.nombre_servicio]
+    listado = ", ".join(servicios) if servicios else _titulo_servicio(servicio)
+    return (
+        f"Orden {numero}. Paciente: {paciente}. Tutor: {tutor}. "
+        f"Motivo: {motivo}. Servicios: {listado}."
+    )
+
+
+def notificar_toma(db: Session, servicio: ServicioConsulta, tomador: Usuario) -> None:
+    """ASIGNADO -> EN_PROCESO: avisa al veterinario de la orden que un gestor
+    se apropió del servicio (toma-exclusiva-servicio-gestor, decisión 3), con
+    los datos para que arranque la atención sin tener que ir a buscarlos.
+
+    No hace nada si la orden no tiene veterinario asignado, o si el propio
+    veterinario fue quien tomó el servicio (no hay a quién avisarle nada que
+    no sepa).
+    """
+    orden = servicio.orden
+    if orden is None or not orden.veterinario_id or orden.veterinario_id == tomador.id:
+        return
+    db.add(
+        Notificacion(
+            destinatario_id=orden.veterinario_id,
+            tipo="SERVICIO_TOMADO",
+            titulo=f"Servicio tomado: {_titulo_servicio(servicio)}",
+            cuerpo=f"El gestor {tomador.username} tomó '{_titulo_servicio(servicio)}'. {_cuerpo_orden(servicio)}",
+            orden_id=servicio.orden_id,
+            servicio_id=servicio.id,
+        )
+    )
+
+
+def notificar_liberacion(db: Session, servicio: ServicioConsulta, liberador: Usuario) -> None:
+    """EN_PROCESO -> ASIGNADO (liberación): avisa al veterinario de la orden
+    que el servicio quedó disponible de nuevo. Mismo guard que
+    notificar_toma: sin veterinario, o liberador == veterinario, no hay nada
+    que avisar."""
+    orden = servicio.orden
+    if orden is None or not orden.veterinario_id or orden.veterinario_id == liberador.id:
+        return
+    db.add(
+        Notificacion(
+            destinatario_id=orden.veterinario_id,
+            tipo="SERVICIO_LIBERADO",
+            titulo=f"Servicio liberado: {_titulo_servicio(servicio)}",
+            cuerpo=f"El gestor {liberador.username} liberó '{_titulo_servicio(servicio)}'. {_cuerpo_orden(servicio)}",
+            orden_id=servicio.orden_id,
+            servicio_id=servicio.id,
+        )
+    )
 
 
 def notificar_ejecucion(db: Session, servicio: ServicioConsulta) -> None:

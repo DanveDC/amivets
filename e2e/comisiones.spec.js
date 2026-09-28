@@ -177,6 +177,32 @@ test.describe('Comisiones — cálculo y control', () => {
     expect(Number(c.pendientes[0].monto_encargado)).toBe(7500);
   });
 
+  test('honorario de una CONSULTA directa (sin consulta clínica): la comisión es del veterinario que la ejecutó', async ({ request }) => {
+    // consulta-directa-atajo-sin-despacho: la línea no tiene consulta_id, el
+    // encargado sale de asignado_a_id. Se usa un veterinario distinto al de la
+    // orden para probar que no se atribuye por la orden.
+    const admin = await getAdminToken(request);
+    const vetOrden = await createTestVeterinario(request, admin);
+    const vetEjecutor = await createTestVeterinario(request, admin);
+    await setPorcentajeEncargado(request, admin, vetOrden.id, 30);
+    await setPorcentajeEncargado(request, admin, vetEjecutor.id, 30);
+    const prop = await createTestPropietario(request, {}, admin);
+    const orden = await createTestOrden(request, { propietarioId: prop.id, veterinarioId: vetOrden.id }, admin);
+    await anexarServicioOrden(request, orden.id, {
+      tipo_servicio: 'CONSULTA', nombre_servicio: testTag('honorario'), precio_unitario: 20000, veterinario_id: vetEjecutor.id,
+    }, admin);
+    const cerrar = await request.post(`/api/ordenes/${orden.id}/cerrar`, { headers: authHeaders(admin) });
+    expect(cerrar.ok(), await cerrar.text()).toBeTruthy();
+    const res = await facturarOrden(request, orden.id, { metodo_pago: 'EFECTIVO', total_pagado: 20000 }, admin);
+    expect(res.status(), await res.text()).toBe(201);
+
+    const c = await control(request, admin, vetEjecutor.id);
+    expect(c.pendientes).toHaveLength(1);
+    expect(Number(c.pendientes[0].subtotal)).toBe(20000);
+    expect(Number(c.pendientes[0].monto_encargado)).toBe(6000);
+    expect((await control(request, admin, vetOrden.id)).pendientes).toHaveLength(0);
+  });
+
   test('factura PENDIENTE o PARCIAL no es elegible; al completar el pago (abono) sí', async ({ request }) => {
     const admin = await getAdminToken(request);
     const ctx = await gestorConArea(request, admin, 40);

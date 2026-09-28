@@ -1,14 +1,14 @@
-# caja-rapida Specification
+# caja-rapida Specification (servicio directo)
 
 ## Purpose
 
-La caja rápida permite vender en el mostrador productos de inventario y servicios del catálogo sin registrar al cliente, emitiendo la factura ya cobrada en un solo paso.
+El servicio directo (antes "caja rápida") permite vender en el mostrador productos de inventario y servicios del catálogo sin registrar al cliente, emitiendo la factura ya cobrada en un solo paso.
 
 ## Requirements
 
-### Requirement: Venta rápida en un solo paso
+### Requirement: Venta directa en un solo paso
 
-The system SHALL expose `POST /api/caja-rapida/ventas`, which receives a list of items (each one either an inventory product or a catalog service, with a quantity), a payment method and an optional `propietario_id`, and in a single atomic operation issues an invoice with one line per item, fully paid (`total_pagado` equal to the total, state `PAGADA`) with the given payment method. If any item is rejected, nothing SHALL be persisted: no invoice, no stock movement, no order and no service.
+The system SHALL expose `POST /api/servicio-directo/ventas`, which receives a list of items (each one either an inventory product or a catalog service, with a quantity), a payment method and an optional `propietario_id`, and in a single atomic operation issues an invoice with one line per item, fully paid (`total_pagado` equal to the total, state `PAGADA`) with the given payment method. If any item is rejected, nothing SHALL be persisted: no invoice, no stock movement, no order and no service.
 
 #### Scenario: Venta de un producto y un servicio
 - **WHEN** se envía una venta con un producto de inventario (cantidad 2) y un servicio del catálogo sin área (cantidad 1), con método de pago `EFECTIVO`
@@ -47,6 +47,14 @@ The system SHALL bill a sale without `propietario_id` to a single system owner n
 - **WHEN** se envía una venta con un `propietario_id` que no existe
 - **THEN** la respuesta es 404 y no se crea ninguna factura
 
+### Requirement: Rutas anteriores retiradas
+
+The former `/api/caja-rapida/` routes SHALL no longer exist.
+
+#### Scenario: Rutas antiguas ya no existen
+- **WHEN** se consulta `GET /api/caja-rapida/items` o `POST /api/caja-rapida/ventas`
+- **THEN** la respuesta es 404
+
 ### Requirement: Solo ítems vendibles en mostrador
 
 The system SHALL accept only active inventory items of type `PRODUCTO` with enough stock, and active catalog services without a dispatch area. Materials (`MATERIAL`), inactive items and catalog services that have an area SHALL be rejected with 409 and a message naming the item.
@@ -81,26 +89,26 @@ The system SHALL price every line from the master data (the product's list price
 
 ### Requirement: Trazabilidad de la venta
 
-The system SHALL record every quick sale as a service order in state `FACTURADA`, with the catalog services as executed lines consuming their materials, and each product sale as an inventory exit movement. Cancelling the invoice SHALL return the products to stock, as with any other invoice.
+The system SHALL record every direct sale as a service order in state `FACTURADA` with `origen = "CAJA_RAPIDA"` (historical value kept after the rename, used when cancelling), with the catalog services as executed lines consuming their materials, and each product sale as an inventory exit movement. Cancelling the invoice SHALL return the products to stock, as with any other invoice.
 
 #### Scenario: Consumo de materiales del servicio
 - **WHEN** se vende un servicio del catálogo que tiene una receta de materiales
 - **THEN** el stock de esos materiales baja según la receta
 
 #### Scenario: La venta queda como orden facturada
-- **WHEN** se completa una venta rápida
+- **WHEN** se completa una venta directa
 - **THEN** existe una orden del propietario de la factura, en estado `FACTURADA`, con los servicios vendidos en estado facturado
 
 #### Scenario: Anular devuelve el stock
-- **WHEN** un admin anula la factura de una venta rápida
+- **WHEN** un admin anula la factura de una venta directa
 - **THEN** el stock de los productos vendidos vuelve a su valor anterior a la venta
 
 ### Requirement: Búsqueda de ítems vendibles
 
-The system SHALL expose `GET /api/caja-rapida/items?q=<texto>`, returning in a single list the sellable products and services whose name or code match the text, each with its kind (product or service), name, price, whether the price is variable, and for products the available stock.
+The system SHALL expose `GET /api/servicio-directo/items?q=<texto>`, returning in a single list the sellable products and services whose name or code match the text, each with its kind (product or service), name, price, whether the price is variable, and for products the available stock.
 
 #### Scenario: Buscar por nombre
-- **WHEN** se consulta `GET /api/caja-rapida/items?q=alim` y hay un producto "Alimento adulto" y un material "Alimento para sonda"
+- **WHEN** se consulta `GET /api/servicio-directo/items?q=alim` y hay un producto "Alimento adulto" y un material "Alimento para sonda"
 - **THEN** la respuesta incluye el producto con su precio y stock, y no incluye el material
 
 #### Scenario: Servicio con área no aparece
@@ -109,19 +117,19 @@ The system SHALL expose `GET /api/caja-rapida/items?q=<texto>`, returning in a s
 
 ### Requirement: Acceso restringido
 
-Both quick-sale endpoints SHALL be available only to the `admin` and `recepcionista` roles.
+Both direct-sale endpoints SHALL be available only to the `admin` and `recepcionista` roles.
 
 #### Scenario: Veterinario sin acceso
-- **WHEN** un usuario con rol `veterinario` envía una venta rápida
+- **WHEN** un usuario con rol `veterinario` envía una venta directa
 - **THEN** la respuesta es 403 y no se crea ninguna factura
 
 #### Scenario: Sin sesión
 - **WHEN** se llama a cualquiera de los dos endpoints sin token
 - **THEN** la respuesta es 401
 
-### Requirement: Pantalla de caja rápida
+### Requirement: Pantalla de servicio directo
 
-The Facturación module SHALL offer a "Caja rápida" screen, for `admin` and `recepcionista`, where the user searches products and services, adds them to a cart with editable quantities, sees each subtotal and the total, picks a payment method and, with one action, issues the paid invoice. The screen SHALL not require choosing a client, SHALL show the server error without clearing the cart when the sale is rejected, and SHALL offer to download the invoice PDF after a successful sale and then start a new empty sale.
+The Facturación module SHALL offer a "Servicio directo" screen (section `sec-servicio-directo`), for `admin` and `recepcionista`, where the user searches products and services, adds them to a cart with editable quantities, sees each subtotal and the total, picks a payment method and, with one action, issues the paid invoice. The screen SHALL not require choosing a client, SHALL show the server error without clearing the cart when the sale is rejected, and SHALL offer to download the invoice PDF after a successful sale and then start a new empty sale.
 
 #### Scenario: Cobrar desde la pantalla
 - **WHEN** una recepcionista agrega un producto al carrito, elige `EFECTIVO` y pulsa "Cobrar y emitir"

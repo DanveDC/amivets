@@ -14,11 +14,11 @@ from app.routers.usuarios import get_current_admin, get_current_user, require_ro
 from app.schemas.schemas import (
     ComisionControlResponse,
     ConfiguracionComisionResponse,
+    ComisionEncargadoUpdate,
     ConfiguracionComisionUpdate,
     EncargadoComisionResponse,
     LiquidacionComisionCreate,
     LiquidacionComisionResponse,
-    PorcentajeEncargadoUpdate,
 )
 from app.services import comision_service
 from app.services.pdf_service import PDFService
@@ -42,20 +42,23 @@ def actualizar_configuracion(
 
 @router.get("/encargados", response_model=List[EncargadoComisionResponse])
 def listar_encargados(db: Session = Depends(get_db), _: Usuario = Depends(get_current_admin)):
-    """Veterinarios y gestores activos, con su porcentaje propio (si tienen)
-    y el efectivo que se les aplica."""
+    """Veterinarios y gestores activos, con su comisión propia (tipo, monto
+    fijo y porcentaje, si tienen) y el porcentaje efectivo que se les aplica."""
     return comision_service.listar_encargados(db)
 
 
 @router.put("/encargados/{usuario_id}", response_model=EncargadoComisionResponse)
-def fijar_porcentaje(
+def fijar_comision(
     usuario_id: int,
-    data: PorcentajeEncargadoUpdate,
+    data: ComisionEncargadoUpdate,
     db: Session = Depends(get_db),
     _: Usuario = Depends(get_current_admin),
 ):
-    """`porcentaje` null quita el propio: el encargado vuelve al de defecto."""
-    return comision_service.fijar_porcentaje_encargado(db, usuario_id, data.porcentaje)
+    """Tipo FIJO, PORCENTAJE o MIXTO con sus campos. Sin tipo ni valores
+    quita la comisión propia: el encargado vuelve al porcentaje de defecto."""
+    return comision_service.fijar_comision_encargado(
+        db, usuario_id, data.tipo_comision, data.monto_fijo, data.porcentaje
+    )
 
 
 @router.get("/", response_model=ComisionControlResponse)
@@ -66,7 +69,7 @@ def control(
     db: Session = Depends(get_db),
     _: Usuario = Depends(get_current_admin),
 ):
-    """Pendientes (con el porcentaje actual), liquidadas (congeladas) y totales."""
+    """Pendientes (con el tipo de comisión actual), liquidadas (congeladas) y totales."""
     return comision_service.control(db, encargado_id, desde, hasta)
 
 

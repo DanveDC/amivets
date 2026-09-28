@@ -1,14 +1,16 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from fastapi import HTTPException, status
 from typing import List, Optional
-from datetime import datetime
+from datetime import date, datetime, time, timedelta, timezone
 
 from app.models.models import (
     Factura, DetalleFactura, Inventario, MovimientoInventario,
     Consulta, PruebaComplementaria, Vacunacion, Desparasitacion,
     Cirugia, Hospitalizacion, ServicioConsulta, TipoMovimiento,
-    OrdenServicio, Usuario, FacturaOrden, ConsumoMaterial
+    OrdenServicio, Usuario, FacturaOrden, ConsumoMaterial,
+    LiquidacionComision, LiquidacionComisionDetalle,
 )
 from app.services import consumo_service, orden_service
 
@@ -328,8 +330,21 @@ class FacturacionService:
     
     @staticmethod
     def obtener_factura(db: Session, factura_id: int) -> Optional[Factura]:
-        """Obtiene una factura por ID"""
-        return db.query(Factura).filter(Factura.id == factura_id).first()
+        """Obtiene una factura por ID.
+
+        `selectinload(Factura.detalles).selectinload(DetalleFactura.servicio)`
+        (servicio-base-paquete-items): DetalleFacturaResponse expone
+        `es_base`/`servicio_padre_id` leídos de `detalle.servicio` -- sin este
+        eager load cada detalle dispara su propio lazy-load (N+1 acotado al
+        número de líneas de ESTA factura, pero evitable).
+        """
+        from sqlalchemy.orm import selectinload
+        return (
+            db.query(Factura)
+            .options(selectinload(Factura.detalles).selectinload(DetalleFactura.servicio))
+            .filter(Factura.id == factura_id)
+            .first()
+        )
     
     @staticmethod
     def listar_facturas(
@@ -463,7 +478,7 @@ class FacturacionService:
             if d.producto_id and not _consumo_en_ledger(db, d.servicio_id)
         ]
         producto_ids = {d.producto_id for d in detalles_a_devolver}
-        # Venta de caja rápida: también se van a devolver los materiales que
+        # Venta de servicio directo: también se van a devolver los materiales que
         # consumieron sus servicios. Se bloquean JUNTO con los productos, en la
         # misma consulta ordenada por id: bloquearlos después rompía el orden
         # global ascendente y podía deadlockear (fix de revisión).
@@ -529,7 +544,7 @@ class FacturacionService:
 
         # Decisión 7 de orden-servicio-carrito: anular la factura de una orden
         # FACTURADA la devuelve a CERRADA para que se pueda volver a cobrar.
-        # Excepción: una venta de caja rápida no tiene nada que "volver a
+        # Excepción: una venta de servicio directo no tiene nada que "volver a
         # cobrar" -- sus productos van en la factura, no en la orden, así que
         # reabrirla la mostraba en "Órdenes por cobrar" solo con los servicios.
         # Anular su factura deshace la venta: la orden queda ANULADA.
@@ -657,6 +672,13 @@ class FacturacionService:
                 "subtotal": subtotal,
                 "tipo": "SERVICIO",
                 "id_interno": s.id,
+                # servicio-base-paquete-items: claves puramente aditivas para
+                # que el preview de facturar-orden (GET .../pendientes-
+                # facturar, orden-abierta.js::facturarOrden) pueda agrupar
+                # base + items -- no cambia nada de lo que ya consume
+                # FacturacionService.crear_factura/facturar_orden (no-goal).
+                "es_base": s.es_base,
+                "servicio_padre_id": s.servicio_padre_id,
             })
 
         return {
@@ -755,7 +777,7 @@ class FacturacionService:
 
     @staticmethod
     def _anular_orden_caja(db: Session, orden: OrdenServicio, factura: Factura, usuario_id: Optional[int]) -> None:
-        """Deshace una venta de caja rápida con la misma lógica que anular una
+        """Deshace una venta de servicio directo con la misma lógica que anular una
         orden: devuelve el material de sus servicios, los deja CANCELADO y la
         orden queda ANULADA. Sus servicios ya se desmarcaron como facturados
         arriba, así que no se saltean. No commitea: lo hace anular_factura."""
@@ -799,3 +821,138 @@ class FacturacionService:
             cantidad=1, precio_unitario=round(cantidad * precio, 2),
             descripcion=f"{descripcion} ({cantidad:g} × {precio:.2f})"[:255],
         )
+
+    # -----------------------------------------------------------------
+    # Dashboard de facturación (facturacion-metodos-gestores-saldo)
+    # -----------------------------------------------------------------
+    @staticmethod
+    def obtener_hoy(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        estado: Optional[str] = None,
+        propietario_id: Optional[int] = None,
+    ) -> List[Factura]:
+        """Facturas cuya `fecha_emision` cae en el día de hoy (UTC del
+        servidor), ordenadas por fecha_emision desc. Mismos filtros
+        opcionales que `listar_facturas` para reusar en la UI."""
+        hoy_inicio = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        hoy_fin = hoy_inicio + timedelta(days=1)
+
+        query = db.query(Factura).filter(
+            Factura.fecha_emision >= hoy_inicio,
+            Factura.fecha_emision < hoy_fin,
+        )
+
+        if estado:
+            query = query.filter(Factura.estado == estado)
+        if propietario_id:
+            query = query.filter(Factura.propietario_id == propietario_id)
+
+        return query.order_by(Factura.fecha_emision.desc()).offset(skip).limit(limit).all()
+
+    @staticmethod
+    def obtener_pagos_gestores(db: Session, desde: date, hasta: date) -> List[dict]:
+        """Totales a pagar por encargado en un rango, desde liquidaciones ya
+        congeladas (LiquidacionComisionDetalle). No recalcula comisiones: usa
+        `monto_encargado`/`monto_amivets` tal como quedaron al liquidar
+        (comision-tipo-mixto-encargado), ajustes negativos (`es_ajuste`)
+        incluidos en la suma algebraica de `total_encargado`."""
+        dt_desde = datetime.combine(desde, time.min, tzinfo=timezone.utc)
+        dt_hasta = datetime.combine(hasta, time.max, tzinfo=timezone.utc)
+
+        filas = (
+            db.query(
+                LiquidacionComision.encargado_id,
+                Usuario.username,
+                Usuario.role,
+                func.sum(LiquidacionComisionDetalle.monto_encargado).label("total_encargado"),
+                func.sum(LiquidacionComisionDetalle.monto_amivets).label("total_amivets"),
+                func.count(LiquidacionComisionDetalle.id).filter(
+                    LiquidacionComisionDetalle.es_ajuste == False  # noqa: E712
+                ).label("cantidad_lineas"),
+                func.sum(LiquidacionComisionDetalle.monto_encargado).filter(
+                    LiquidacionComisionDetalle.es_ajuste == True  # noqa: E712
+                ).label("total_ajustes"),
+            )
+            .join(LiquidacionComision, LiquidacionComision.id == LiquidacionComisionDetalle.liquidacion_id)
+            .join(Usuario, Usuario.id == LiquidacionComision.encargado_id)
+            .filter(
+                LiquidacionComision.fecha_calculo >= dt_desde,
+                LiquidacionComision.fecha_calculo <= dt_hasta,
+            )
+            .group_by(LiquidacionComision.encargado_id, Usuario.username, Usuario.role)
+            .order_by(Usuario.username)
+            .all()
+        )
+
+        return [
+            {
+                "encargado_id": fila.encargado_id,
+                "username": fila.username,
+                "role": fila.role,
+                "total_encargado": float(fila.total_encargado or 0),
+                "total_amivets": float(fila.total_amivets or 0),
+                "cantidad_lineas": int(fila.cantidad_lineas or 0),
+                "total_ajustes": float(fila.total_ajustes or 0),
+            }
+            for fila in filas
+        ]
+
+    @staticmethod
+    def obtener_saldo_pendiente_orden(db: Session, orden_id: int) -> dict:
+        """Saldo pendiente de cobro de una orden: de su factura vinculada
+        (FacturaOrden) o, si no tiene, de sus ítems sin facturar (solo si la
+        orden está CERRADA)."""
+        orden = db.query(OrdenServicio).filter(OrdenServicio.id == orden_id).first()
+        if not orden:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
+
+        # Solo cuenta la factura vigente: anular_factura deja el vínculo
+        # FacturaOrden y el saldo_pendiente intactos, y una orden refacturada
+        # tiene un vínculo por factura (orden_id no es único en FacturaOrden).
+        factura = (
+            db.query(Factura)
+            .join(FacturaOrden, FacturaOrden.factura_id == Factura.id)
+            .filter(FacturaOrden.orden_id == orden_id, Factura.estado != "ANULADA")
+            .order_by(Factura.id.desc())
+            .first()
+        )
+        if factura:
+            saldo = 0.0 if factura.estado == "PAGADA" else float(factura.saldo_pendiente or 0)
+            return {
+                "orden_id": orden.id,
+                "orden_numero": orden.numero,
+                "estado_orden": orden.estado,
+                "factura_id": factura.id,
+                "factura_numero": factura.numero_factura,
+                "factura_estado": factura.estado,
+                "saldo_pendiente": saldo,
+                "total_factura": float(factura.total or 0),
+                "total_pagado": float(factura.total_pagado or 0),
+            }
+
+        # Sin factura vinculada: solo se resuelve si la orden está CERRADA
+        # (todavía no facturada) -- FACTURADA sin FacturaOrden sería un dato
+        # inconsistente, no un caso a cubrir acá.
+        if orden.estado != "CERRADA":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"La orden {orden.numero} está {orden.estado}; no tiene factura "
+                    "vinculada ni está cerrada."
+                ),
+            )
+
+        data = FacturacionService.obtener_items_pendientes_orden(db, orden_id)
+        return {
+            "orden_id": orden.id,
+            "orden_numero": orden.numero,
+            "estado_orden": orden.estado,
+            "factura_id": None,
+            "factura_numero": None,
+            "factura_estado": None,
+            "saldo_pendiente": data["total"],
+            "total_factura": data["total"],
+            "total_pagado": 0.0,
+        }

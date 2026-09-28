@@ -13,7 +13,7 @@ from app.schemas.schemas import (
 from app.models.models import Consulta, Receta, DetalleReceta, ServicioConsulta, Inventario, MovimientoInventario, Vacunacion, Usuario, Factura
 from app.services.consulta_service import ConsultaService
 from app.services.pdf_service import PDFService
-from app.services import consumo_service, orden_service
+from app.services import consumo_service, orden_service, paquete_service
 from app.routers.usuarios import require_roles, get_current_admin
 from app.routers.servicios import (
     actualizar_servicio_impl,
@@ -238,6 +238,11 @@ def agregar_servicio_consulta(
 
     # Tarea 09, decisión 7: la recepcionista no puede anexar servicios clínicos.
     validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
+
+    # plantillas-paquete-catalogo: mismo guard que anexar_servicio_orden --
+    # esto crearía UNA sola línea de ServicioConsulta a precio de paquete, sin
+    # sus componentes.
+    paquete_service.rechazar_si_es_paquete(db, servicio_data.catalogo_servicio_id)
 
     # La consulta ya vive dentro de una orden (Tarea 06, decisión 3): sus
     # servicios cuelgan de la MISMA orden, o el candado de cierre (decisión 1,

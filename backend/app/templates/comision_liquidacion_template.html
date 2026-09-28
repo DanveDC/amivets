@@ -129,7 +129,7 @@
                 <th style="width: 12%;">Orden</th>
                 <th style="width: 27%;">Servicio</th>
                 <th class="num" style="width: 14%;">Subtotal</th>
-                <th class="num" style="width: 8%;">%</th>
+                <th class="num" style="width: 8%;">Comisión</th>
                 <th class="num" style="width: 14%;">Encargado</th>
                 <th class="num" style="width: 14%;">AmiVets</th>
             </tr>
@@ -144,7 +144,7 @@
                     {% if d.es_ajuste %}<br><span class="tag-ajuste">Ajuste por anulación · Factura {{ d.numero_factura }}</span>{% endif %}
                 </td>
                 <td class="num">{{ money(d.subtotal) }}</td>
-                <td class="num">{{ '{:g}'.format(d.porcentaje|float) }}%</td>
+                <td class="num">{% if d.tipo_comision_usado == 'FIJO' %}${{ '{:,.2f}'.format(d.monto_fijo_usado|float) }}{% elif d.tipo_comision_usado == 'MIXTO' %}${{ '{:,.2f}'.format(d.monto_fijo_usado|float) }} + {{ '{:g}'.format(d.porcentaje|float) }}%{% else %}{{ '{:g}'.format(d.porcentaje|float) }}%{% endif %}</td>
                 <td class="num"><b>{{ money(d.monto_encargado) }}</b></td>
                 <td class="num">{{ money(d.monto_amivets) }}</td>
             </tr>
@@ -171,7 +171,7 @@
     </table>
 
     <div class="nota">
-        Los porcentajes y montos quedan fijos al momento de liquidar. Las líneas marcadas como ajuste
+        El tipo de comisión y los montos quedan fijos al momento de liquidar. Las líneas marcadas como ajuste
         descuentan comisiones ya liquidadas cuya factura fue anulada.
     </div>
 

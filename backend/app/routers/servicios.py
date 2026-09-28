@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional
 
 
@@ -161,6 +161,14 @@ def actualizar_servicio_impl(
 
     update_dict = update_data.model_dump(exclude_unset=True)
     consumos_override = update_dict.pop("consumos", None)
+
+    # plantillas-paquete-catalogo: re-apuntar una línea existente a un item
+    # es_paquete=true la dejaría a precio de paquete sin sus componentes,
+    # mismo problema que anexarlo suelto. Solo se chequea cuando el payload
+    # trae el campo (import local, ver crear_servicio_directo arriba).
+    if "catalogo_servicio_id" in update_dict:
+        from app.services.paquete_service import rechazar_si_es_paquete
+        rechazar_si_es_paquete(db, update_dict["catalogo_servicio_id"])
 
     # M2: editar cantidad/consumos de un servicio que se queda del lado
     # consumido cambiaria solo la columna, sin tocar el ledger ni
@@ -333,6 +341,13 @@ def crear_servicio_directo(
 
     validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
 
+    # plantillas-paquete-catalogo: mismo guard que anexar_servicio_orden y
+    # agregar_servicio_consulta. Import local -- paquete_service importa
+    # validar_tipo_servicio_por_rol DE ESTE módulo, un import a nivel de
+    # módulo acá arriba sería circular.
+    from app.services.paquete_service import rechazar_si_es_paquete
+    rechazar_si_es_paquete(db, servicio_data.catalogo_servicio_id)
+
     if not servicio_data.orden_id:
         raise HTTPException(
             status_code=422,
@@ -395,6 +410,7 @@ def listar_servicios_mascota(
     facturado: Optional[bool] = None,
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     # HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): unico endpoint de este
     # router sin Depends(require_roles) -- los otros 4 (POST, PATCH, DELETE,
@@ -414,9 +430,14 @@ def listar_servicios_mascota(
 
     Filtros opcionales para el timeline: `tipo_servicio`, `estado`
     (SOLICITADO / EJECUTADO / FACTURADO / CANCELADO), `facturado`, y rango `fecha_desde` /
-    `fecha_hasta` (YYYY-MM-DD, sobre `created_at`).
+    `fecha_hasta` (YYYY-MM-DD, sobre `created_at`). `search` (ficha-animal-
+    ordenes-servicios, tab "Servicios e insumos") es ilike parcial sobre
+    `nombre_servicio`.
     """
-    q = db.query(ServicioConsulta).filter(
+    q = db.query(ServicioConsulta).options(
+        selectinload(ServicioConsulta.asignado_a),
+        selectinload(ServicioConsulta.asignado_directo_a),
+    ).filter(
         ServicioConsulta.mascota_id == mascota_id,
         ServicioConsulta.is_deleted == False,  # noqa: E712
     )
@@ -434,6 +455,11 @@ def listar_servicios_mascota(
         q = q.filter(ServicioConsulta.estado == estado)
     if facturado is not None:
         q = q.filter(ServicioConsulta.facturado == facturado)
+    if search:
+        # Mismo escapado que routers/ordenes.py::_escapar_ilike: sin esto un
+        # '%' o '_' en la búsqueda actúa como comodín de SQL LIKE.
+        termino = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(ServicioConsulta.nombre_servicio.ilike(f"%{termino}%", escape="\\"))
     d_desde = _parse_fecha(fecha_desde, "fecha_desde")
     d_hasta = _parse_fecha(fecha_hasta, "fecha_hasta")
     if d_desde:
@@ -490,6 +516,16 @@ def tomar_servicio(
     AND asignado_a_id IS NULL`) para cerrar la carrera entre dos tomas
     simultáneas, no solo con un chequeo en Python que deja una ventana entre
     el SELECT y el UPDATE.
+
+    Toma exclusiva (asignacion-directa-servicio-gestor, decisión 4): si el
+    servicio se despachó directamente a un gestor (`asignado_directo_a_id`),
+    para no-admin el UPDATE condicional suma `AND (asignado_directo_a_id IS
+    NULL OR asignado_directo_a_id = current_user.id)` -- el resto del área ya
+    no puede tomarlo. El admin no suma esa condición: conserva sus poderes.
+    Con 0 filas se relee el servicio para distinguir el motivo exacto del
+    rechazo: si sigue sin tomar y asignado directamente a otro, 409 "asignado
+    a otro gestor"; si no, el 409 de siempre ("ya fue tomado por otro
+    gestor").
     """
     servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
     if not servicio:
@@ -510,22 +546,112 @@ def tomar_servicio(
             detail=f"El servicio está {servicio.estado}; solo se puede tomar un servicio ASIGNADO.",
         )
 
+    filtros = [
+        ServicioConsulta.id == servicio_id,
+        ServicioConsulta.estado == "ASIGNADO",
+        ServicioConsulta.asignado_a_id.is_(None),
+    ]
+    if current_user.role != "admin":
+        filtros.append(
+            (ServicioConsulta.asignado_directo_a_id.is_(None))
+            | (ServicioConsulta.asignado_directo_a_id == current_user.id)
+        )
+
     filas = (
         db.query(ServicioConsulta)
-        .filter(
-            ServicioConsulta.id == servicio_id,
-            ServicioConsulta.estado == "ASIGNADO",
-            ServicioConsulta.asignado_a_id.is_(None),
-        )
+        .filter(*filtros)
         .update({"estado": "EN_PROCESO", "asignado_a_id": current_user.id}, synchronize_session=False)
     )
-    db.commit()
 
     if filas == 0:
+        db.rollback()
+        db.refresh(servicio)
+        if (
+            servicio.estado == "ASIGNADO"
+            and servicio.asignado_directo_a_id is not None
+            and servicio.asignado_directo_a_id != current_user.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este servicio está asignado a otro gestor.",
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Este servicio ya fue tomado por otro gestor.",
         )
+
+    # Notificación al veterinario de la orden (toma-exclusiva-servicio-gestor,
+    # decisión 3): misma transacción que el UPDATE de arriba, para que no
+    # quede un servicio tomado sin su aviso si algo de acá abajo fallara.
+    notificacion_service.notificar_toma(db, servicio, current_user)
+    db.commit()
+
+    db.refresh(servicio)
+    return ServicioConsultaResponse.model_validate(servicio)
+
+
+@router.post("/{servicio_id}/liberar", response_model=ServicioConsultaResponse)
+def liberar_servicio(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    # Mismos roles que tomar_servicio: admin siempre; gestor/veterinario solo
+    # si son dueños de la toma (se verifica con el UPDATE condicional, no acá
+    # -- decisión 1, design.md).
+    current_user: Usuario = Depends(require_roles("admin", "veterinario", "gestor")),
+):
+    """EN_PROCESO -> ASIGNADO: el gestor que tomó el servicio (o un admin) lo
+    devuelve a la cola del área para que lo tome cualquiera de nuevo
+    (toma-exclusiva-servicio-gestor, decisión 1).
+
+    Mismo patrón de UPDATE condicional que tomar_servicio: `WHERE id=? AND
+    estado='EN_PROCESO' AND (asignado_a_id=? si no es admin)` cierra la
+    ventana entre el SELECT y el UPDATE. Con 0 filas se relee el servicio
+    para distinguir el motivo exacto del rechazo -- 409 en los dos casos,
+    mensaje distinto (decisión 1 / spec areas-y-gestores).
+
+    Vuelve al área (asignacion-directa-servicio-gestor, decisión 5): si el
+    servicio se había despachado directamente a alguien, liberar borra esa
+    asignación (`asignado_directo_a_id = NULL`) -- queda disponible para
+    cualquier gestor del área, igual que uno despachado sin elegir gestor.
+    """
+    servicio = db.query(ServicioConsulta).filter(ServicioConsulta.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+
+    filtros = [ServicioConsulta.id == servicio_id, ServicioConsulta.estado == "EN_PROCESO"]
+    if current_user.role != "admin":
+        filtros.append(ServicioConsulta.asignado_a_id == current_user.id)
+
+    filas = (
+        db.query(ServicioConsulta)
+        .filter(*filtros)
+        .update(
+            {
+                "estado": "ASIGNADO",
+                "asignado_a_id": None,
+                "liberado_at": datetime.now(timezone.utc),
+                "liberado_por_id": current_user.id,
+                "asignado_directo_a_id": None,
+            },
+            synchronize_session=False,
+        )
+    )
+
+    if filas == 0:
+        db.rollback()
+        db.refresh(servicio)
+        if servicio.estado != "EN_PROCESO":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Solo se pueden liberar servicios en proceso.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No se puede liberar: el servicio no es tuyo.",
+        )
+
+    notificacion_service.notificar_liberacion(db, servicio, current_user)
+    db.commit()
 
     db.refresh(servicio)
     return ServicioConsultaResponse.model_validate(servicio)
@@ -649,13 +775,27 @@ def listar_bandeja(
     if not areas_ids:
         return []
 
-    q = db.query(ServicioConsulta).filter(
+    q = db.query(ServicioConsulta).options(
+        selectinload(ServicioConsulta.asignado_a),
+        selectinload(ServicioConsulta.asignado_directo_a),
+    ).filter(
         ServicioConsulta.area_id.in_(areas_ids),
         ServicioConsulta.estado.in_(("ASIGNADO", "EN_PROCESO")),
         ServicioConsulta.is_deleted == False,  # noqa: E712
     )
     if gestor_objetivo is not None:
+        # asignacion-directa-servicio-gestor, decisión 6: un servicio
+        # despachado directamente a OTRO gestor no entra a esta bandeja aunque
+        # nadie lo haya tomado todavía -- solo lo ve su asignado directo (o el
+        # admin, que no filtra por gestor_objetivo).
         q = q.filter(
-            (ServicioConsulta.asignado_a_id.is_(None)) | (ServicioConsulta.asignado_a_id == gestor_objetivo)
+            (
+                (ServicioConsulta.asignado_a_id.is_(None))
+                & (
+                    (ServicioConsulta.asignado_directo_a_id.is_(None))
+                    | (ServicioConsulta.asignado_directo_a_id == gestor_objetivo)
+                )
+            )
+            | (ServicioConsulta.asignado_a_id == gestor_objetivo)
         )
     return q.order_by(ServicioConsulta.created_at.asc()).all()

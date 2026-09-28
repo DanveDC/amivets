@@ -1,6 +1,6 @@
-"""Caja rápida: venta de mostrador sin registrar cliente (caja-rapida).
+"""Servicio directo: venta de mostrador sin registrar cliente.
 
-Una venta es una OrdenServicio (origen CAJA_RAPIDA, sin mascota) que nace y
+Una venta es una OrdenServicio (origen ORIGEN, sin mascota) que nace y
 muere en la misma transacción: los servicios del catálogo se registran como
 EJECUTADO (consumiendo su receta), los productos van como líneas producto_id
 de la factura, y la orden queda FACTURADA. La factura la emite
@@ -27,10 +27,12 @@ from app.models.models import (
     ServicioConsulta,
     Usuario,
 )
-from app.schemas.schemas import DetalleFacturaCreate, FacturaCreate, VentaRapidaCreate
+from app.schemas.schemas import DetalleFacturaCreate, FacturaCreate, VentaDirectaCreate
 from app.services import consumo_service
 from app.services.facturacion_service import FacturacionService
 
+# Valor histórico de OrdenServicio.origen: se conserva al renombrar la
+# sección porque facturacion_service lo usa para anular estas ventas.
 ORIGEN = "CAJA_RAPIDA"
 
 # Propietario de sistema para las ventas sin cliente (decisión 1). La cédula
@@ -76,10 +78,10 @@ def _conflicto(detalle: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detalle)
 
 
-def registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> Factura:
+def registrar_venta_directa(db: Session, data: VentaDirectaCreate, usuario: Usuario) -> Factura:
     """Valida, arma la orden y emite la factura cobrada al 100%. Todo o nada."""
     try:
-        return _registrar_venta(db, data, usuario)
+        return _registrar_venta_directa(db, data, usuario)
     except Exception:
         # crear_factura ya hace rollback de lo suyo; esto cubre los errores
         # previos (validación, consumo de receta) para no dejar la orden o los
@@ -88,7 +90,7 @@ def registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> F
         raise
 
 
-def _registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> Factura:
+def _registrar_venta_directa(db: Session, data: VentaDirectaCreate, usuario: Usuario) -> Factura:
     # --- Cliente ---------------------------------------------------------
     if data.propietario_id:
         propietario = db.query(Propietario).filter(Propietario.id == data.propietario_id).first()
@@ -126,7 +128,7 @@ def _registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> 
         if not producto.activo:
             raise _conflicto(f"El producto {producto.nombre} está inactivo.")
         if producto.tipo_item != "PRODUCTO":
-            raise _conflicto(f"{producto.nombre} es un material de uso interno; no se vende en caja.")
+            raise _conflicto(f"{producto.nombre} es un material de uso interno; no se vende en servicio directo.")
         if producto.stock_actual < cantidad:
             raise _conflicto(
                 f"Stock insuficiente para {producto.nombre}. Disponible: {float(producto.stock_actual):g}"
@@ -148,7 +150,7 @@ def _registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> 
             raise _conflicto(f"El servicio {item.nombre} está inactivo.")
         if item.area_id is not None:
             raise _conflicto(
-                f"El servicio {item.nombre} tiene área de despacho: se vende con una orden, no en caja rápida."
+                f"El servicio {item.nombre} tiene área de despacho: se vende con una orden, no en servicio directo."
             )
         if item.precio_variable and not (it.precio_unitario and it.precio_unitario > 0):
             raise HTTPException(
@@ -233,7 +235,7 @@ def _registrar_venta(db: Session, data: VentaRapidaCreate, usuario: Usuario) -> 
 
 
 def buscar_items(db: Session, q: Optional[str], limit: int = 30) -> List[dict]:
-    """Productos y servicios vendibles en caja (mismas reglas que la venta):
+    """Productos y servicios vendibles en servicio directo (mismas reglas que la venta):
     Inventario PRODUCTO activo, y CatalogoServicio activo sin área."""
     productos_q = db.query(Inventario).filter(
         Inventario.activo == True,  # noqa: E712

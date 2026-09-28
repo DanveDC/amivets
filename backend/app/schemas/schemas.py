@@ -196,6 +196,11 @@ class ServicioConsultaBase(BaseModel):
     estado: Optional[str] = Field(default="SOLICITADO", max_length=50)
     detalles_clinicos: Optional[str] = None
     is_deleted: Optional[bool] = False
+    # servicio-base-paquete-items: jerarquía padre/hijo. `servicio_padre_id`
+    # apunta a un servicio `es_base=true` de la MISMA orden (validado en
+    # orden_service.crear_servicio_en_orden, no acá).
+    servicio_padre_id: Optional[int] = Field(None, gt=0)
+    es_base: bool = False
 
 class ServicioConsultaCreate(ServicioConsultaBase):
     # Overrides opcionales de consumo real por material (Decision 6). Solo se
@@ -210,6 +215,11 @@ class ServicioConsultaUpdate(BaseModel):
     is_deleted: Optional[bool] = None
     catalogo_servicio_id: Optional[int] = Field(None, gt=0)
     consumos: Optional[List[ConsumoMaterialOverride]] = None
+    # Sin servicio_padre_id / es_base a propósito (servicio-base-paquete-items):
+    # la jerarquía se define solo al anexar, donde crear_servicio_en_orden la
+    # valida. actualizar_servicio_impl aplica los campos con setattr sin
+    # validación, así que exponerlos acá permitía colgar un servicio de un
+    # padre de otra orden o que no es base.
 
 class ServicioConsultaResponse(ServicioConsultaBase):
     id: int
@@ -231,7 +241,152 @@ class ServicioConsultaResponse(ServicioConsultaBase):
     # permitieron y registraron igual. None salvo en la respuesta del POST/PATCH
     # que dispara el consumo.
     advertencias: Optional[List[dict]] = None
+    # Toma exclusiva por gestor (toma-exclusiva-servicio-gestor, decisión 2):
+    # quién lo tomó y cuándo se liberó por última vez. asignado_a_id ya vive en
+    # el modelo desde la etapa 5 (despacho al área); no se exponía en la
+    # respuesta porque nada lo necesitaba hasta ahora.
+    asignado_a_id: Optional[int] = None
+    # Nombre del gestor/veterinario que tomó el servicio, para el badge "Tomada
+    # por <nombre>" del front (Panel del día, orden-abierta.js) sin que cada
+    # pantalla tenga que resolverlo por su cuenta contra /usuarios. `Usuario`
+    # no tiene nombre/apellido -- se usa `username`, mismo criterio que
+    # `OrdenServicioResponse.veterinario_nombre`.
+    asignado_a_nombre: Optional[str] = None
+    liberado_at: Optional[datetime] = None
+    # Asignación directa (asignacion-directa-servicio-gestor, decisión 8): a
+    # quién se DESPACHÓ el servicio al confirmar, distinto de asignado_a_id
+    # (quién lo TOMÓ). asignado_directo_a_nombre se resuelve en el mismo
+    # model_validator que asignado_a_nombre, mismo criterio (username).
+    asignado_directo_a_id: Optional[int] = None
+    asignado_directo_a_nombre: Optional[str] = None
+    # Nombre del área resuelto desde la relación `area` si vino cargada
+    # (obtener_orden(con_asignados=True)). Interno: lo expone `area_nombre`.
+    area_nombre_resuelto: Optional[str] = Field(None, exclude=True)
+    # servicio-base-paquete-items: campos planos (NO @computed_field/@property
+    # -- con `from_attributes` una property de la clase Pydantic no lee nada
+    # del ORM, así que nunca se serializaría) llenados por el
+    # model_validator de abajo a partir de `items_adicionales`, la misma
+    # relación que hay que eager-cargar con selectinload para que esto no
+    # dispare un N+1 por servicio base (ver orden_service.obtener_orden).
+    # `es_item_adicional` es una desviación deliberada del spec ("alias de not
+    # es_base"): un servicio suelto (sin padre, no base) no es un "item
+    # adicional" de nada, así que se define como `servicio_padre_id is not
+    # None` -- documentado en tasks.md.
+    es_item_adicional: bool = False
+    items_adicionales_count: int = 0
+    subtotal_items_adicionales: float = 0.0
+    subtotal_paquete: Optional[float] = None
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    def _adjuntar_asignado_a_nombre(cls, data):
+        # Mismo patrón que OrdenServicioResponse._adjuntar_nombres: se resuelve
+        # acá para que el front no tenga que hacer una segunda llamada por
+        # cada servicio tomado.
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                asignado = getattr(data, 'asignado_a', None)
+                if asignado:
+                    data.asignado_a_nombre = asignado.username
+            except Exception:
+                pass
+            try:
+                asignado_directo = getattr(data, 'asignado_directo_a', None)
+                if asignado_directo:
+                    data.asignado_directo_a_nombre = asignado_directo.username
+            except Exception:
+                pass
+            try:
+                # Solo si ya está cargada: no dispara un lazy load por línea
+                # en los endpoints que no la piden.
+                if 'area' in data.__dict__ and data.area is not None:
+                    data.area_nombre_resuelto = data.area.nombre
+            except Exception:
+                pass
+            try:
+                data.es_item_adicional = getattr(data, 'servicio_padre_id', None) is not None
+            except Exception:
+                pass
+            try:
+                if data.es_base:
+                    # Solo si `items_adicionales` ya vino eager-cargada
+                    # (selectinload): igual que `area` arriba, chequear
+                    # `data.es_base` no dispara la lazy-load que se evita acá
+                    # -- es una columna propia, no la relación. Sin eager
+                    # load, count/subtotal_items_adicionales quedan en 0 (no
+                    # se conocen los hijos), pero subtotal_paquete igual
+                    # refleja al menos el propio precio del base.
+                    subtotal_hijos = 0.0
+                    if 'items_adicionales' in data.__dict__:
+                        hijos = [
+                            h for h in (data.items_adicionales or [])
+                            if not h.is_deleted and h.estado != 'CANCELADO'
+                        ]
+                        subtotal_hijos = sum((h.cantidad or 0) * (h.precio_unitario or 0) for h in hijos)
+                        data.items_adicionales_count = len(hijos)
+                        data.subtotal_items_adicionales = subtotal_hijos
+                    data.subtotal_paquete = (data.cantidad or 0) * (data.precio_unitario or 0) + subtotal_hijos
+            except Exception:
+                pass
+        return data
+
+    @computed_field
+    @property
+    def estado_toma(self) -> Optional[str]:
+        """Mapea estado + asignado_a_id + asignado_directo_a_id + liberado_at
+        a un estado de toma legible para el front (decisión 2 y decisión 8,
+        design.md). `@computed_field` (no `@property` sola) es obligatorio en
+        pydantic 2 para que esto se serialice en la respuesta -- una property
+        común no aparece en `model_dump`/JSON.
+
+        "asignada" (ASIGNADO + nadie lo tomó + hay asignación directa) se
+        evalúa ANTES que "liberada"/"disponible": un servicio recién
+        despachado directamente nunca pasó por liberar_servicio, así que
+        liberado_at siempre es NULL en ese caso, pero la distinción de origen
+        (asignado a alguien vs. al área) importa más que ese detalle."""
+        if self.estado in ("EJECUTADO", "FACTURADO"):
+            return "completada"
+        if self.estado == "EN_PROCESO" and self.asignado_a_id is not None:
+            return "tomada"
+        if self.estado == "ASIGNADO" and self.asignado_a_id is None:
+            if self.asignado_directo_a_id is not None:
+                return "asignada"
+            return "liberada" if self.liberado_at is not None else "disponible"
+        return None
+
+    @computed_field
+    @property
+    def veterinario_nombre(self) -> Optional[str]:
+        """Alias semántico de asignado_a_nombre (consulta-directa-atajo-sin-
+        despacho): en una línea CONSULTA, quien la tomó es el veterinario que
+        la ejecutó."""
+        return self.asignado_a_nombre
+
+    @computed_field
+    @property
+    def area_nombre(self) -> Optional[str]:
+        """Nombre del área que ejecuta el servicio, "NINGUNO" si no tiene
+        (atajo sin despacho), None si hay área pero no vino cargada."""
+        if self.area_id is None:
+            return "NINGUNO"
+        return self.area_nombre_resuelto
+
+
+class AsignacionServicioGestor(BaseModel):
+    """Un par (servicio, gestor elegido) dentro del cuerpo de confirmar
+    (asignacion-directa-servicio-gestor, decisión 2)."""
+    servicio_id: int = Field(..., gt=0)
+    gestor_id: int = Field(..., gt=0)
+
+
+class ConfirmarServiciosRequest(BaseModel):
+    """Cuerpo opcional de `POST /api/ordenes/{id}/confirmar` (decisión 2,
+    design.md): por cada servicio `SOLICITADO` con área que el que confirma
+    quiera despachar a un gestor puntual, un par {servicio_id, gestor_id}. Un
+    servicio sin entrada acá sigue yendo "al área", como hoy. Lista vacía por
+    defecto para que un `POST` sin cuerpo (front viejo, `e2e/helpers.js::
+    confirmarServiciosOrden`) siga funcionando igual."""
+    asignaciones: List[AsignacionServicioGestor] = Field(default_factory=list)
 
 
 class ConsultaResponse(ConsultaBase):
@@ -578,8 +733,26 @@ class DetalleFacturaResponse(DetalleFacturaBase):
     factura_id: int
     subtotal: float
     servicio_id: Optional[int] = None
-    
+    # servicio-base-paquete-items: leídos de la relación `servicio`
+    # (DetalleFactura.servicio -> ServicioConsulta) para que
+    # facturacion.js::abrirPreviewFactura pueda agrupar base + items igual que
+    # orden-abierta.js. Campos aditivos, no tocan FacturacionService.crear_factura.
+    es_base: bool = False
+    servicio_padre_id: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='before')
+    def _adjuntar_jerarquia_servicio(cls, data):
+        if not isinstance(data, dict) and hasattr(data, '__table__'):
+            try:
+                servicio = getattr(data, 'servicio', None)
+                if servicio is not None:
+                    data.es_base = bool(servicio.es_base)
+                    data.servicio_padre_id = servicio.servicio_padre_id
+            except Exception:
+                pass
+        return data
 
 
 class FacturaBase(BaseModel):
@@ -631,8 +804,8 @@ class OrdenFacturarBody(BaseModel):
     impuesto: Optional[float] = Field(default=0.0)
 
 
-# ========== CAJA RÁPIDA SCHEMAS (caja-rapida) ==========
-class VentaRapidaItem(BaseModel):
+# ========== SERVICIO DIRECTO SCHEMAS ==========
+class VentaDirectaItem(BaseModel):
     """Una línea de la venta de mostrador. `id` es un Inventario.id (PRODUCTO)
     o un CatalogoServicio.id (SERVICIO). `precio_unitario` solo se usa en
     servicios de precio variable (decisión 5): el resto se cobra al precio del
@@ -643,12 +816,12 @@ class VentaRapidaItem(BaseModel):
     precio_unitario: Optional[float] = None
 
 
-class VentaRapidaCreate(BaseModel):
-    """Body de POST /api/caja-rapida/ventas. Sin `propietario_id` se factura a
+class VentaDirectaCreate(BaseModel):
+    """Body de POST /api/servicio-directo/ventas. Sin `propietario_id` se factura a
     "Consumidor final" (decisión 1). Cobro completo obligatorio (decisión 6)."""
     propietario_id: Optional[int] = Field(None, gt=0)
     metodo_pago: Literal["EFECTIVO", "TARJETA", "TRANSFERENCIA", "MULTIPLE"]
-    items: List[VentaRapidaItem] = Field(..., min_length=1)
+    items: List[VentaDirectaItem] = Field(..., min_length=1)
 
 
 class ServicioRealizadoResponse(BaseModel):
@@ -666,8 +839,8 @@ class ServicioRealizadoResponse(BaseModel):
     adjuntos: int = 0
 
 
-class ItemCajaResponse(BaseModel):
-    """Resultado de GET /api/caja-rapida/items: productos y servicios
+class ItemServicioDirectoResponse(BaseModel):
+    """Resultado de GET /api/servicio-directo/items: productos y servicios
     vendibles en un solo listado."""
     tipo: Literal["PRODUCTO", "SERVICIO"]
     id: int
@@ -889,6 +1062,25 @@ class RecetaServicioResponse(RecetaServicioBase):
 
 
 # ========== CATALOGO SERVICIO SCHEMAS ==========
+TIPOS_COMISION_SERVICIO = Literal["FIJO", "PORCENTAJE", "HEREDA"]
+
+
+def validar_comision_servicio(tipo: str, monto_fijo: Optional[Decimal], porcentaje: Optional[Decimal]):
+    """Coherencia del override de comisión de un item del catálogo
+    (comision-tipo-mixto-encargado). Devuelve (monto_fijo, porcentaje)
+    normalizados: el campo que el tipo no usa queda en None, así el CHECK
+    ck_catalogo_comision_campos nunca salta."""
+    if tipo == "FIJO":
+        if monto_fijo is None:
+            raise ValueError("monto_fijo_servicio es obligatorio para tipo FIJO")
+        return monto_fijo, None
+    if tipo == "PORCENTAJE":
+        if porcentaje is None:
+            raise ValueError("porcentaje_servicio es obligatorio para tipo PORCENTAJE")
+        return None, porcentaje
+    return None, None
+
+
 class CatalogoServicioBase(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=255)
     categoria: str = Field(..., min_length=1, max_length=100)
@@ -905,6 +1097,21 @@ class CatalogoServicioCreate(CatalogoServicioBase):
     # valida el rol igual que ya hace con precio_ref.
     area_id: Optional[int] = Field(None, gt=0)
     requiere_adjunto: Optional[bool] = None
+    # Override de comisión (comision-tipo-mixto-encargado), admin-only.
+    tipo_comision_servicio: TIPOS_COMISION_SERVICIO = "HEREDA"
+    monto_fijo_servicio: Optional[Decimal] = Field(None, ge=0)
+    porcentaje_servicio: Optional[Decimal] = Field(None, ge=0, le=100)
+    # plantillas-paquete-catalogo: marca este servicio como plantilla de
+    # paquete (design D1/D5). Admin-only -- el router valida el rol y las
+    # reglas cruzadas (sin CONSULTA, no ser ya componente de otro paquete).
+    es_paquete: bool = False
+
+    @model_validator(mode="after")
+    def validar_comision(self):
+        self.monto_fijo_servicio, self.porcentaje_servicio = validar_comision_servicio(
+            self.tipo_comision_servicio, self.monto_fijo_servicio, self.porcentaje_servicio
+        )
+        return self
 
 
 class CostoRecetaLinea(BaseModel):
@@ -939,6 +1146,13 @@ class CatalogoServicioUpdate(BaseModel):
     # explícito o simplemente no mandando el campo (exclude_unset lo respeta).
     area_id: Optional[int] = Field(None, gt=0)
     requiere_adjunto: Optional[bool] = None
+    # Override de comisión. La coherencia contra lo que ya tiene la fila la
+    # resuelve el router (un PUT parcial puede traer solo el monto).
+    tipo_comision_servicio: Optional[TIPOS_COMISION_SERVICIO] = None
+    monto_fijo_servicio: Optional[Decimal] = Field(None, ge=0)
+    porcentaje_servicio: Optional[Decimal] = Field(None, ge=0, le=100)
+    # plantillas-paquete-catalogo (ver CatalogoServicioCreate).
+    es_paquete: Optional[bool] = None
 
 
 class CatalogoServicioResponse(CatalogoServicioBase):
@@ -946,8 +1160,76 @@ class CatalogoServicioResponse(CatalogoServicioBase):
     created_at: datetime
     area_id: Optional[int] = None
     requiere_adjunto: Optional[bool] = None
+    tipo_comision_servicio: str = "HEREDA"
+    monto_fijo_servicio: Optional[Decimal] = None
+    porcentaje_servicio: Optional[Decimal] = None
+    # plantillas-paquete-catalogo (design D1/D5).
+    es_paquete: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ========== PLANTILLAS DE PAQUETE (plantillas-paquete-catalogo) ==========
+# Componentes de una plantilla de paquete (design D5) y disponibilidad de
+# insumos de un servicio del catálogo (design D4, pura + wrapper con DB).
+
+
+class PaqueteComponenteCreate(BaseModel):
+    componente_id: int = Field(..., gt=0)
+    cantidad: Decimal = Field(..., gt=0)
+
+
+class PaqueteComponenteUpdate(BaseModel):
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    posicion: Optional[int] = Field(None, ge=0)
+
+
+class PaqueteComponenteResponse(BaseModel):
+    id: int
+    paquete_id: int
+    componente_id: int
+    nombre: str
+    categoria: str
+    precio_ref: float
+    activo: bool
+    cantidad: Decimal
+    posicion: int
+    subtotal: float
+
+    @field_serializer('cantidad', when_used='json')
+    def _serializar_cantidad(self, v):
+        return float(v) if v is not None else None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaqueteComponentesResponse(BaseModel):
+    paquete_id: int
+    precio_propio: float
+    total_paquete: float
+    componentes: List[PaqueteComponenteResponse] = []
+
+
+class DisponibilidadInsumo(BaseModel):
+    inventario_id: int
+    nombre: str
+    unidad: str
+    requerido: float
+    disponible: float
+    faltante: float
+    origenes: List[str] = []
+
+
+class ComponenteOmitido(BaseModel):
+    catalogo_servicio_id: int
+    nombre: str
+
+
+class DisponibilidadServicioResponse(BaseModel):
+    catalogo_servicio_id: int
+    suficiente: bool
+    insumos: List[DisponibilidadInsumo] = []
+    componentes_omitidos: List[ComponenteOmitido] = []
 
 
 # ========== ABONO SCHEMAS ==========
@@ -955,16 +1237,52 @@ class AbonoCreate(BaseModel):
     monto: Decimal
     metodo_pago: str
     notas: Optional[str] = None
+    # Vínculo adicional y opcional con la orden pagada (facturacion-metodos-
+    # gestores-saldo): NO reemplaza a factura_id (viene del path del
+    # endpoint) -- se suma cuando el abono corresponde a una orden puntual.
+    orden_id: Optional[int] = Field(None, gt=0)
 
 
 class AbonoResponse(BaseModel):
     id: int
     numero_abono: Optional[str] = None
     factura_id: int
+    orden_id: Optional[int] = None
+    orden_numero: Optional[str] = None
     monto: Decimal
     metodo_pago: str
     fecha: datetime
     notas: Optional[str] = None
+
+    # orden_numero sale de la @property Abono.orden_numero.
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== DASHBOARD DE FACTURACIÓN (facturacion-metodos-gestores-saldo) ==========
+class GestorPagoResponse(BaseModel):
+    """Total a pagar a un gestor/encargado en un rango, desde liquidaciones
+    ya congeladas (LiquidacionComisionDetalle)."""
+    encargado_id: int
+    username: str
+    role: str
+    total_encargado: float
+    total_amivets: float
+    cantidad_lineas: int
+    total_ajustes: float
+
+
+class SaldoPendienteOrdenResponse(BaseModel):
+    """Saldo pendiente de cobro de una orden: de su factura vinculada
+    (FacturaOrden) o, si no tiene, de sus ítems sin facturar (orden CERRADA)."""
+    orden_id: int
+    orden_numero: str
+    estado_orden: str
+    factura_id: Optional[int] = None
+    factura_numero: Optional[str] = None
+    factura_estado: Optional[str] = None
+    saldo_pendiente: float
+    total_factura: float
+    total_pagado: float
 
 
 # ========== LIQUIDACIONES A VETERINARIOS (Unidad E) ==========
@@ -1034,16 +1352,47 @@ class ConfiguracionComisionResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class PorcentajeEncargadoUpdate(BaseModel):
-    """`porcentaje` null quita el porcentaje propio: el encargado vuelve al
-    de defecto. Es obligatorio mandarlo (aunque sea null)."""
-    porcentaje: Optional[Decimal] = Field(..., ge=0, le=100)
+class ComisionEncargadoUpdate(BaseModel):
+    """Comisión propia del encargado (comision-tipo-mixto-encargado).
+
+    Sin `tipo_comision` (o null) y sin porcentaje ni monto, se quita la
+    comisión propia y el encargado vuelve al porcentaje de defecto. Sin
+    `tipo_comision` pero con `porcentaje`, es PORCENTAJE: así el payload
+    anterior `{porcentaje: X | null}` sigue funcionando."""
+    tipo_comision: Optional[Literal["FIJO", "PORCENTAJE", "MIXTO"]] = None
+    monto_fijo: Optional[Decimal] = Field(None, ge=0)
+    porcentaje: Optional[Decimal] = Field(None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def validar_campos(self):
+        if self.tipo_comision is None:
+            if self.monto_fijo is not None:
+                raise ValueError("tipo_comision es obligatorio si se manda monto_fijo")
+            if self.porcentaje is not None:
+                self.tipo_comision = "PORCENTAJE"
+            return self
+        if self.tipo_comision == "FIJO":
+            if self.monto_fijo is None:
+                raise ValueError("monto_fijo es obligatorio para tipo FIJO")
+            self.porcentaje = None
+        elif self.tipo_comision == "PORCENTAJE":
+            if self.porcentaje is None:
+                raise ValueError("porcentaje es obligatorio para tipo PORCENTAJE")
+            self.monto_fijo = None
+        elif self.monto_fijo is None or self.porcentaje is None:
+            raise ValueError("monto_fijo y porcentaje son obligatorios para tipo MIXTO")
+        return self
 
 
 class EncargadoComisionResponse(BaseModel):
+    """`tipo_comision` null: sin comisión propia, usa el porcentaje de
+    defecto. `porcentaje_efectivo` se mantiene por compatibilidad: es el
+    porcentaje que se aplica (0 si el tipo es FIJO)."""
     usuario_id: int
     username: str
     role: Optional[str] = None
+    tipo_comision: Optional[str] = None
+    monto_fijo: Optional[Decimal] = None
     porcentaje_propio: Optional[Decimal] = None
     porcentaje_efectivo: Decimal
 
@@ -1064,6 +1413,11 @@ class ComisionLineaResponse(BaseModel):
     monto_amivets: Decimal
     es_ajuste: bool = False
     liquidacion_id: Optional[int] = None
+    # Tipo y parámetros efectivos (comision-tipo-mixto-encargado): actuales
+    # en pendientes, congelados en liquidadas.
+    tipo_comision_usado: str = "PORCENTAJE"
+    monto_fijo_usado: Optional[Decimal] = None
+    porcentaje_usado: Optional[Decimal] = None
 
 
 class ComisionTotales(BaseModel):
@@ -1075,6 +1429,8 @@ class ComisionControlResponse(BaseModel):
     encargado_id: int
     username: str
     porcentaje_efectivo: Decimal
+    tipo_comision: Optional[str] = None
+    monto_fijo: Optional[Decimal] = None
     pendientes: List[ComisionLineaResponse] = []
     liquidadas: List[ComisionLineaResponse] = []
     totales_pendientes: ComisionTotales
@@ -1134,8 +1490,10 @@ class OrdenServicioAnexarServicio(BaseModel):
     que decide el propio endpoint por el área del ítem (decisión 4, atajo sin
     despacho) en vez de aceptarlo del cliente.
 
-    `tipo_servicio='CONSULTA'` está reservado a POST /api/consultas/ (decisión
-    3, índice único uq_orden_una_consulta): el endpoint lo rechaza con 400.
+    `tipo_servicio='CONSULTA'` (consulta-directa-atajo-sin-despacho) anexa el
+    honorario suelto con el atajo sin despacho: entra EJECUTADO, sin área,
+    asignado a `veterinario_id`. Máximo una por orden (índice único
+    uq_orden_una_consulta, 409).
     """
     tipo_servicio: str = Field(..., max_length=50)
     referencia_id: Optional[int] = None
@@ -1147,6 +1505,32 @@ class OrdenServicioAnexarServicio(BaseModel):
     # Overrides opcionales de consumo real por material (decisión 6, Tarea 07).
     # Solo se usan si el atajo sin despacho deja el servicio en EJECUTADO.
     consumos: Optional[List[ConsumoMaterialOverride]] = None
+    # Solo para tipo_servicio='CONSULTA': quién la ejecuta. Si no viene, se
+    # hereda orden.veterinario_id; tiene que ser un usuario con rol veterinario
+    # (400). Se ignora para cualquier otro tipo.
+    veterinario_id: Optional[int] = Field(None, gt=0)
+    # servicio-base-paquete-items: `servicio_padre_id` ancla este servicio como
+    # item adicional de un paquete base (`es_base=true`) de la MISMA orden;
+    # `es_base=true` lo marca a él mismo como paquete. Mutuamente excluyentes
+    # -- ver orden_service.crear_servicio_en_orden.
+    servicio_padre_id: Optional[int] = Field(None, gt=0)
+    es_base: bool = False
+
+
+class OrdenAnexarPaquete(BaseModel):
+    """POST /api/ordenes/{id}/paquetes (plantillas-paquete-catalogo, design D3):
+    anexa una plantilla de paquete completa (base + items activos) en una sola
+    transacción -- la hermana "de un solo paso" de anexar servicios sueltos
+    con es_base/servicio_padre_id a mano."""
+    catalogo_servicio_id: int = Field(..., gt=0)
+
+
+class PaqueteAnexadoResponse(BaseModel):
+    base: ServicioConsultaResponse
+    items: List[ServicioConsultaResponse] = []
+    # Una por componente inactivo omitido y una por material con faltante
+    # (design D3/D4) -- nunca bloquea el anexo, solo informa.
+    advertencias: List[dict] = []
 
 
 class OrdenServicioAnular(BaseModel):
@@ -1280,10 +1664,128 @@ class GestorAreaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ========== GESTORES EXTERNOS (gestor-externo-crud) ==========
+METODOS_PAGO_GESTOR_EXTERNO = Literal["TRANSFERENCIA", "EFECTIVO", "ZELLE", "CHEQUE", "OTRO"]
+
+# Columnas NOT NULL de la tabla `gestores_externos` (migración
+# b4e04370dc32_gestor_externo_crud.py). `null` explícito en el PATCH para
+# cualquiera de estas revienta en un IntegrityError de NOT NULL si no se
+# rechaza antes en el schema (ver GestorExternoUpdate._rechazar_null_explicito).
+# numero_cuenta / zelle / usuario_id quedan afuera a propósito: esas sí son
+# nullable y `null` las limpia normalmente.
+CAMPOS_GESTOR_EXTERNO_NO_NULOS = ("nombre", "rif", "telefono", "metodo_pago", "es_movil", "activo")
+
+
+class GestorExternoBase(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=120)
+    rif: str = Field(..., min_length=1, max_length=20)
+    telefono: str = Field(..., min_length=1, max_length=20)
+    metodo_pago: METODOS_PAGO_GESTOR_EXTERNO
+    numero_cuenta: Optional[str] = Field(None, max_length=50)
+    es_movil: bool = False
+    zelle: Optional[str] = Field(None, max_length=100)
+    usuario_id: Optional[int] = Field(None, gt=0)
+    activo: bool = True
+
+    # mode="before": si no se limpia antes de min_length=1, " " pasa la
+    # validación y se guarda tal cual (fix de revisión).
+    @field_validator("nombre", "telefono", mode="before")
+    @classmethod
+    def _strip_nombre_telefono(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+
+class GestorExternoCreate(GestorExternoBase):
+    @field_validator("rif", mode="before")
+    @classmethod
+    def _rif_upper(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+
+class GestorExternoUpdate(BaseModel):
+    """Todos los campos opcionales (PATCH). `rif` se normaliza a mayúsculas
+    igual que en el alta, pero el router es quien decide si se puede aplicar
+    (422 si el gestor ya tiene áreas asignadas -- ver spec, "RIF inmutable
+    con áreas asignadas").
+
+    `null` explícito en un campo NOT NULL (CAMPOS_GESTOR_EXTERNO_NO_NULOS) se
+    rechaza con 422 antes de llegar al router -- exclude_unset lo aplicaría
+    igual y rompería en la DB con un IntegrityError (fix de revisión).
+    """
+    nombre: Optional[str] = Field(None, min_length=1, max_length=120)
+    rif: Optional[str] = Field(None, min_length=1, max_length=20)
+    telefono: Optional[str] = Field(None, min_length=1, max_length=20)
+    metodo_pago: Optional[METODOS_PAGO_GESTOR_EXTERNO] = None
+    numero_cuenta: Optional[str] = Field(None, max_length=50)
+    es_movil: Optional[bool] = None
+    zelle: Optional[str] = Field(None, max_length=100)
+    usuario_id: Optional[int] = Field(None, gt=0)
+    activo: Optional[bool] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _rechazar_null_explicito(cls, data):
+        if isinstance(data, dict):
+            for campo in CAMPOS_GESTOR_EXTERNO_NO_NULOS:
+                if campo in data and data[campo] is None:
+                    raise ValueError(f"'{campo}' no puede ser null")
+        return data
+
+    @field_validator("nombre", "telefono", mode="before")
+    @classmethod
+    def _strip_nombre_telefono(cls, v):
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("rif", mode="before")
+    @classmethod
+    def _rif_upper(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+
+class GestorExternoResponse(GestorExternoBase):
+    id: int
+    created_at: datetime
+    areas: List[AreaServicioResponse] = []
+    usuario_nombre: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _adjuntar_nombres(cls, data):
+        # ORM -> dict antes de validar: reemplaza `areas` (filas GestorAreaExterno)
+        # por las AreaServicio reales, y expone usuario_nombre si hay vínculo.
+        if not isinstance(data, dict) and hasattr(data, "__table__"):
+            usuario = getattr(data, "usuario", None)
+            areas = getattr(data, "areas", None)
+            return {
+                "id": data.id,
+                "nombre": data.nombre,
+                "rif": data.rif,
+                "telefono": data.telefono,
+                "metodo_pago": data.metodo_pago,
+                "numero_cuenta": data.numero_cuenta,
+                "es_movil": data.es_movil,
+                "zelle": data.zelle,
+                "usuario_id": data.usuario_id,
+                "activo": data.activo,
+                "created_at": data.created_at,
+                "areas": [ga.area for ga in (areas or []) if ga.area],
+                "usuario_nombre": usuario.username if usuario else None,
+            }
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GestorExternoAreaCreate(BaseModel):
+    """Body de `POST /api/gestores-externos/{id}/areas/`."""
+    area_id: int = Field(..., gt=0)
+
+
 # ========== NOTIFICACIONES (Tarea 06, decisión 6, etapa 5) ==========
 class NotificacionResponse(BaseModel):
     id: int
-    destinatario_id: int
+    destinatario_id: Optional[int] = None
+    gestor_externo_id: Optional[int] = None
     tipo: str
     titulo: str
     cuerpo: Optional[str] = None

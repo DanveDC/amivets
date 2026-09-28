@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.models.models import CatalogoServicio, Consulta, OrdenServicio, ServicioConsulta, Usuario
+from app.models.models import CatalogoServicio, Consulta, GestorArea, OrdenServicio, ServicioConsulta, Usuario
 from app.services import consumo_service, notificacion_service
 
 # La orden todavia recibe trabajo: se le pueden anexar servicios y abrir la
@@ -38,12 +38,53 @@ def _ahora() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def validar_veterinario(db: Session, veterinario_id: int) -> Usuario:
+    """El destino tiene que ser un usuario con rol veterinario.
+
+    Mismo criterio y mismo código (400) que ConsultaService.crear_consulta: sin
+    esto una orden puede quedar "asignada" a la recepcionista y no aparecer
+    nunca en la lista de nadie. Vive acá (y no en routers/ordenes.py) para que
+    crear_servicio_en_orden la use sin importar el router.
+    """
+    vet = db.query(Usuario).filter(Usuario.id == veterinario_id).first()
+    if not vet or vet.role != "veterinario":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El veterinario_id indicado no corresponde a un usuario con rol veterinario",
+        )
+    return vet
+
+
 # ---------------------------------------------------------------------------
 # Lecturas
 # ---------------------------------------------------------------------------
-def obtener_orden(db: Session, orden_id: int) -> OrdenServicio:
-    """Trae la orden o levanta 404. No valida estado."""
-    orden = db.query(OrdenServicio).filter(OrdenServicio.id == orden_id).first()
+def obtener_orden(db: Session, orden_id: int, *, con_asignados: bool = False) -> OrdenServicio:
+    """Trae la orden o levanta 404. No valida estado.
+
+    `con_asignados=True` (toma-exclusiva-servicio-gestor, decisión 6): eager
+    -load de `servicios[].asignado_a` con `selectinload` -- lo pide GET
+    /api/ordenes/{id} para exponer `ServicioConsultaResponse.asignado_a_nombre`
+    sin un N+1 por servicio (el Panel del día hace un GET por orden, y cada
+    orden puede tener varios servicios despachados). Suma `asignado_directo_a`
+    (asignacion-directa-servicio-gestor, decisión 1): mismo motivo, para
+    `asignado_directo_a_nombre`. El resto de los call sites (cerrar, anular,
+    confirmar, anexar, etc.) no leen esos nombres y siguen sin el eager load,
+    que no les aporta nada.
+    """
+    q = db.query(OrdenServicio)
+    if con_asignados:
+        q = q.options(
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_a),
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.asignado_directo_a),
+            # consulta-directa-atajo-sin-despacho: `area_nombre` en la respuesta.
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.area),
+            # servicio-base-paquete-items: para que
+            # ServicioConsultaResponse.items_adicionales_count /
+            # subtotal_items_adicionales / subtotal_paquete no disparen un N+1
+            # (un lazy-load de `items_adicionales` por cada servicio base).
+            selectinload(OrdenServicio.servicios).selectinload(ServicioConsulta.items_adicionales),
+        )
+    orden = q.filter(OrdenServicio.id == orden_id).first()
     if not orden:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Orden no encontrada")
     return orden
@@ -137,23 +178,47 @@ def tomar_orden(db: Session, orden: OrdenServicio, current_user: Usuario) -> Ord
     return orden
 
 
-def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario) -> tuple:
+def confirmar_servicios(
+    db: Session,
+    orden: OrdenServicio,
+    current_user: Usuario,
+    asignaciones: Optional[list] = None,
+) -> tuple:
     """Despacha los servicios SOLICITADO de la orden (decision 4, fila 9 de la
     matriz de permisos): es el paso "el veterinario confirma los servicios"
     del diagrama de estados.
 
     - Si el item tiene area de ejecucion (area_id no nulo, snapshot tomado al
-      anexar): pasa a ASIGNADO y se notifica a cada gestor activo del area
-      (Notificacion tipo SERVICIO_ASIGNADO). Si el area no tiene NINGUN
-      gestor activo, se notifica a los admins (SERVICIO_SIN_GESTOR) en su
-      lugar y la linea se suma a `advertencias` (decision 5, defensas 1 y 2)
-      -- ver notificacion_service.notificar_asignacion. Queda a la espera de
-      que un gestor lo tome (POST /api/servicios/{id}/tomar, etapa 5).
+      anexar): pasa a ASIGNADO. Si quien confirma eligió un gestor puntual
+      para ESE servicio (`asignaciones`, asignacion-directa-servicio-gestor,
+      decisión 2), `asignado_directo_a_id` queda seteado y
+      `notificar_asignacion` avisa solo a ese gestor; sin entrada, se notifica
+      a cada gestor activo del area (Notificacion tipo SERVICIO_ASIGNADO),
+      igual que siempre. Si el area no tiene NINGUN gestor activo (solo puede
+      pasar sin asignación directa: un gestor elegido ya se validó activo), se
+      notifica a los admins (SERVICIO_SIN_GESTOR) en su lugar y la linea se
+      suma a `advertencias` (decision 5, defensas 1 y 2) -- ver
+      notificacion_service.notificar_asignacion. Queda a la espera de que un
+      gestor lo tome (POST /api/servicios/{id}/tomar, etapa 5).
     - Si no tiene area (atajo sin despacho de la decision 4 -- CONSULTA,
       INSUMO, o cualquier item de catalogo con area_id NULL): pasa directo a
       EJECUTADO y dispara consumo_service.consumir_para_servicio, exactamente
       como hace actualizar_servicio_impl al cruzar hacia un estado consumido.
       No se notifica nada acá: no hay area, no hay gestor a quien avisarle.
+
+    `asignaciones` (asignacion-directa-servicio-gestor, decisión 2): lista de
+    pares `(servicio_id, gestor_id)` armada por el router desde
+    `ConfirmarServiciosRequest.asignaciones`. Se valida ACÁ, antes de mutar
+    nada (después de `asegurar_recibe_trabajo` y de la query de `solicitados`
+    de abajo), en tres pasos; cualquiera de los tres deja la orden y sus
+    servicios sin cambios (422, nada de esto commitea):
+      1. Ningún `servicio_id` repetido en la lista.
+      2. Cada `servicio_id` tiene que ser uno de los `solicitados` con
+         `area_id` de ESTA orden.
+      3. El `gestor_id` elegido tiene que tener `GestorArea` en el área de
+         ESE servicio y estar activo (`Usuario.is_active`) -- una sola query
+         por lote (join `GestorArea`/`Usuario` filtrada por los pares
+         pedidos), no una por servicio.
 
     Idempotente: si no queda ninguna linea en SOLICITADO no es un error --
     confirmar una orden ya confirmada es un 200 sin cambios, no un 409. No hay
@@ -181,6 +246,53 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
         )
         .all()
     )
+    por_id = {s.id: s for s in solicitados}
+
+    pares = asignaciones or []
+    asignaciones_dict = {}
+    if pares:
+        servicio_ids_pedidos = [sid for sid, _ in pares]
+        if len(servicio_ids_pedidos) != len(set(servicio_ids_pedidos)):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No se puede indicar el mismo servicio más de una vez al confirmar.",
+            )
+
+        for servicio_id, gestor_id in pares:
+            servicio_pedido = por_id.get(servicio_id)
+            if servicio_pedido is None or servicio_pedido.area_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"El servicio {servicio_id} no es un servicio SOLICITADO "
+                        "con área de esta orden."
+                    ),
+                )
+
+        pares_area_gestor = {(por_id[sid].area_id, gestor_id) for sid, gestor_id in pares}
+        areas_pedidas = {area_id for area_id, _ in pares_area_gestor}
+        gestores_pedidos = {gestor_id for _, gestor_id in pares_area_gestor}
+        validos = set(
+            db.query(GestorArea.area_id, GestorArea.usuario_id)
+            .join(Usuario, Usuario.id == GestorArea.usuario_id)
+            .filter(
+                GestorArea.area_id.in_(areas_pedidas),
+                GestorArea.usuario_id.in_(gestores_pedidos),
+                Usuario.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+        for servicio_id, gestor_id in pares:
+            par = (por_id[servicio_id].area_id, gestor_id)
+            if par not in validos:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"El gestor {gestor_id} no gestiona el área del servicio "
+                        f"{servicio_id}, o su cuenta no está activa."
+                    ),
+                )
+            asignaciones_dict[servicio_id] = gestor_id
 
     ahora = _ahora()
     advertencias = []
@@ -194,6 +306,8 @@ def confirmar_servicios(db: Session, orden: OrdenServicio, current_user: Usuario
             # escribe ASIGNADO, así que este es el único punto que necesita
             # sellarlo.
             servicio.asignado_at = ahora
+            if servicio.id in asignaciones_dict:
+                servicio.asignado_directo_a_id = asignaciones_dict[servicio.id]
             advertencia = notificacion_service.notificar_asignacion(db, servicio)
             if advertencia:
                 advertencias.append(advertencia)
@@ -226,6 +340,9 @@ def crear_servicio_en_orden(
     detalles_clinicos: Optional[str],
     consumos_override,
     current_user: Usuario,
+    veterinario_id: Optional[int] = None,
+    servicio_padre_id: Optional[int] = None,
+    es_base: bool = False,
 ) -> tuple:
     """Anexa una linea de servicio a la orden SIN pasar por una consulta
     (Tarea 06, decision 1: venta de mostrador, orden solo de estetica; y
@@ -244,9 +361,109 @@ def crear_servicio_en_orden(
     esos dos toman el `estado` que manda el cliente, para no romper su
     contrato ya cubierto por la suite.
 
+    Excepcion: `tipo_servicio='CONSULTA'` (consulta-directa-atajo-sin-despacho)
+    es el honorario suelto de la consulta, sin `Consulta` clinica detras. Aplica
+    el atajo sin despacho EN EL MOMENTO, igual que crear_linea_consulta: entra
+    en EJECUTADO, sin area, asignada al veterinario (`veterinario_id` si viene,
+    si no el de la orden; 422 si no hay ninguno, 400 si no es veterinario) y
+    pasa la orden a EN_ATENCION. No dispara consumo: una consulta no tiene
+    receta. 409 si la orden ya tiene su consulta (uq_orden_una_consulta; el
+    llamador igual tiene que atajar el IntegrityError de la carrera).
+
     No commitea: el llamador decide la transaccion. Devuelve
     (servicio, advertencias).
+
+    servicio-base-paquete-items: `es_base`/`servicio_padre_id` arman la
+    jerarquia padre/hijo de un paquete. Las reglas de integridad
+    "padre es_base", "misma orden" y "un solo nivel" se validan ACA (no en un
+    CHECK: PostgreSQL no admite subqueries en un CHECK) -- ver design.md y
+    ck_servicio_base_sin_padre (models.py) para la unica regla que si vive en
+    la DB (base sin padre).
     """
+    if es_base and servicio_padre_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un servicio base no puede tener padre",
+        )
+
+    padre: Optional[ServicioConsulta] = None
+    if servicio_padre_id is not None:
+        # Excluye padres soft-deleted y CANCELADO (decision de la orquestacion,
+        # decision 2): un padre "borrado" o cancelado no es un ancla valida
+        # para un item nuevo, aunque la FK (ON DELETE SET NULL) solo reaccione
+        # al borrado fisico, no al soft delete.
+        padre = db.query(ServicioConsulta).filter(
+            ServicioConsulta.id == servicio_padre_id,
+            ServicioConsulta.is_deleted == False,  # noqa: E712
+            ServicioConsulta.estado != "CANCELADO",
+        ).first()
+        if not padre:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Servicio padre no encontrado",
+            )
+        if not padre.es_base:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="El servicio padre debe ser un paquete base (es_base=true)",
+            )
+        if padre.orden_id != orden.id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="El servicio padre debe pertenecer a la misma orden",
+            )
+        if padre.servicio_padre_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="No se permite anidación de más de un nivel",
+            )
+
+    # Hereda mascota_id del padre (decision de la orquestacion, decision 6):
+    # en este endpoint mascota_id siempre sale de la orden (nunca del
+    # cliente), asi que en la practica coincide con orden.mascota_id -- se
+    # deja explicito por si algun dia difieren.
+    mascota_id = padre.mascota_id if padre is not None else orden.mascota_id
+
+    if (tipo_servicio or "").strip().upper() == TIPO_SERVICIO_CONSULTA:
+        vet_id = veterinario_id or orden.veterinario_id
+        if not vet_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "La orden no tiene veterinario asignado; indique veterinario_id "
+                    "en el body o asigne uno a la orden"
+                ),
+            )
+        validar_veterinario(db, vet_id)
+        if consulta_viva_en_orden(db, orden.id):
+            raise error_una_consulta_por_orden(orden)
+
+        linea = ServicioConsulta(
+            orden_id=orden.id,
+            consulta_id=None,
+            mascota_id=mascota_id,
+            tipo_servicio=TIPO_SERVICIO_CONSULTA,
+            referencia_id=referencia_id,
+            catalogo_servicio_id=catalogo_servicio_id,
+            nombre_servicio=nombre_servicio or "Consulta veterinaria",
+            cantidad=cantidad,
+            precio_unitario=precio_unitario,
+            detalles_clinicos=detalles_clinicos,
+            # Atajo sin despacho (decision 4): sin area, la ejecuta el veterinario.
+            area_id=None,
+            asignado_a_id=vet_id,
+            estado="EJECUTADO",
+            ejecutado_at=_ahora(),
+            is_deleted=False,
+            servicio_padre_id=servicio_padre_id,
+            es_base=es_base,
+        )
+        db.add(linea)
+        db.flush()
+        # Decision 1, regla 1: igual que el alta de consulta por POST /api/consultas/.
+        marcar_en_atencion(orden)
+        return linea, []
+
     area_id = None
     if catalogo_servicio_id:
         item = db.query(CatalogoServicio).filter(CatalogoServicio.id == catalogo_servicio_id).first()
@@ -256,9 +473,10 @@ def crear_servicio_en_orden(
         orden_id=orden.id,
         consulta_id=None,
         # mascota_id se llena desde la orden (puede ser None: venta de
-        # mostrador sin paciente, decision 1). El CHECK de la DB ya tiene
-        # orden_id como ancla valida.
-        mascota_id=orden.mascota_id,
+        # mostrador sin paciente, decision 1), o del padre si hay uno
+        # (servicio-base-paquete-items, decision 6). El CHECK de la DB ya
+        # tiene orden_id como ancla valida.
+        mascota_id=mascota_id,
         tipo_servicio=tipo_servicio,
         referencia_id=referencia_id,
         catalogo_servicio_id=catalogo_servicio_id,
@@ -269,6 +487,8 @@ def crear_servicio_en_orden(
         area_id=area_id,
         estado="SOLICITADO",
         is_deleted=False,
+        servicio_padre_id=servicio_padre_id,
+        es_base=es_base,
     )
     db.add(servicio)
     db.flush()  # id necesario para anclar movimientos/consumos
@@ -347,7 +567,7 @@ def cancelar_servicios_y_anular(
 ) -> None:
     """Revierte el consumo de los servicios ejecutados de la orden, los deja
     CANCELADO y pasa la orden a ANULADA. No commitea: la usan anular_orden y la
-    anulación de la factura de una venta de caja rápida
+    anulación de la factura de una venta de servicio directo
     (facturacion_service), cada una dentro de su propia transacción.
 
     Con `saltear_facturados` (anular_orden) los servicios ya cobrados no se
@@ -411,6 +631,10 @@ def crear_linea_consulta(
         # consulta no tiene receta de materiales propia; los insumos que se
         # usan durante la atencion se anexan como sus propias lineas.
         estado="EJECUTADO",
+        # consulta-directa-atajo-sin-despacho: el veterinario de la consulta,
+        # para que la respuesta exponga `veterinario_nombre`. Sin ejecutado_at
+        # a proposito: no cambia lo que lista GET /api/servicios/mis-ejecutados.
+        asignado_a_id=consulta.veterinario_id,
         origen=None,
         is_deleted=False,
     )

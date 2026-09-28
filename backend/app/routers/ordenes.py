@@ -13,8 +13,9 @@ la bandeja. Por eso `gestor` todavía no tiene acceso a ningún endpoint de acá
 from datetime import date, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -22,7 +23,9 @@ from app.models.models import Mascota, OrdenServicio, Propietario, ServicioConsu
 from app.routers.usuarios import get_current_admin, require_roles
 from app.routers.servicios import validar_tipo_servicio_por_rol
 from app.schemas.schemas import (
+    ConfirmarServiciosRequest,
     FacturaResponse,
+    OrdenAnexarPaquete,
     OrdenFacturarBody,
     OrdenServicioAnexarServicio,
     OrdenServicioAnular,
@@ -30,9 +33,10 @@ from app.schemas.schemas import (
     OrdenServicioCreate,
     OrdenServicioDetalleResponse,
     OrdenServicioResponse,
+    PaqueteAnexadoResponse,
     ServicioConsultaResponse,
 )
-from app.services import orden_service
+from app.services import orden_service, paquete_service
 from app.services.facturacion_service import FacturacionService
 
 # Mismos roles que POST /api/facturas/ (routers/facturas.py, _ROLES_FACTURACION):
@@ -57,19 +61,16 @@ def _parse_fecha(valor: Optional[str], campo: str) -> Optional[date]:
 
 
 def _validar_veterinario(db: Session, veterinario_id: int) -> Usuario:
-    """El destino tiene que ser un usuario con rol veterinario.
+    """Ver orden_service.validar_veterinario (vive ahí para que el anexo de
+    CONSULTA directa la comparta sin importar el router)."""
+    return orden_service.validar_veterinario(db, veterinario_id)
 
-    Mismo criterio y mismo código (400) que ConsultaService.crear_consulta: sin
-    esto una orden puede quedar "asignada" a la recepcionista y no aparecer
-    nunca en la lista de nadie.
-    """
-    vet = db.query(Usuario).filter(Usuario.id == veterinario_id).first()
-    if not vet or vet.role != "veterinario":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El veterinario_id indicado no corresponde a un usuario con rol veterinario",
-        )
-    return vet
+
+def _escapar_ilike(termino: str) -> str:
+    """Escapa '%'/'_' de un término de búsqueda antes de un ilike (mismo
+    hallazgo de revisión que ya cubre el filtro `numero`: sin esto un typo con
+    '%' o '_' se interpreta como comodín de SQL LIKE, no como caracter literal)."""
+    return termino.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 @router.post("/", response_model=OrdenServicioDetalleResponse, status_code=status.HTTP_201_CREATED)
@@ -134,6 +135,15 @@ def listar_ordenes(
         None,
         description="Búsqueda parcial (ilike) por número de orden, ej. OS-2418 o 2418",
     ),
+    search: Optional[str] = Query(
+        None,
+        description=(
+            "Búsqueda parcial (ilike) por número de orden, motivo de visita o "
+            "nombre de usuario del veterinario asignado (ficha-animal-ordenes-"
+            "servicios, tab 'Órdenes de servicio'). No reemplaza a `numero`: "
+            "ambos se pueden usar juntos."
+        ),
+    ),
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
     por_cobrar: bool = Query(False, description="Solo órdenes CERRADA con algún servicio vivo, no cancelado y sin facturar"),
@@ -170,8 +180,22 @@ def listar_ordenes(
         # usuario tenga forma de saberlo (no es una fuga de datos -- ilike
         # sigue acotado a lo que el rol ya puede ver -- pero sí resultados
         # incorrectos sin aviso).
-        termino = numero.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        termino = _escapar_ilike(numero)
         q = q.filter(OrdenServicio.numero.ilike(f"%{termino}%", escape="\\"))
+    if search:
+        # ficha-animal-ordenes-servicios: buscador del tab "Órdenes de
+        # servicio" -- a diferencia de `numero`, también busca por motivo de
+        # visita y por el veterinario asignado (join sólo cuando hace falta,
+        # para no pagar el costo en el resto de los listados).
+        termino = _escapar_ilike(search)
+        patron = f"%{termino}%"
+        q = q.outerjoin(Usuario, OrdenServicio.veterinario_id == Usuario.id).filter(
+            or_(
+                OrdenServicio.numero.ilike(patron, escape="\\"),
+                OrdenServicio.motivo_visita.ilike(patron, escape="\\"),
+                Usuario.username.ilike(patron, escape="\\"),
+            )
+        )
     if veterinario_id:
         q = q.filter(OrdenServicio.veterinario_id == veterinario_id)
     if mascota_id:
@@ -222,7 +246,7 @@ def obtener_orden(
     _: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
 ):
     """La orden completa: paciente, tutor, veterinario, estado y sus servicios."""
-    return orden_service.obtener_orden(db, orden_id)
+    return orden_service.obtener_orden(db, orden_id, con_asignados=True)
 
 
 @router.put("/{orden_id}/veterinario", response_model=OrdenServicioDetalleResponse)
@@ -278,22 +302,22 @@ def anexar_servicio_orden(
     Es la hermana de POST /api/consultas/{id}/servicios para el caso en que la
     orden no tiene consulta (decisión 1: venta de mostrador, orden solo de
     estética -- una orden puede no tener paciente y de todas formas necesitar
-    líneas facturables). La línea `tipo_servicio='CONSULTA'` queda reservada a
-    POST /api/consultas/ -- única fuente, decisión 3, índice
-    `uq_orden_una_consulta` -- y este endpoint la rechaza con 400.
+    líneas facturables). `tipo_servicio='CONSULTA'` anexa el honorario suelto
+    con el atajo sin despacho (consulta-directa-atajo-sin-despacho): EJECUTADO
+    directo, sin área, asignado a `veterinario_id` o al de la orden -- 422 si
+    no hay ninguno, 400 si no es veterinario, 409 si la orden ya tiene su
+    consulta (índice `uq_orden_una_consulta`).
     """
     orden = orden_service.obtener_orden(db, orden_id)
     orden_service.asegurar_recibe_trabajo(orden)
 
-    tipo = (data.tipo_servicio or "").strip().upper()
-    if tipo == orden_service.TIPO_SERVICIO_CONSULTA:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "La línea CONSULTA no se anexa por acá: la crea únicamente "
-                "POST /api/consultas/ (decisión 3)."
-            ),
-        )
+    # plantillas-paquete-catalogo (delta orden-servicio-carrito): un item
+    # marcado es_paquete=true no se anexa suelto por acá -- se armaría a medio
+    # construir (solo la base, sin sus componentes). Tiene su propio endpoint
+    # atómico, POST /ordenes/{id}/paquetes. Guard compartido con
+    # agregar_servicio_consulta, crear_servicio_directo y
+    # actualizar_servicio_impl (ver paquete_service.rechazar_si_es_paquete).
+    paquete_service.rechazar_si_es_paquete(db, data.catalogo_servicio_id)
 
     validar_tipo_servicio_por_rol(current_user, data.tipo_servicio)
 
@@ -309,8 +333,19 @@ def anexar_servicio_orden(
         detalles_clinicos=data.detalles_clinicos,
         consumos_override=data.consumos,
         current_user=current_user,
+        veterinario_id=data.veterinario_id,
+        servicio_padre_id=data.servicio_padre_id,
+        es_base=data.es_base,
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Carrera de dos anexos CONSULTA simultáneos: el pre-chequeo de
+        # crear_servicio_en_orden no la cubre, el índice único sí.
+        db.rollback()
+        if "uq_orden_una_consulta" in str(getattr(exc, "orig", exc)):
+            raise orden_service.error_una_consulta_por_orden(orden)
+        raise
     db.refresh(servicio)
     resp = ServicioConsultaResponse.model_validate(servicio)
     if advertencias:
@@ -318,29 +353,72 @@ def anexar_servicio_orden(
     return resp
 
 
+@router.post("/{orden_id}/paquetes", response_model=PaqueteAnexadoResponse, status_code=status.HTTP_201_CREATED)
+def anexar_paquete_orden(
+    orden_id: int,
+    data: OrdenAnexarPaquete,
+    db: Session = Depends(get_db),
+    # Mismos roles que POST /{orden_id}/servicios (design D3): admin/
+    # recepción/veterinario anexan; recepción queda bloqueada en paquetes con
+    # alguna línea clínica por validar_tipo_servicio_por_rol, corrida sobre la
+    # base y cada componente ANTES de crear nada (paquete_service.anexar_paquete).
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
+):
+    """Anexa una plantilla de paquete del catálogo a la orden en un solo paso
+    (plantillas-paquete-catalogo, design D3): una línea base al precio propio
+    del paquete más un ítem por componente activo anclado a ella, todo en la
+    misma transacción -- ver `paquete_service.anexar_paquete`.
+    """
+    orden = orden_service.obtener_orden(db, orden_id)
+    orden_service.asegurar_recibe_trabajo(orden)
+
+    base, items, advertencias = paquete_service.anexar_paquete(
+        db, orden, data.catalogo_servicio_id, current_user
+    )
+    db.commit()
+    db.refresh(base)
+    for item in items:
+        db.refresh(item)
+    return PaqueteAnexadoResponse(
+        base=ServicioConsultaResponse.model_validate(base),
+        items=[ServicioConsultaResponse.model_validate(i) for i in items],
+        advertencias=advertencias,
+    )
+
+
 @router.post("/{orden_id}/confirmar", response_model=OrdenServicioDetalleResponse)
 def confirmar_servicios(
     orden_id: int,
+    # Cuerpo opcional (asignacion-directa-servicio-gestor, decisión 2): sin
+    # cuerpo (front viejo, e2e/helpers.js::confirmarServiciosOrden) el
+    # comportamiento es el de siempre, "área → cualquier gestor".
+    payload: Optional[ConfirmarServiciosRequest] = Body(None),
     db: Session = Depends(get_db),
     # Fila 9 de la matriz: admin / veterinario. Recepción y gestor no
     # confirman servicios.
     current_user: Usuario = Depends(require_roles("admin", "veterinario")),
 ):
     """Confirma los servicios SOLICITADO de la orden (decisión 4): a ASIGNADO
-    los que tienen área de ejecución (despacho, con notificación a los
-    gestores del área -- etapa 5); a EJECUTADO directo los que no la tienen
-    (atajo sin despacho).
+    los que tienen área de ejecución (despacho; a un gestor puntual si el
+    cuerpo lo elige para esa línea -- asignacion-directa-servicio-gestor,
+    decisión 2 -- o con notificación a los gestores del área si no, como
+    siempre); a EJECUTADO directo los que no la tienen (atajo sin despacho).
 
     Idempotente: si no queda ninguna línea en SOLICITADO, devuelve 200 sin
     cambios -- confirmar una orden ya confirmada no es un error.
 
-    Si algún área despachada no tiene ningún gestor activo (decisión 5,
-    defensa 1), la línea correspondiente vuelve con `advertencias` seteado
-    dentro de `servicios[]` -- mismo campo que ya usa `ServicioConsultaResponse`
-    en el resto de la API, no un canal nuevo.
+    422 si el cuerpo trae un `servicio_id` repetido, un `servicio_id` que no
+    es un `SOLICITADO` con área de esta orden, o un `gestor_id` que no
+    gestiona esa área o no está activo -- ver orden_service.confirmar_servicios.
+
+    Si algún área despachada sin gestor elegido no tiene ningún gestor activo
+    (decisión 5, defensa 1), la línea correspondiente vuelve con
+    `advertencias` seteado dentro de `servicios[]` -- mismo campo que ya usa
+    `ServicioConsultaResponse` en el resto de la API, no un canal nuevo.
     """
     orden = orden_service.obtener_orden(db, orden_id)
-    orden, advertencias = orden_service.confirmar_servicios(db, orden, current_user)
+    pares = [(a.servicio_id, a.gestor_id) for a in payload.asignaciones] if payload else []
+    orden, advertencias = orden_service.confirmar_servicios(db, orden, current_user, asignaciones=pares)
     resp = OrdenServicioDetalleResponse.model_validate(orden)
     if advertencias:
         por_servicio = {a["servicio_id"]: a for a in advertencias}

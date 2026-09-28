@@ -2,7 +2,8 @@
 // decisión 11). Vive dentro de Informes (#liqSeccion, solo admin) y lo
 // inicializa reportes.js.
 //
-// (a) porcentaje por defecto y porcentaje propio de cada encargado,
+// (a) porcentaje por defecto y comisión propia de cada encargado: FIJO,
+//     PORCENTAJE o MIXTO (comision-tipo-mixto-encargado),
 // (b) control por encargado y rango: pendientes, liquidadas y totales, con
 //     el botón "Liquidar",
 // (c) liquidaciones del encargado con su comprobante PDF.
@@ -21,6 +22,19 @@ let _ultimoControl = null; // { encargado_id, desde, hasta }
 const ROL_LABEL = { veterinario: 'Veterinario/a', gestor: 'Encargado/a de área' };
 export const pct = (v) => `${Number(v).toLocaleString('es', { maximumFractionDigits: 2 })}%`;
 const fecha = fechaCorta;
+
+export const TIPO_COMISION_LABEL = { FIJO: 'Fijo', PORCENTAJE: 'Porcentaje', MIXTO: 'Mixto' };
+const USA_MONTO = new Set(['FIJO', 'MIXTO']);
+const USA_PCT = new Set(['PORCENTAJE', 'MIXTO', '']);
+
+/** Texto corto de una comisión: "20%", "$50,00 fijo" o "$30,00 + 10%". */
+export function describirComision(tipo, montoFijo, porcentaje) {
+    if (tipo === 'FIJO') return `${money(montoFijo)} fijo`;
+    if (tipo === 'MIXTO') return `${money(montoFijo)} + ${pct(porcentaje)}`;
+    return pct(porcentaje ?? 0);
+}
+
+const describirEncargado = (e) => describirComision(e.tipo_comision, e.monto_fijo, e.porcentaje_efectivo);
 
 // ── (a) Porcentajes ─────────────────────────────────────────────────────────
 
@@ -58,18 +72,32 @@ async function cargarEncargados() {
         if (!lista.length) {
             body.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-secondary); padding: 1rem;">No hay veterinarios ni encargados de área activos.</td></tr>';
         } else {
-            body.innerHTML = lista.map(e => `
+            const campo = 'padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px; margin:0;';
+            body.innerHTML = lista.map(e => {
+                const tipo = e.tipo_comision || '';
+                const nombre = escapeHtml(e.username);
+                return `
                 <tr>
-                    <td style="padding: 0.6rem 0.75rem;">${escapeHtml(e.username)}</td>
+                    <td style="padding: 0.6rem 0.75rem;">${nombre}</td>
                     <td style="padding: 0.6rem 0.75rem;">${escapeHtml(ROL_LABEL[e.role] || e.role || '')}</td>
                     <td style="padding: 0.6rem 0.75rem;">
-                        <input type="number" min="0" max="100" step="0.01" data-com-pct="${e.usuario_id}" value="${e.porcentaje_propio ?? ''}" placeholder="Por defecto" aria-label="Porcentaje propio de ${escapeHtml(e.username)}" style="width:110px; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:6px; margin:0;">
+                        <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+                            <select data-com-tipo="${e.usuario_id}" aria-label="Tipo de comisión de ${nombre}" style="${campo}">
+                                <option value=""${tipo === '' ? ' selected' : ''}>Por defecto</option>
+                                <option value="PORCENTAJE"${tipo === 'PORCENTAJE' ? ' selected' : ''}>Porcentaje</option>
+                                <option value="FIJO"${tipo === 'FIJO' ? ' selected' : ''}>Fijo</option>
+                                <option value="MIXTO"${tipo === 'MIXTO' ? ' selected' : ''}>Mixto</option>
+                            </select>
+                            <input type="number" min="0" step="0.01" data-com-monto="${e.usuario_id}" value="${e.monto_fijo ?? ''}" placeholder="Monto fijo" aria-label="Monto fijo de ${nombre}" ${USA_MONTO.has(tipo) ? '' : 'hidden'} style="width:110px; ${campo}">
+                            <input type="number" min="0" max="100" step="0.01" data-com-pct="${e.usuario_id}" value="${e.porcentaje_propio ?? ''}" placeholder="${tipo ? '%' : 'Por defecto'}" aria-label="Porcentaje propio de ${nombre}" ${USA_PCT.has(tipo) ? '' : 'hidden'} style="width:110px; ${campo}">
+                        </div>
                     </td>
-                    <td style="padding: 0.6rem 0.75rem;" data-com-efectivo="${e.usuario_id}">${pct(e.porcentaje_efectivo)}</td>
+                    <td style="padding: 0.6rem 0.75rem;" data-com-efectivo="${e.usuario_id}">${describirEncargado(e)}</td>
                     <td style="padding: 0.6rem 0.75rem; text-align:right;">
                         <button type="button" class="av-btn" data-com-guardar="${e.usuario_id}" style="height:30px; padding:0 10px; font-size:12.5px;">Guardar</button>
                     </td>
-                </tr>`).join('');
+                </tr>`;
+            }).join('');
         }
         if (select) {
             const previo = select.value;
@@ -82,20 +110,56 @@ async function cargarEncargados() {
     }
 }
 
-async function guardarPorcentaje(usuarioId) {
-    const input = document.querySelector(`[data-com-pct="${usuarioId}"]`);
-    if (!input) return;
-    const texto = input.value.trim();
-    const porcentaje = texto === '' ? null : Number(texto);
+/** Muestra solo los campos que usa el tipo elegido. */
+function mostrarCamposTipo(usuarioId) {
+    const tipo = document.querySelector(`[data-com-tipo="${usuarioId}"]`)?.value ?? '';
+    const monto = document.querySelector(`[data-com-monto="${usuarioId}"]`);
+    const porcentaje = document.querySelector(`[data-com-pct="${usuarioId}"]`);
+    if (monto) monto.hidden = !USA_MONTO.has(tipo);
+    if (porcentaje) {
+        porcentaje.hidden = !USA_PCT.has(tipo);
+        porcentaje.placeholder = tipo ? '%' : 'Por defecto';
+    }
+}
+
+const numeroOVacio = (input) => {
+    const texto = (input?.value ?? '').trim();
+    return texto === '' ? null : Number(texto);
+};
+
+/** Payload del PUT, validado igual que el backend. Devuelve un string si
+ *  hay error. "Por defecto" con un porcentaje escrito es PORCENTAJE. */
+function payloadComision(usuarioId) {
+    let tipo = document.querySelector(`[data-com-tipo="${usuarioId}"]`)?.value || null;
+    const montoFijo = USA_MONTO.has(tipo ?? '') ? numeroOVacio(document.querySelector(`[data-com-monto="${usuarioId}"]`)) : null;
+    const porcentaje = USA_PCT.has(tipo ?? '') ? numeroOVacio(document.querySelector(`[data-com-pct="${usuarioId}"]`)) : null;
+    if (!tipo && porcentaje !== null) tipo = 'PORCENTAJE';
+
     if (porcentaje !== null && (Number.isNaN(porcentaje) || porcentaje < 0 || porcentaje > 100)) {
-        showNotification('El porcentaje tiene que estar entre 0 y 100, o vacío para usar el de defecto.', 'warning');
+        return 'El porcentaje tiene que estar entre 0 y 100.';
+    }
+    if (montoFijo !== null && (Number.isNaN(montoFijo) || montoFijo < 0)) {
+        return 'El monto fijo no puede ser negativo.';
+    }
+    if (USA_MONTO.has(tipo ?? '') && montoFijo === null) return `El monto fijo es obligatorio para el tipo ${TIPO_COMISION_LABEL[tipo]}.`;
+    if ((tipo === 'PORCENTAJE' || tipo === 'MIXTO') && porcentaje === null) return `El porcentaje es obligatorio para el tipo ${TIPO_COMISION_LABEL[tipo]}.`;
+    return { tipo_comision: tipo, monto_fijo: montoFijo, porcentaje };
+}
+
+async function guardarComision(usuarioId) {
+    const payload = payloadComision(usuarioId);
+    if (typeof payload === 'string') {
+        showNotification(payload, 'warning');
         return;
     }
     try {
-        const r = await fetchAPI(`/comisiones/encargados/${usuarioId}`, { method: 'PUT', body: JSON.stringify({ porcentaje }) });
+        const r = await fetchAPI(`/comisiones/encargados/${usuarioId}`, { method: 'PUT', body: JSON.stringify(payload) });
         const celda = document.querySelector(`[data-com-efectivo="${usuarioId}"]`);
-        if (celda) celda.textContent = pct(r.porcentaje_efectivo);
-        showNotification(porcentaje === null ? 'Vuelve al porcentaje por defecto.' : 'Porcentaje actualizado.', 'success');
+        if (celda) celda.textContent = describirEncargado(r);
+        const select = document.querySelector(`[data-com-tipo="${usuarioId}"]`);
+        if (select) select.value = r.tipo_comision || '';
+        mostrarCamposTipo(usuarioId);
+        showNotification(r.tipo_comision ? 'Comisión actualizada.' : 'Vuelve al porcentaje por defecto.', 'success');
     } catch (e) {
         showNotification('No se pudo guardar: ' + e.message, 'error');
     }
@@ -111,7 +175,9 @@ function filaLinea(l) {
             <td style="padding: 0.5rem 0.75rem;">${escapeHtml(l.orden_numero || '—')}</td>
             <td style="padding: 0.5rem 0.75rem;">${escapeHtml(l.descripcion || '—')}${l.es_ajuste ? `<br><small style="color: var(--accent-dark);">Ajuste por anulación · ${escapeHtml(l.numero_factura || '')}</small>` : ''}</td>
             <td style="padding: 0.5rem 0.75rem; text-align:right;">${money(l.subtotal)}</td>
-            <td style="padding: 0.5rem 0.75rem; text-align:right;">${pct(l.porcentaje)}</td>
+            <td style="padding: 0.5rem 0.75rem;" data-com-linea-tipo>${escapeHtml(TIPO_COMISION_LABEL[l.tipo_comision_usado] || l.tipo_comision_usado || '—')}</td>
+            <td style="padding: 0.5rem 0.75rem; text-align:right;">${l.monto_fijo_usado != null ? money(l.monto_fijo_usado) : '—'}</td>
+            <td style="padding: 0.5rem 0.75rem; text-align:right;">${l.porcentaje_usado != null ? pct(l.porcentaje_usado) : '—'}</td>
             <td style="padding: 0.5rem 0.75rem; text-align:right; font-weight:600;">${money(l.monto_encargado)}</td>
             <td style="padding: 0.5rem 0.75rem; text-align:right;">${money(l.monto_amivets)}</td>
         </tr>`;
@@ -127,6 +193,8 @@ export function tablaLineas(lineas, vacio) {
                     <th style="padding: 0.5rem 0.75rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Orden</th>
                     <th style="padding: 0.5rem 0.75rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Servicio</th>
                     <th style="padding: 0.5rem 0.75rem; text-align:right; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Subtotal</th>
+                    <th style="padding: 0.5rem 0.75rem; text-align:left; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Tipo</th>
+                    <th style="padding: 0.5rem 0.75rem; text-align:right; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Monto fijo</th>
                     <th style="padding: 0.5rem 0.75rem; text-align:right; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">%</th>
                     <th style="padding: 0.5rem 0.75rem; text-align:right; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">Encargado</th>
                     <th style="padding: 0.5rem 0.75rem; text-align:right; font-size:0.75rem; text-transform:uppercase; color:var(--text-secondary);">AmiVets</th>
@@ -156,7 +224,7 @@ async function verControl() {
         const c = await fetchAPI(`/comisiones/?${params}`);
         wrap.innerHTML = `
             <p style="margin:0 0 0.75rem; color: var(--text-primary);">
-                <b>${escapeHtml(c.username)}</b> · porcentaje actual ${pct(c.porcentaje_efectivo)}
+                <b>${escapeHtml(c.username)}</b> · comisión actual ${describirComision(c.tipo_comision, c.monto_fijo, c.porcentaje_efectivo)}
             </p>
             <h4 style="margin: 0.5rem 0;">Pendiente de liquidar</h4>
             ${tablaLineas(c.pendientes, 'No hay comisiones pendientes en este rango.')}
@@ -176,7 +244,7 @@ async function verControl() {
 
 async function liquidar() {
     if (!_ultimoControl) return;
-    if (!confirm('¿Liquidar las comisiones pendientes? El porcentaje y los montos quedan fijos y esas líneas no se vuelven a liquidar.')) return;
+    if (!confirm('¿Liquidar las comisiones pendientes? El tipo de comisión y los montos quedan fijos y esas líneas no se vuelven a liquidar.')) return;
     try {
         const liq = await fetchAPI('/comisiones/liquidaciones', { method: 'POST', body: JSON.stringify(_ultimoControl) });
         showNotification(`Liquidación ${liq.numero} creada: ${money(liq.total_encargado)} para el encargado.`, 'success');
@@ -235,9 +303,21 @@ function wire() {
     if (_wired) return;
     _wired = true;
     document.getElementById('btnComGuardarDefecto')?.addEventListener('click', guardarDefecto);
-    document.getElementById('comEncargadosBody')?.addEventListener('click', (e) => {
+    const encargadosBody = document.getElementById('comEncargadosBody');
+    encargadosBody?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-com-guardar]');
-        if (btn) guardarPorcentaje(Number(btn.dataset.comGuardar));
+        if (btn) guardarComision(Number(btn.dataset.comGuardar));
+    });
+    encargadosBody?.addEventListener('change', (e) => {
+        const select = e.target.closest('[data-com-tipo]');
+        if (!select) return;
+        // "Por defecto" means no own commission: a leftover percentage would
+        // otherwise be saved as PORCENTAJE instead of resetting to the default.
+        if (!select.value) {
+            const porcentaje = document.querySelector(`[data-com-pct="${select.dataset.comTipo}"]`);
+            if (porcentaje) porcentaje.value = '';
+        }
+        mostrarCamposTipo(Number(select.dataset.comTipo));
     });
     document.getElementById('btnComVer')?.addEventListener('click', verControl);
     document.getElementById('comEncargadoSelect')?.addEventListener('change', (e) => {

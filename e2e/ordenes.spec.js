@@ -14,9 +14,10 @@
 //   - GET    /api/ordenes/?estado=A,B      → listado del panel del día (filtros)
 //   - POST   /api/ordenes/{id}/servicios   → anexa un servicio SIN consulta (venta de
 //     mostrador / orden de estética) al carrito/presupuesto de la orden;
-//     rechaza tipo_servicio='CONSULTA' (400); SIEMPRE queda SOLICITADO, tenga
-//     o no área, sin consumir inventario y sin mover la orden de ABIERTA
-//     (orden-servicio-carrito, decisiones 3 y 4).
+//     SIEMPRE queda SOLICITADO, tenga o no área, sin consumir inventario y
+//     sin mover la orden de ABIERTA (orden-servicio-carrito, decisiones 3 y
+//     4). Excepción: tipo_servicio='CONSULTA' entra EJECUTADO directo
+//     (consulta-directa-atajo-sin-despacho, cubierto en su propio spec).
 //   - POST   /api/ordenes/{id}/confirmar   → SOLICITADO -> ASIGNADO (con área) o
 //     EJECUTADO (sin área); idempotente (200 sin cambios si no hay nada en
 //     SOLICITADO); pasa la orden ABIERTA -> EN_ATENCION (decisión 5).
@@ -611,18 +612,21 @@ test.describe.serial('Órdenes de servicio (Tarea 06, etapa 4)', () => {
     expect(fila.total).toBe(200);
   });
 
-  test('no se puede anexar una línea CONSULTA por POST /api/ordenes/{id}/servicios', async ({ request }) => {
+  test('anexar una línea CONSULTA por POST /api/ordenes/{id}/servicios aplica el atajo sin despacho', async ({ request }) => {
+    // Antes era 400 (la línea era exclusiva de POST /api/consultas/). Desde
+    // consulta-directa-atajo-sin-despacho se acepta: el detalle de ese
+    // contrato vive en e2e/consulta-directa-atajo-sin-despacho.spec.js.
     const orden = await createTestOrden(request, {
       propietarioId: S.propietario.id,
       mascotaId: S.mascota.id,
     }, S.recep.token);
 
-    const rechazada = await request.post(`/api/ordenes/${orden.id}/servicios`, {
+    const res = await request.post(`/api/ordenes/${orden.id}/servicios`, {
       headers: authHeaders(S.vetToken),
-      data: { tipo_servicio: 'CONSULTA', nombre_servicio: 'x', precio_unitario: 1000 },
+      data: { tipo_servicio: 'CONSULTA', nombre_servicio: 'x', precio_unitario: 1000, veterinario_id: S.vet.id },
     });
-    expect(rechazada.status()).toBe(400);
-    expect((await rechazada.json()).detail).toContain('CONSULTA');
+    expect(res.status()).toBe(201);
+    expect((await res.json()).estado).toBe('EJECUTADO');
   });
 
   test('anexar servicio a la orden: gate de sesión/rol y el bloqueo de tipos clínicos para recepción', async ({ request }) => {
