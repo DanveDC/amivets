@@ -1254,6 +1254,7 @@ class AbonoResponse(BaseModel):
     fecha: datetime
     notas: Optional[str] = None
 
+    # orden_numero sale de la @property Abono.orden_numero.
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -1308,7 +1309,6 @@ class LiquidacionPreviewItem(BaseModel):
     factura_id: int
     fecha_consulta: datetime
     tarifa_aplicada: Decimal
-    # orden_numero sale de la @property Abono.orden_numero.
 
 
 class LiquidacionPreviewResponse(BaseModel):
