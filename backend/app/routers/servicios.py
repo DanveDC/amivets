@@ -410,6 +410,7 @@ def listar_servicios_mascota(
     facturado: Optional[bool] = None,
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
+    search: Optional[str] = None,
     db: Session = Depends(get_db),
     # HALLAZGO DE SEGURIDAD (Tarea 10, gate parcial): unico endpoint de este
     # router sin Depends(require_roles) -- los otros 4 (POST, PATCH, DELETE,
@@ -429,7 +430,9 @@ def listar_servicios_mascota(
 
     Filtros opcionales para el timeline: `tipo_servicio`, `estado`
     (SOLICITADO / EJECUTADO / FACTURADO / CANCELADO), `facturado`, y rango `fecha_desde` /
-    `fecha_hasta` (YYYY-MM-DD, sobre `created_at`).
+    `fecha_hasta` (YYYY-MM-DD, sobre `created_at`). `search` (ficha-animal-
+    ordenes-servicios, tab "Servicios e insumos") es ilike parcial sobre
+    `nombre_servicio`.
     """
     q = db.query(ServicioConsulta).options(
         selectinload(ServicioConsulta.asignado_a),
@@ -452,6 +455,11 @@ def listar_servicios_mascota(
         q = q.filter(ServicioConsulta.estado == estado)
     if facturado is not None:
         q = q.filter(ServicioConsulta.facturado == facturado)
+    if search:
+        # Mismo escapado que routers/ordenes.py::_escapar_ilike: sin esto un
+        # '%' o '_' en la búsqueda actúa como comodín de SQL LIKE.
+        termino = search.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        q = q.filter(ServicioConsulta.nombre_servicio.ilike(f"%{termino}%", escape="\\"))
     d_desde = _parse_fecha(fecha_desde, "fecha_desde")
     d_hasta = _parse_fecha(fecha_hasta, "fecha_hasta")
     if d_desde:

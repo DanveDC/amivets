@@ -1505,8 +1505,31 @@
                                         <p id="displayInfoMascota"
                                             style="color: var(--text-secondary); margin: 0; font-size: 0.85rem;"></p>
                                     </div>
-                                    <div class="actions" id="petTabActions">
-                                        <button class="btn-primary" id="btnActionAdd">+ Registrar</button>
+                                    <div class="actions" style="display:flex; gap:0.5rem; align-items:center;">
+                                        <button class="btn-primary" id="btnFichaNuevaOrden">+ Orden de servicio</button>
+                                        <div class="actions" id="petTabActions" style="display:flex; gap:0.5rem;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Panel inline "Nueva orden de servicio" (ficha-animal-ordenes-servicios:
+                                     NO es un modal -- mismo lenguaje visual que #oaAnexarPanel de
+                                     orden-abierta.js, pero ancho completo de la columna de contenido). -->
+                                <div id="fichaNuevaOrdenPanel" class="ficha-nueva-orden-panel" hidden>
+                                    <div class="ficha-nop-head">
+                                        <strong>Nueva orden de servicio</strong>
+                                        <span class="av-muted">Paciente: <span id="fnoPacienteLabel"></span></span>
+                                    </div>
+                                    <div class="ficha-nop-body">
+                                        <label>Veterinario <span class="required">*</span>
+                                            <select id="fnoVeterinario" required></select>
+                                        </label>
+                                        <label>Motivo de visita
+                                            <textarea id="fnoMotivo" rows="2"></textarea>
+                                        </label>
+                                    </div>
+                                    <div class="ficha-nop-actions">
+                                        <button type="button" class="btn-secondary" id="btnFnoCancelar">Cancelar</button>
+                                        <button type="button" class="btn-primary" id="btnFnoCrear">Crear orden</button>
                                     </div>
                                 </div>
 
@@ -1521,12 +1544,12 @@
                                             </span>
                                             <span>Resumen</span>
                                         </div>
-                                        <div class="pet-nav-item" data-tab="consultas">
+                                        <div class="pet-nav-item" data-tab="ordenes">
                                             <span class="icon">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 12.5-5 5"/><path d="m16 11-5 5"/><path d="M7 16.5c-1.35 0-2-1.35-2-2 0-2.5 4-2.5 4-2.5s0-4 2.5-4c.65 0 2 .65 2 2 0 2.5-6.5 6.5-6.5 6.5Z"/><path d="m8.5 8 2.5 2.5"/><path d="m10.5 10 5 5"/><path d="m12 11.5 5 5"/></svg>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                                             </span>
-                                            <span>Consultas</span>
-                                            <span class="count" id="count-consultas">0</span>
+                                            <span>Órdenes de servicio</span>
+                                            <span class="count" id="count-ordenes">0</span>
                                         </div>
                                         <div class="pet-nav-item" data-tab="servicios">
                                             <span class="icon">

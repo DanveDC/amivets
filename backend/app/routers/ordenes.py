@@ -66,6 +66,13 @@ def _validar_veterinario(db: Session, veterinario_id: int) -> Usuario:
     return orden_service.validar_veterinario(db, veterinario_id)
 
 
+def _escapar_ilike(termino: str) -> str:
+    """Escapa '%'/'_' de un término de búsqueda antes de un ilike (mismo
+    hallazgo de revisión que ya cubre el filtro `numero`: sin esto un typo con
+    '%' o '_' se interpreta como comodín de SQL LIKE, no como caracter literal)."""
+    return termino.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.post("/", response_model=OrdenServicioDetalleResponse, status_code=status.HTTP_201_CREATED)
 def abrir_orden(
     data: OrdenServicioCreate,
@@ -128,6 +135,15 @@ def listar_ordenes(
         None,
         description="Búsqueda parcial (ilike) por número de orden, ej. OS-2418 o 2418",
     ),
+    search: Optional[str] = Query(
+        None,
+        description=(
+            "Búsqueda parcial (ilike) por número de orden, motivo de visita o "
+            "nombre de usuario del veterinario asignado (ficha-animal-ordenes-"
+            "servicios, tab 'Órdenes de servicio'). No reemplaza a `numero`: "
+            "ambos se pueden usar juntos."
+        ),
+    ),
     fecha_desde: Optional[str] = None,
     fecha_hasta: Optional[str] = None,
     por_cobrar: bool = Query(False, description="Solo órdenes CERRADA con algún servicio vivo, no cancelado y sin facturar"),
@@ -164,8 +180,22 @@ def listar_ordenes(
         # usuario tenga forma de saberlo (no es una fuga de datos -- ilike
         # sigue acotado a lo que el rol ya puede ver -- pero sí resultados
         # incorrectos sin aviso).
-        termino = numero.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        termino = _escapar_ilike(numero)
         q = q.filter(OrdenServicio.numero.ilike(f"%{termino}%", escape="\\"))
+    if search:
+        # ficha-animal-ordenes-servicios: buscador del tab "Órdenes de
+        # servicio" -- a diferencia de `numero`, también busca por motivo de
+        # visita y por el veterinario asignado (join sólo cuando hace falta,
+        # para no pagar el costo en el resto de los listados).
+        termino = _escapar_ilike(search)
+        patron = f"%{termino}%"
+        q = q.outerjoin(Usuario, OrdenServicio.veterinario_id == Usuario.id).filter(
+            or_(
+                OrdenServicio.numero.ilike(patron, escape="\\"),
+                OrdenServicio.motivo_visita.ilike(patron, escape="\\"),
+                Usuario.username.ilike(patron, escape="\\"),
+            )
+        )
     if veterinario_id:
         q = q.filter(OrdenServicio.veterinario_id == veterinario_id)
     if mascota_id:

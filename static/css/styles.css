@@ -1142,6 +1142,59 @@ form {
     flex: 1;
 }
 
+/* --- PANEL INLINE "NUEVA ORDEN DE SERVICIO" (ficha-animal-ordenes-servicios) ---
+   NO es un modal: mismo lenguaje visual que .oa-anexar-panel de orden-abierta.js
+   (cabecera + cuerpo con borde), pero ancho completo de la columna de
+   contenido en vez de aside lateral. */
+.ficha-nueva-orden-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 1.25rem 1.5rem;
+    margin-top: 1rem;
+}
+/* Hallazgo de revisión conocido (mismo que .oa-anexar-panel, .av-search,
+   #catalogoCargarMas): con display:flex de base, [hidden] no le gana solo. */
+.ficha-nueva-orden-panel[hidden] { display: none; }
+.ficha-nop-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.ficha-nop-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    max-width: 480px;
+}
+.ficha-nop-body label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.ficha-nop-body select,
+.ficha-nop-body textarea {
+    font: inherit;
+    font-weight: 400;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.ficha-nop-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
 /* --- RESUMEN: franja de alertas del paciente (Tarea 09) --- */
 .pet-resumen-alert {
     display: flex;
@@ -1880,6 +1933,7 @@ button:active:not(:disabled) {
 .status-pill--ok    { color: var(--secondary); }
 .status-pill--warn  { color: var(--warning-dark); }
 .status-pill--muted { color: var(--text-muted); }
+.status-pill--info  { color: var(--info-dark, var(--primary)); }
 
 /* Destructive row action — quiet red ghost */
 .btn-row-danger {

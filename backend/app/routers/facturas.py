@@ -246,13 +246,40 @@ def obtener_items_pendientes(
 @router.get("/mascota/{mascota_id}", response_model=List[FacturaResponse])
 def obtener_facturas_mascota(
     mascota_id: int,
+    estado: Optional[str] = None,
     db: Session = Depends(get_db),
     _: Usuario = Depends(require_roles(*_ROLES_FACTURACION)),
 ):
-    """Obtiene facturas asociadas a una mascota a través de sus consultas"""
+    """Facturas de una mascota, vía sus consultas o vía la orden que las originó.
+
+    Hallazgo de revisión (ficha-animal-ordenes-servicios): esto sólo buscaba
+    `JOIN Consulta ON Factura.consulta_id == Consulta.id` -- una factura de una
+    orden SIN línea de consulta (venta de mostrador, servicio directo/estética
+    facturado con `POST /ordenes/{id}/facturar`) se vincula sólo por
+    `FacturaOrden.orden_id`, y nunca aparecía acá. Se agrega esa segunda vía y
+    se deduplica por id. `estado` es opcional (csv, ej. "PAGADA" o
+    "PENDIENTE,PARCIAL") para separar pagadas de pendientes sin traer todo el
+    historial dos veces.
+    """
     from app.models.models import Consulta, Factura
-    facturas = db.query(Factura).join(Consulta, Factura.consulta_id == Consulta.id).filter(Consulta.mascota_id == mascota_id).all()
-    return facturas
+
+    por_consulta = db.query(Factura.id).join(Consulta, Factura.consulta_id == Consulta.id).filter(
+        Consulta.mascota_id == mascota_id
+    )
+    por_orden = db.query(Factura.id).join(FacturaOrden, FacturaOrden.factura_id == Factura.id).join(
+        OrdenServicio, OrdenServicio.id == FacturaOrden.orden_id
+    ).filter(OrdenServicio.mascota_id == mascota_id)
+
+    ids = {row[0] for row in por_consulta.all()} | {row[0] for row in por_orden.all()}
+    if not ids:
+        return []
+
+    q = db.query(Factura).filter(Factura.id.in_(ids))
+    if estado:
+        estados = [e.strip().upper() for e in estado.split(",") if e.strip()]
+        if estados:
+            q = q.filter(Factura.estado.in_(estados))
+    return q.order_by(Factura.fecha_emision.desc()).all()
 
 
 @router.post("/{factura_id}/abonar", response_model=AbonoResponse, status_code=status.HTTP_201_CREATED)

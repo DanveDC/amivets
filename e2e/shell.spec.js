@@ -658,9 +658,17 @@ test.describe('Shell — Facturación: Órdenes por cobrar (orden-servicio-carri
 });
 
 // orden-servicio-carrito, decisión 10: Historia clínica no factura la
-// consulta por fuera de su orden -- ofrece "Ir a la orden" en su lugar.
-test.describe('Shell — Historia clínica: "Ir a la orden" (orden-servicio-carrito)', () => {
-  test('una consulta sin facturar no ofrece "Facturar" y "Ir a la orden" abre su orden', async ({ page, request }) => {
+// consulta por fuera de su orden -- ofrece llegar a la orden en su lugar.
+//
+// ficha-animal-ordenes-servicios: el tab que mostraba la tabla de consultas
+// (con su botón "Ir a la orden" por fila) se reemplazó por el tab "Órdenes de
+// servicio" -- ver justamente esa orden ahora se hace desde ahí ("Ver"),
+// no desde una consulta. cargarConsultas() y su "Ir a la orden" siguen
+// existiendo en el código (los sigue usando Reportes/Facturación vía
+// verConsultaCompleta), pero ya no se renderizan dentro de la ficha: por eso
+// este test se adapta a la nueva pestaña en vez de buscar la vieja.
+test.describe('Shell — Historia clínica: tab "Órdenes de servicio" (orden-servicio-carrito / ficha-animal-ordenes-servicios)', () => {
+  test('la orden de una consulta se encuentra y se abre desde el tab "Órdenes de servicio" de la ficha', async ({ page, request }) => {
     const adminToken = await getAdminToken(request);
     const propietario = await createTestPropietario(request);
     const mascota = await createTestMascota(request, propietario.id);
@@ -685,14 +693,11 @@ test.describe('Shell — Historia clínica: "Ir a la orden" (orden-servicio-carr
       await expect(item).toBeVisible({ timeout: 15000 });
       await item.click();
       await expect(page.locator('#patientWrapper')).toBeVisible();
-      await page.click('.pet-nav-item[data-tab="consultas"]');
+      await page.click('.pet-nav-item[data-tab="ordenes"]');
 
       const seccion = page.locator('#sec-consultorio');
-      const irALaOrden = seccion.getByRole('button', { name: /Ir a la orden/ });
-      await expect(irALaOrden).toBeVisible({ timeout: 15000 });
-      await expect(seccion.getByRole('button', { name: /^\W*Facturar$/ })).toHaveCount(0);
-
-      await irALaOrden.click();
+      await expect(seccion.locator('#ordenesTableBody')).toContainText(orden.numero, { timeout: 15000 });
+      await seccion.getByRole('button', { name: 'Ver' }).click();
       await expect(page.locator('#sec-orden-abierta')).toBeVisible();
       await expect(page.locator('#oaMetaNumero')).toHaveText(orden.numero);
     } finally {
