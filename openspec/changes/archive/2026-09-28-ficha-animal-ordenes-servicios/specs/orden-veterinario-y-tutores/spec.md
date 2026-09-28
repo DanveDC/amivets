@@ -136,27 +136,55 @@ Al confirmar, el sistema SHALL enviar `POST /api/ordenes/` con `propietario_id` 
 
 ### Requirement: Tab "Servicios e insumos" en la ficha
 
-La ficha SHALL ofrecer un tab con la vista plana de servicios/insumos aplicados al animal (`GET /api/servicios/?mascota_id={id}&alcance=todos`), con buscador (usa el `search` del requisito anterior), filtro por tipo, por estado, por facturado y por rango de fechas.
+La ficha SHALL ofrecer un tab con la vista plana de servicios/insumos aplicados al animal (`GET /api/servicios/?mascota_id={id}&alcance=todos`), con buscador (usa el `search` del requisito anterior), filtro por tipo, por estado, por facturado y por rango de fechas. Cada fila SHALL enlazar a su orden cuando tiene una. El tab SHALL mostrar la cantidad de servicios listados y la suma de sus subtotales; los servicios `CANCELADO` se listan pero NO SHALL sumar, igual que en el total de la orden. Una respuesta de un filtro ya reemplazado NO SHALL pisar la del filtro actual.
 
 #### Scenario: Filtrar servicios de un tipo en un rango de fechas
 - **WHEN** el usuario selecciona tipo CIRUGIA y un rango de fechas
 - **THEN** la tabla muestra solo los servicios de ese tipo dentro de ese rango
 
+#### Scenario: Un servicio cancelado no suma
+- **WHEN** el animal tiene un servicio de $500 `CANCELADO` y otro de $100 vivo
+- **THEN** el tab lista los dos y el total muestra $100
+
 ### Requirement: Tab "Notas" en la ficha
 
-La ficha SHALL ofrecer un tab con un formulario para agregar notas (`POST /api/notas/` con `mascota_id`, `categoria`, `texto`) y la lista de notas de la mascota en orden cronológico inverso (más reciente primero), invertida en el cliente a partir de `GET /api/notas/mascota/{id}` (que devuelve orden ascendente).
+La ficha SHALL ofrecer un tab con un formulario para agregar notas (`POST /api/notas/` con `mascota_id`, `categoria`, `texto`) y la lista de notas de la mascota en orden cronológico inverso (más reciente primero), invertida en el cliente a partir de `GET /api/notas/mascota/{id}` (que devuelve orden ascendente). La lista SHALL mostrar 20 notas y un botón "Cargar más" para las siguientes (paginado en el cliente: el endpoint no pagina). Autor y texto SHALL mostrarse escapados.
 
 #### Scenario: Agregar una nota desde la ficha
 - **WHEN** el usuario escribe una nota y confirma
 - **THEN** la nota se guarda y aparece primera en la lista del tab
 
+#### Scenario: Cargar más notas
+- **WHEN** el animal tiene 21 notas
+- **THEN** el tab muestra 20 y "Cargar más" muestra la restante
+
 ### Requirement: Tab "Facturación" en la ficha
 
-La ficha SHALL ofrecer un tab que muestre las facturas del animal (`GET /api/facturas/mascota/{id}`, incluyendo las vinculadas solo por orden) separadas en pagadas y pendientes/parciales, con la acción de abonar (reutilizando el modal de abono ya existente en `facturacion.js`) para las no pagadas.
+La ficha SHALL ofrecer un tab que muestre las facturas del animal (`GET /api/facturas/mascota/{id}`, incluyendo las vinculadas solo por orden) separadas en pagadas y pendientes/parciales, con la acción de abonar (reutilizando el modal de abono ya existente en `facturacion.js`) para las no pagadas, "Ver PDF" y el total de cada sección. Al registrar un abono desde el modal, el tab SHALL refrescarse solo, sin salir de la ficha.
 
 #### Scenario: Ver facturas pendientes y abonar
 - **WHEN** el usuario abre el tab "Facturación" de una mascota con una factura PARCIAL
 - **THEN** la ve en la sección de pendientes con la acción "Abonar" disponible
+
+#### Scenario: Abonar el saldo completo
+- **WHEN** el usuario abona el saldo total de una factura pendiente desde el tab
+- **THEN** al cerrarse el modal la factura pasa a la sección de pagadas y los totales se actualizan
+
+### Requirement: Tab "Resumen" en la ficha
+
+La ficha SHALL abrir en un tab "Resumen" con tarjetas: la última orden (número, estado, fecha, total y "Ver"), la próxima cita pendiente, el peso actual y los totales del animal. Cambiar de paciente SHALL volver a este tab.
+
+#### Scenario: Resumen con datos reales
+- **WHEN** el usuario abre la ficha de un animal con órdenes y una cita pendiente futura
+- **THEN** el Resumen muestra la última orden con su botón "Ver" y la próxima cita
+
+### Requirement: Tab "Evolución de peso" en la ficha
+
+La ficha SHALL ofrecer un tab propio con el gráfico de evolución de peso del animal, reutilizando el gráfico existente.
+
+#### Scenario: Ver la evolución de peso
+- **WHEN** el usuario abre el tab "Evolución de peso"
+- **THEN** ve el gráfico de peso del animal
 
 ## Acceptance Criteria
 
