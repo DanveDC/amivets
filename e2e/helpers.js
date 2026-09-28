@@ -565,13 +565,13 @@ async function facturarOrden(request, ordenId, body = {}, token = null) {
 }
 
 /**
- * POST /api/caja-rapida/ventas (caja-rapida). `body` is
+ * POST /api/servicio-directo/ventas (servicio-directo). `body` is
  * { propietario_id?, metodo_pago, items: [{ tipo, id, cantidad, precio_unitario? }] }.
  * Returns the raw response — specs assert 201/404/409/422/403/401 on
  * `.status()` themselves. Without a token the request goes unauthenticated.
  */
-async function ventaRapida(request, body, token = null) {
-  return request.post('/api/caja-rapida/ventas', {
+async function cobrarServicioDirecto(request, body, token = null) {
+  return request.post('/api/servicio-directo/ventas', {
     headers: token ? authHeaders(token) : {},
     data: body,
   });
@@ -623,9 +623,9 @@ async function liquidarComisiones(request, token, encargadoId, desde, hasta) {
   });
 }
 
-/** GET /api/caja-rapida/items?q= (caja-rapida). Returns the raw response. */
-async function buscarItemsCaja(request, q, token = null) {
-  return request.get(`/api/caja-rapida/items?q=${encodeURIComponent(q || '')}&limit=100`, {
+/** GET /api/servicio-directo/items?q= (servicio-directo). Returns the raw response. */
+async function buscarItemsServicioDirecto(request, q, token = null) {
+  return request.get(`/api/servicio-directo/items?q=${encodeURIComponent(q || '')}&limit=100`, {
     headers: token ? authHeaders(token) : {},
   });
 }
@@ -1344,8 +1344,8 @@ module.exports = {
   listarGestoresActivos,
   pendientesFacturarOrden,
   facturarOrden,
-  ventaRapida,
-  buscarItemsCaja,
+  cobrarServicioDirecto,
+  buscarItemsServicioDirecto,
   setPorcentajeDefecto,
   setPorcentajeEncargado,
   setComisionEncargado,

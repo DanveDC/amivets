@@ -478,7 +478,7 @@ class FacturacionService:
             if d.producto_id and not _consumo_en_ledger(db, d.servicio_id)
         ]
         producto_ids = {d.producto_id for d in detalles_a_devolver}
-        # Venta de caja rápida: también se van a devolver los materiales que
+        # Venta de servicio directo: también se van a devolver los materiales que
         # consumieron sus servicios. Se bloquean JUNTO con los productos, en la
         # misma consulta ordenada por id: bloquearlos después rompía el orden
         # global ascendente y podía deadlockear (fix de revisión).
@@ -544,7 +544,7 @@ class FacturacionService:
 
         # Decisión 7 de orden-servicio-carrito: anular la factura de una orden
         # FACTURADA la devuelve a CERRADA para que se pueda volver a cobrar.
-        # Excepción: una venta de caja rápida no tiene nada que "volver a
+        # Excepción: una venta de servicio directo no tiene nada que "volver a
         # cobrar" -- sus productos van en la factura, no en la orden, así que
         # reabrirla la mostraba en "Órdenes por cobrar" solo con los servicios.
         # Anular su factura deshace la venta: la orden queda ANULADA.
@@ -777,7 +777,7 @@ class FacturacionService:
 
     @staticmethod
     def _anular_orden_caja(db: Session, orden: OrdenServicio, factura: Factura, usuario_id: Optional[int]) -> None:
-        """Deshace una venta de caja rápida con la misma lógica que anular una
+        """Deshace una venta de servicio directo con la misma lógica que anular una
         orden: devuelve el material de sus servicios, los deja CANCELADO y la
         orden queda ANULADA. Sus servicios ya se desmarcaron como facturados
         arriba, así que no se saltean. No commitea: lo hace anular_factura."""

@@ -567,7 +567,7 @@ def cancelar_servicios_y_anular(
 ) -> None:
     """Revierte el consumo de los servicios ejecutados de la orden, los deja
     CANCELADO y pasa la orden a ANULADA. No commitea: la usan anular_orden y la
-    anulación de la factura de una venta de caja rápida
+    anulación de la factura de una venta de servicio directo
     (facturacion_service), cada una dentro de su propia transacción.
 
     Con `saltear_facturados` (anular_orden) los servicios ya cobrados no se

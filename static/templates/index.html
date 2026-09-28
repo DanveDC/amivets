@@ -1986,14 +1986,14 @@
                 </div>
             </section>
 
-            <!-- Content Area: Caja rápida (caja-rapida) — venta de mostrador
+            <!-- Content Area: Servicio directo (servicio-directo) — venta de mostrador
                  sin registrar cliente: buscar productos/servicios, carrito,
-                 forma de pago y "Cobrar y emitir" (POST /api/caja-rapida/ventas).
-                 La lógica vive en sections/caja-rapida.js. -->
-            <section id="sec-caja-rapida" class="content-area spa-section">
+                 forma de pago y "Cobrar y emitir" (POST /api/servicio-directo/ventas).
+                 La lógica vive en sections/servicio-directo.js. -->
+            <section id="sec-servicio-directo" class="content-area spa-section">
                 <div class="content-header" style="margin-bottom: 1.25rem;">
                     <div>
-                        <h2 style="margin:0;">Caja rápida</h2>
+                        <h2 style="margin:0;">Servicio directo</h2>
                         <p style="color: var(--text-secondary); font-size: 0.9rem;">Vendé productos y servicios en el mostrador sin registrar al cliente. La factura sale cobrada a nombre de Consumidor final.</p>
                     </div>
                 </div>
@@ -2001,8 +2001,8 @@
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem; align-items:start;">
                     <!-- Buscador y resultados -->
                     <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); padding: 1rem; min-width: 0; overflow-x: auto;">
-                        <label for="cajaBuscar" style="font-size:13px; font-weight:600; color:var(--text-primary);">Buscar producto o servicio</label>
-                        <input type="search" id="cajaBuscar" class="search-input" placeholder="Nombre o código…" autocomplete="off" style="width:100%; margin: 0.5rem 0 0.75rem;">
+                        <label for="servicioDirectoBuscar" style="font-size:13px; font-weight:600; color:var(--text-primary);">Buscar producto o servicio</label>
+                        <input type="search" id="servicioDirectoBuscar" class="search-input" placeholder="Nombre o código…" autocomplete="off" style="width:100%; margin: 0.5rem 0 0.75rem;">
                         <table class="consultas-table" style="width:100%; border-collapse:collapse; margin-top:0; box-shadow:none;">
                             <thead>
                                 <tr style="background: var(--surface-hover); border-bottom: 1.5px solid var(--border);">
@@ -2012,7 +2012,7 @@
                                     <th></th>
                                 </tr>
                             </thead>
-                            <tbody id="cajaResultadosBody">
+                            <tbody id="servicioDirectoResultadosBody">
                                 <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:1.5rem;">Escribí para buscar.</td></tr>
                             </tbody>
                         </table>
@@ -2020,7 +2020,7 @@
 
                     <!-- Carrito y cobro -->
                     <div class="card" style="background: var(--surface); border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-sm); padding: 1rem; min-width: 0; overflow-x: auto;">
-                        <div id="cajaVenta">
+                        <div id="servicioDirectoVenta">
                             <span style="font-size:14px; font-weight:600; color:var(--text-primary);">Venta</span>
                             <table class="consultas-table" style="width:100%; border-collapse:collapse; margin-top:0.5rem; box-shadow:none;">
                                 <thead>
@@ -2032,7 +2032,7 @@
                                         <th></th>
                                     </tr>
                                 </thead>
-                                <tbody id="cajaCarritoBody">
+                                <tbody id="servicioDirectoCarritoBody">
                                     <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:1.25rem;">El carrito está vacío.</td></tr>
                                 </tbody>
                             </table>
@@ -2040,35 +2040,35 @@
                             <div class="cat-hr" style="margin:0.75rem 0;"></div>
                             <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1rem;">
                                 <strong style="font-size:14px;">Total</strong>
-                                <span id="cajaTotal" class="rp-num" style="font-size:24px; font-weight:500; letter-spacing:-0.02em;">$0.00</span>
+                                <span id="servicioDirectoTotal" class="rp-num" style="font-size:24px; font-weight:500; letter-spacing:-0.02em;">$0.00</span>
                             </div>
 
                             <div class="form-group">
                                 <label>Forma de pago</label>
                                 <div style="display:flex; flex-direction:column; gap:6px;">
                                     <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
-                                        <input type="radio" name="cajaMetodo" value="EFECTIVO" checked style="width:auto;"> Efectivo
+                                        <input type="radio" name="servicioDirectoMetodo" value="EFECTIVO" checked style="width:auto;"> Efectivo
                                     </label>
                                     <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
-                                        <input type="radio" name="cajaMetodo" value="TARJETA" style="width:auto;"> Punto de venta / Tarjeta
+                                        <input type="radio" name="servicioDirectoMetodo" value="TARJETA" style="width:auto;"> Punto de venta / Tarjeta
                                     </label>
                                     <label style="display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">
-                                        <input type="radio" name="cajaMetodo" value="TRANSFERENCIA" style="width:auto;"> Transferencia / Zelle
+                                        <input type="radio" name="servicioDirectoMetodo" value="TRANSFERENCIA" style="width:auto;"> Transferencia / Zelle
                                     </label>
                                 </div>
                             </div>
 
-                            <button type="button" class="av-btn av-btn--primary" id="btnCajaCobrar" style="width:100%;" disabled>Cobrar y emitir</button>
+                            <button type="button" class="av-btn av-btn--primary" id="btnServicioDirectoEmitir" style="width:100%;" disabled>Cobrar y emitir</button>
                         </div>
 
                         <!-- Confirmación de la venta emitida -->
-                        <div id="cajaConfirmacion" hidden style="text-align:center; padding:1rem 0;">
+                        <div id="servicioDirectoConfirmacion" hidden style="text-align:center; padding:1rem 0;">
                             <p style="font-size:14px; color:var(--text-secondary); margin:0 0 0.25rem;">Factura emitida y cobrada</p>
-                            <p id="cajaFacturaNumero" style="font-size:22px; font-weight:600; margin:0 0 0.25rem;"></p>
-                            <p id="cajaFacturaTotal" class="rp-num" style="font-size:14px; color:var(--text-secondary); margin:0 0 1rem;"></p>
+                            <p id="servicioDirectoFacturaNumero" style="font-size:22px; font-weight:600; margin:0 0 0.25rem;"></p>
+                            <p id="servicioDirectoFacturaTotal" class="rp-num" style="font-size:14px; color:var(--text-secondary); margin:0 0 1rem;"></p>
                             <div style="display:flex; gap:0.5rem; justify-content:center;">
-                                <button type="button" class="btn-secondary" id="btnCajaPdf">Descargar PDF</button>
-                                <button type="button" class="av-btn av-btn--primary" id="btnCajaNueva">Nueva venta</button>
+                                <button type="button" class="btn-secondary" id="btnServicioDirectoPdf">Descargar PDF</button>
+                                <button type="button" class="av-btn av-btn--primary" id="btnServicioDirectoNueva">Nueva venta</button>
                             </div>
                         </div>
                     </div>

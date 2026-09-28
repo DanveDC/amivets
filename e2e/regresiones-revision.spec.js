@@ -5,7 +5,7 @@
 //   2. honorario ya facturado no bloquea facturar el resto de la orden
 //   4. el consumo real indicado al agregar se respeta al ejecutar
 //   5. la comisión se calcula sobre lo cobrado (descuento incluido)
-//   7. anular una venta de caja rápida anula su orden (no la reabre)
+//   7. anular una venta de servicio directo anula su orden (no la reabre)
 //   8. una orden cerrada sin nada pendiente no aparece "por cobrar"
 //   9. una consulta sin orden se puede facturar desde Historia clínica
 //  10. las fechas de las liquidaciones se muestran en el día local
@@ -31,7 +31,7 @@ const {
   tomarServicio,
   facturarOrden,
   anularTestFactura,
-  ventaRapida,
+  cobrarServicioDirecto,
   setPorcentajeEncargado,
   controlComisiones,
   liquidarComisiones,
@@ -254,12 +254,12 @@ test.describe('Revisión — consumo y comisiones', () => {
   });
 });
 
-test.describe('Revisión — caja rápida e historia clínica', () => {
-  test('7. anular una venta de caja rápida anula su orden y no la vuelve "por cobrar"', async ({ request }) => {
+test.describe('Revisión — servicio directo e historia clínica', () => {
+  test('7. anular una venta de servicio directo anula su orden y no la vuelve "por cobrar"', async ({ request }) => {
     const admin = await getAdminToken(request);
     const prop = await createTestPropietario(request, {}, admin);
     const cat = await createTestCatalogoServicio(request, { categoria: 'PELUQUERIA', precio_ref: 300 });
-    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'SERVICIO', id: cat.id, cantidad: 1 }] }, admin);
+    const r = await cobrarServicioDirecto(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'SERVICIO', id: cat.id, cantidad: 1 }] }, admin);
     expect(r.status(), await r.text()).toBe(201);
     const factura = await r.json();
     const an = await request.post(`/api/facturas/${factura.id}/anular`, { headers: authHeaders(admin) });
@@ -272,7 +272,7 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     expect(porCobrar).toHaveLength(0);
   });
 
-  test('7b. anular una venta de caja rápida devuelve el material de sus servicios y los cancela', async ({ request }) => {
+  test('7b. anular una venta de servicio directo devuelve el material de sus servicios y los cancela', async ({ request }) => {
     const admin = await getAdminToken(request);
     const material = await createTestProduct(request, {
       categoria: 'Insumo', tipo_item: 'MATERIAL', unidad_medida: 'ml', contenido_por_envase: 1000, stock_actual: 1000, precio_unitario: 1,
@@ -280,7 +280,7 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     const cat = await createTestCatalogoServicio(request, { categoria: 'PELUQUERIA', precio_ref: 300 });
     await request.post(`/api/catalogo/${cat.id}/recetas`, { headers: authHeaders(admin), data: { inventario_id: material.id, cantidad: 50, unidad_medida: 'ml' } });
     const prop = await createTestPropietario(request, {}, admin);
-    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'SERVICIO', id: cat.id, cantidad: 1 }] }, admin);
+    const r = await cobrarServicioDirecto(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'SERVICIO', id: cat.id, cantidad: 1 }] }, admin);
     expect(r.status()).toBe(201);
     expect(await stockOf(request, admin, material.id)).toBe(950);
     await request.post(`/api/facturas/${(await r.json()).id}/anular`, { headers: authHeaders(admin) });
@@ -292,11 +292,11 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     expect(detalle.servicios.every((s) => s.estado === 'CANCELADO')).toBe(true);
   });
 
-  test('2b. una nota libre en las observaciones de otra factura no anula una venta de caja ajena', async ({ request }) => {
+  test('2b. una nota libre en las observaciones de otra factura no anula una venta de servicio directo ajena', async ({ request }) => {
     const admin = await getAdminToken(request);
     const p = await createTestProduct(request, { stock_actual: 5, precio_unitario: 100 }, admin);
     const prop = await createTestPropietario(request, {}, admin);
-    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 1 }] }, admin);
+    const r = await cobrarServicioDirecto(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 1 }] }, admin);
     expect(r.status()).toBe(201);
     const [orden] = await (await request.get(`/api/ordenes/?propietario_id=${prop.id}`, { headers: authHeaders(admin) })).json();
 
@@ -311,11 +311,11 @@ test.describe('Revisión — caja rápida e historia clínica', () => {
     expect(despues.estado).toBe('FACTURADA');
   });
 
-  test('7c. anular una venta de caja rápida solo de productos también anula su orden', async ({ request }) => {
+  test('7c. anular una venta de servicio directo solo de productos también anula su orden', async ({ request }) => {
     const admin = await getAdminToken(request);
     const p = await createTestProduct(request, { stock_actual: 5, precio_unitario: 100 }, admin);
     const prop = await createTestPropietario(request, {}, admin);
-    const r = await ventaRapida(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 2 }] }, admin);
+    const r = await cobrarServicioDirecto(request, { propietario_id: prop.id, metodo_pago: 'EFECTIVO', items: [{ tipo: 'PRODUCTO', id: p.id, cantidad: 2 }] }, admin);
     expect(r.status()).toBe(201);
     await request.post(`/api/facturas/${(await r.json()).id}/anular`, { headers: authHeaders(admin) });
     expect(await stockOf(request, admin, p.id)).toBe(5);

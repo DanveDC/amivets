@@ -804,8 +804,8 @@ class OrdenFacturarBody(BaseModel):
     impuesto: Optional[float] = Field(default=0.0)
 
 
-# ========== CAJA RÁPIDA SCHEMAS (caja-rapida) ==========
-class VentaRapidaItem(BaseModel):
+# ========== SERVICIO DIRECTO SCHEMAS ==========
+class VentaDirectaItem(BaseModel):
     """Una línea de la venta de mostrador. `id` es un Inventario.id (PRODUCTO)
     o un CatalogoServicio.id (SERVICIO). `precio_unitario` solo se usa en
     servicios de precio variable (decisión 5): el resto se cobra al precio del
@@ -816,12 +816,12 @@ class VentaRapidaItem(BaseModel):
     precio_unitario: Optional[float] = None
 
 
-class VentaRapidaCreate(BaseModel):
-    """Body de POST /api/caja-rapida/ventas. Sin `propietario_id` se factura a
+class VentaDirectaCreate(BaseModel):
+    """Body de POST /api/servicio-directo/ventas. Sin `propietario_id` se factura a
     "Consumidor final" (decisión 1). Cobro completo obligatorio (decisión 6)."""
     propietario_id: Optional[int] = Field(None, gt=0)
     metodo_pago: Literal["EFECTIVO", "TARJETA", "TRANSFERENCIA", "MULTIPLE"]
-    items: List[VentaRapidaItem] = Field(..., min_length=1)
+    items: List[VentaDirectaItem] = Field(..., min_length=1)
 
 
 class ServicioRealizadoResponse(BaseModel):
@@ -839,8 +839,8 @@ class ServicioRealizadoResponse(BaseModel):
     adjuntos: int = 0
 
 
-class ItemCajaResponse(BaseModel):
-    """Resultado de GET /api/caja-rapida/items: productos y servicios
+class ItemServicioDirectoResponse(BaseModel):
+    """Resultado de GET /api/servicio-directo/items: productos y servicios
     vendibles en un solo listado."""
     tipo: Literal["PRODUCTO", "SERVICIO"]
     id: int

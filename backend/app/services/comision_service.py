@@ -313,7 +313,7 @@ def _pares_cobrados(db: Session, encargado_id: int, dt_desde, dt_hasta) -> List[
         base_filtros.append(Factura.fecha_emision <= dt_hasta)
 
     # 1) Factura por DetalleFactura.servicio_id (cobro por orden, servicio
-    #    directo, caja rápida...).
+    #    directo sin consulta, venta de mostrador...).
     por_detalle = (
         db.query(ServicioConsulta, Factura, DetalleFactura)
         .options(joinedload(ServicioConsulta.catalogo_servicio))

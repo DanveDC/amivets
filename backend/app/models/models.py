@@ -1460,7 +1460,7 @@ class ConsumoMaterial(Base):
 class FacturaOrden(Base):
     """Vínculo explícito factura -> orden de servicio que la originó (fix de
     revisión). Antes la orden de una factura se deducía por sus líneas de
-    servicio, y una venta de caja rápida solo con productos no tiene ninguna.
+    servicio, y una venta de servicio directo solo con productos no tiene ninguna.
 
     Tabla aparte a propósito (y no una columna facturas.orden_id): el dev
     corre create_all, que no agrega columnas a tablas existentes. Una factura
