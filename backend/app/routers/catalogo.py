@@ -2,11 +2,20 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
+from sqlalchemy import or_, func
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 
 from app.core.database import get_db
-from app.models.models import AreaServicio, CatalogoServicio, RecetaServicio, Inventario, HistorialPrecioServicio, Usuario
+from app.models.models import (
+    AreaServicio,
+    CatalogoServicio,
+    CatalogoPaqueteComponente,
+    RecetaServicio,
+    Inventario,
+    HistorialPrecioServicio,
+    Usuario,
+)
 from app.routers.usuarios import require_roles
 from app.schemas.schemas import (
     CostoServicioResponse,
@@ -18,8 +27,14 @@ from app.schemas.schemas import (
     RecetaServicioUpdate,
     RecetaServicioResponse,
     HistorialPrecioRead,
+    PaqueteComponenteCreate,
+    PaqueteComponenteUpdate,
+    PaqueteComponenteResponse,
+    PaqueteComponentesResponse,
+    DisponibilidadServicioResponse,
 )
 from app.services.precio_service import registrar_cambio_precio, cuantizar_precio
+from app.services import paquete_service
 
 router = APIRouter(prefix="/api/catalogo", tags=["Catalogo de Servicios"])
 
@@ -135,6 +150,57 @@ def _aplicar_comision(servicio: CatalogoServicio, payload: dict, current_user: U
     servicio.porcentaje_servicio = porcentaje
 
 
+_SOLO_ADMIN_PAQUETE = "Solo un administrador puede marcar o desmarcar un servicio como paquete"
+
+
+def _validar_cambio_es_paquete(
+    db: Session,
+    servicio: Optional[CatalogoServicio],
+    categoria: str,
+    es_paquete_actual: bool,
+    es_paquete_nuevo: bool,
+    current_user: Usuario,
+) -> None:
+    """plantillas-paquete-catalogo, design D5: `es_paquete` es admin-only,
+    igual que `precio_ref` (la composición decide qué se factura). Solo se
+    valida cuando el valor efectivamente CAMBIA -- un PUT que repite el valor
+    actual no exige admin, mismo criterio que el resto del router.
+    """
+    if es_paquete_nuevo == bool(es_paquete_actual):
+        return
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_SOLO_ADMIN_PAQUETE)
+    if es_paquete_nuevo:
+        if (categoria or "").strip().upper() == "CONSULTA":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Un servicio de categoría CONSULTA no puede marcarse como paquete",
+            )
+        if servicio is not None:
+            es_componente = (
+                db.query(CatalogoPaqueteComponente)
+                .filter(CatalogoPaqueteComponente.componente_id == servicio.id)
+                .first()
+            )
+            if es_componente:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Este servicio ya es componente de otro paquete y no puede ser paquete",
+                )
+    else:
+        if servicio is not None:
+            tiene_componentes = (
+                db.query(CatalogoPaqueteComponente)
+                .filter(CatalogoPaqueteComponente.paquete_id == servicio.id)
+                .first()
+            )
+            if tiene_componentes:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="El paquete todavía tiene componentes; quitalos antes de desmarcarlo",
+                )
+
+
 @router.post("/", response_model=CatalogoServicioResponse, status_code=status.HTTP_201_CREATED)
 def crear_servicio(
     servicio: CatalogoServicioCreate,
@@ -145,7 +211,8 @@ def crear_servicio(
 
     `area_id` / `requiere_adjunto` (Tarea 06, decisiones 5 y 7) son admin-only
     (fila 23 de la matriz de permisos) -- mismo criterio que ya aplica
-    `actualizar_servicio` sobre `precio_ref`.
+    `actualizar_servicio` sobre `precio_ref`. `es_paquete` es admin-only por el
+    mismo motivo (plantillas-paquete-catalogo, design D5).
     """
     payload = servicio.model_dump()
     if (payload.get("area_id") is not None or payload.get("requiere_adjunto") is not None) and current_user.role != "admin":
@@ -156,6 +223,9 @@ def crear_servicio(
     _validar_area_activa(db, payload.get("area_id"))
     if payload.get("tipo_comision_servicio") != "HEREDA" and current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_SOLO_ADMIN_COMISION)
+    _validar_cambio_es_paquete(
+        db, None, payload.get("categoria"), False, bool(payload.get("es_paquete")), current_user
+    )
 
     nuevo = CatalogoServicio(**payload)
     db.add(nuevo)
@@ -222,6 +292,37 @@ def actualizar_servicio(
         _validar_area_activa(db, payload["area_id"])
     _aplicar_comision(servicio, payload, current_user)
 
+    categoria_final = payload.get("categoria", servicio.categoria)
+
+    # plantillas-paquete-catalogo (hallazgo de revisión): `_validar_cambio_es_
+    # paquete` solo corre si "es_paquete" viene en el payload, y ese chequeo
+    # devuelve temprano si el valor no cambia -- un PUT que solo cambia
+    # `categoria` a CONSULTA se colaba sin pasar por ningún validador, tanto
+    # si el servicio YA es paquete como si es componente de otro. Chequeo
+    # aparte, siempre que la categoría efectiva termine en CONSULTA.
+    if (categoria_final or "").strip().upper() == "CONSULTA":
+        es_paquete_final = payload.get("es_paquete", servicio.es_paquete)
+        if es_paquete_final:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Un servicio de categoría CONSULTA no puede marcarse como paquete",
+            )
+        es_componente = (
+            db.query(CatalogoPaqueteComponente)
+            .filter(CatalogoPaqueteComponente.componente_id == servicio.id)
+            .first()
+        )
+        if es_componente:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Un servicio de categoría CONSULTA no puede ser componente de un paquete",
+            )
+
+    if "es_paquete" in payload:
+        _validar_cambio_es_paquete(
+            db, servicio, categoria_final, servicio.es_paquete, bool(payload["es_paquete"]), current_user
+        )
+
     for key, value in payload.items():
         setattr(servicio, key, value)
 
@@ -278,6 +379,223 @@ def desactivar_servicio(
     servicio.activo = False
     db.commit()
     return None
+
+
+# ========== Componentes de paquete (plantillas-paquete-catalogo, design D5) ==========
+# ABM de los componentes de una plantilla de paquete: qué otros servicios del
+# catálogo integran el paquete y con qué cantidad. Admin-only (la composición
+# decide qué se factura, mismo criterio que `es_paquete` arriba) aunque la
+# escritura general del catálogo es admin+veterinario -- por eso estos
+# endpoints usan `require_roles("admin")` directo en vez de
+# `_ROLES_CATALOGO_ESCRITURA`.
+
+
+def _totales_paquete(paquete: CatalogoServicio, componentes: list) -> tuple:
+    """(precio_propio, total_paquete) sobre los componentes ACTIVOS -- un
+    componente desactivado sigue en el listado pero no suma (design D5,
+    escenario "Componente desactivado después")."""
+    precio_propio = float(paquete.precio_ref or 0)
+    total = precio_propio + sum(
+        float(c.cantidad) * float(c.componente.precio_ref or 0)
+        for c in componentes
+        if c.componente is not None and c.componente.activo
+    )
+    return precio_propio, total
+
+
+def _serializar_componente(c: CatalogoPaqueteComponente) -> dict:
+    comp = c.componente
+    return {
+        "id": c.id,
+        "paquete_id": c.paquete_id,
+        "componente_id": c.componente_id,
+        "nombre": comp.nombre if comp else f"#{c.componente_id}",
+        "categoria": comp.categoria if comp else "",
+        "precio_ref": float(comp.precio_ref or 0) if comp else 0.0,
+        "activo": bool(comp.activo) if comp else False,
+        "cantidad": c.cantidad,
+        "posicion": c.posicion,
+        "subtotal": float(c.cantidad) * float(comp.precio_ref or 0) if comp else 0.0,
+    }
+
+
+def _obtener_paquete_o_404(db: Session, servicio_id: int) -> CatalogoServicio:
+    servicio = (
+        db.query(CatalogoServicio)
+        .options(joinedload(CatalogoServicio.componentes).joinedload(CatalogoPaqueteComponente.componente))
+        .filter(CatalogoServicio.id == servicio_id)
+        .first()
+    )
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    return servicio
+
+
+@router.get("/{servicio_id}/componentes", response_model=PaqueteComponentesResponse)
+def listar_componentes_paquete(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
+    """Lista los componentes de un paquete, en orden `posicion` y luego
+    creación (design D5), con el precio propio y el total del paquete."""
+    paquete = _obtener_paquete_o_404(db, servicio_id)
+    precio_propio, total = _totales_paquete(paquete, paquete.componentes)
+    return {
+        "paquete_id": paquete.id,
+        "precio_propio": precio_propio,
+        "total_paquete": total,
+        "componentes": [_serializar_componente(c) for c in paquete.componentes],
+    }
+
+
+@router.post(
+    "/{servicio_id}/componentes",
+    response_model=PaqueteComponenteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def agregar_componente_paquete(
+    servicio_id: int,
+    data: PaqueteComponenteCreate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles("admin")),
+):
+    """Agrega un componente a la plantilla de paquete `servicio_id`.
+
+    404 si el paquete o el componente no existen; 422 si el target no es
+    paquete, si el componente es el propio paquete, si el componente ya es un
+    paquete, si su categoría es CONSULTA o si está inactivo; 409 si ya está en
+    el paquete (design D5)."""
+    paquete = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not paquete:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    if not paquete.es_paquete:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Este servicio no es un paquete",
+        )
+
+    componente = db.query(CatalogoServicio).filter(CatalogoServicio.id == data.componente_id).first()
+    if not componente:
+        raise HTTPException(status_code=404, detail="Componente no encontrado")
+    if componente.id == paquete.id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un paquete no puede contenerse a sí mismo",
+        )
+    if componente.es_paquete:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un paquete no puede ser componente de otro paquete",
+        )
+    if (componente.categoria or "").strip().upper() == "CONSULTA":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un servicio de categoría CONSULTA no puede ser componente de un paquete",
+        )
+    if not componente.activo:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Un servicio inactivo no puede ser componente de un paquete",
+        )
+
+    ya_existe = (
+        db.query(CatalogoPaqueteComponente)
+        .filter(
+            CatalogoPaqueteComponente.paquete_id == paquete.id,
+            CatalogoPaqueteComponente.componente_id == componente.id,
+        )
+        .first()
+    )
+    if ya_existe:
+        raise HTTPException(status_code=409, detail="Ese servicio ya es un componente de este paquete")
+
+    max_posicion = (
+        db.query(func.max(CatalogoPaqueteComponente.posicion))
+        .filter(CatalogoPaqueteComponente.paquete_id == paquete.id)
+        .scalar()
+    )
+    fila = CatalogoPaqueteComponente(
+        paquete_id=paquete.id,
+        componente_id=componente.id,
+        cantidad=data.cantidad,
+        posicion=(max_posicion or 0) + 1,
+    )
+    db.add(fila)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Carrera entre dos altas simultáneas del mismo componente: el
+        # chequeo `ya_existe` de arriba no la cubre (lee-y-luego-escribe), el
+        # unique `uq_paquete_componente` sí (mismo criterio que otros
+        # candados de índice único del repo, ej. areas.py).
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ese servicio ya es un componente de este paquete")
+    db.refresh(fila)
+    fila.componente = componente
+    return _serializar_componente(fila)
+
+
+def _obtener_fila_componente_o_404(db: Session, componente_row_id: int) -> CatalogoPaqueteComponente:
+    fila = (
+        db.query(CatalogoPaqueteComponente)
+        .options(joinedload(CatalogoPaqueteComponente.componente))
+        .filter(CatalogoPaqueteComponente.id == componente_row_id)
+        .first()
+    )
+    if not fila:
+        raise HTTPException(status_code=404, detail="Componente de paquete no encontrado")
+    return fila
+
+
+@router.put("/componentes/{componente_row_id}", response_model=PaqueteComponenteResponse)
+def actualizar_componente_paquete(
+    componente_row_id: int,
+    data: PaqueteComponenteUpdate,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles("admin")),
+):
+    """Cambia la cantidad y/o la posición de un componente (design D5,
+    "Reordenar componentes": el front hace dos PUT de posicion para
+    intercambiar dos vecinos)."""
+    fila = _obtener_fila_componente_o_404(db, componente_row_id)
+    cambios = data.model_dump(exclude_unset=True)
+    for key, value in cambios.items():
+        setattr(fila, key, value)
+    db.commit()
+    db.refresh(fila)
+    fila = _obtener_fila_componente_o_404(db, componente_row_id)
+    return _serializar_componente(fila)
+
+
+@router.delete("/componentes/{componente_row_id}", status_code=status.HTTP_204_NO_CONTENT)
+def eliminar_componente_paquete(
+    componente_row_id: int,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_roles("admin")),
+):
+    """Quita un componente de la plantilla de paquete."""
+    fila = db.query(CatalogoPaqueteComponente).filter(CatalogoPaqueteComponente.id == componente_row_id).first()
+    if not fila:
+        raise HTTPException(status_code=404, detail="Componente de paquete no encontrado")
+    db.delete(fila)
+    db.commit()
+    return None
+
+
+@router.get("/{servicio_id}/disponibilidad", response_model=DisponibilidadServicioResponse)
+def disponibilidad_servicio_endpoint(
+    servicio_id: int,
+    db: Session = Depends(get_db),
+    _: Usuario = Depends(require_roles(*_ROLES_CATALOGO_LECTURA)),
+):
+    """Disponibilidad de insumos de un servicio del catálogo (design D4): su
+    receta propia más, si es un paquete, la receta de cada componente activo.
+    No toca stock ni reserva nada -- ver paquete_service.disponibilidad_servicio."""
+    servicio = db.query(CatalogoServicio).filter(CatalogoServicio.id == servicio_id).first()
+    if not servicio:
+        raise HTTPException(status_code=404, detail="Servicio no encontrado")
+    return paquete_service.disponibilidad_servicio(db, servicio)
 
 
 # ========== ABM de receta de servicio (Tarea 07, slice A) ==========

@@ -511,6 +511,7 @@ function cerrarAnexarPanel() {
     if (canvas) canvas.classList.remove('oa-canvas--compressed');
     _svcSeleccionado = null;
     _consumos = [];
+    ocultarPanelPaquete();
     document.removeEventListener('keydown', onAnexarKeydown);
 }
 
@@ -599,7 +600,7 @@ function pintarServiciosPicker() {
     cont.innerHTML = items.map(s => `
         <button type="button" class="oa-svc-item" data-id="${s.id}" aria-checked="${_svcSeleccionado?.id === s.id ? 'true' : 'false'}">
             <span class="oa-svc-radio"><span class="oa-svc-radio-dot"></span></span>
-            <span class="oa-svc-info"><strong>${escapeHtml(s.nombre)}</strong><span>${escapeHtml(s.categoria)}</span></span>
+            <span class="oa-svc-info"><strong>${escapeHtml(s.nombre)}</strong>${s.es_paquete ? ' <span class="av-pill av-pill--info" style="font-size:10px;">PAQUETE</span>' : ''}<span>${escapeHtml(s.categoria)}</span></span>
             <span class="oa-svc-price num">${money(s.precio_ref)}</span>
         </button>`).join('');
     cont.querySelectorAll('.oa-svc-item').forEach(btn => {
@@ -610,13 +611,27 @@ function pintarServiciosPicker() {
 async function seleccionarServicio(id) {
     _svcSeleccionado = _catalogo.find(s => s.id === id) || null;
     pintarServiciosPicker();
+    if (_svcSeleccionado?.es_paquete) {
+        await mostrarPanelPaquete();
+    } else {
+        ocultarPanelPaquete();
+        await mostrarConsumosServicio();
+    }
+}
+
+async function mostrarConsumosServicio() {
     const wrap = document.getElementById('oaConsumosWrap');
     const list = document.getElementById('oaConsumosList');
     if (!_svcSeleccionado || !wrap || !list) return;
+    // Fix de revisión: si el usuario elige otro servicio mientras este fetch
+    // está en vuelo, no hay que pintar la respuesta vieja encima del nuevo
+    // servicio seleccionado.
+    const svcId = _svcSeleccionado.id;
     wrap.hidden = false;
     list.innerHTML = '<p class="av-muted" style="padding:8px 0;">Cargando insumos…</p>';
     try {
-        const lineas = await fetchAPI(`/catalogo/${_svcSeleccionado.id}/recetas`) || [];
+        const lineas = await fetchAPI(`/catalogo/${svcId}/recetas`) || [];
+        if (_svcSeleccionado?.id !== svcId) return;
         _consumos = lineas.map(l => ({ inventario_id: l.inventario_id, nombre: l.inventario_nombre, cantidad: Number(l.cantidad), unidad: l.unidad_medida }));
         if (_consumos.length === 0) {
             list.innerHTML = '<p class="av-muted" style="padding:8px 0;">Este servicio no consume insumos con receta fija.</p>';
@@ -635,14 +650,98 @@ async function seleccionarServicio(id) {
             });
         });
     } catch (_) {
+        if (_svcSeleccionado?.id !== svcId) return;
         _consumos = [];
         list.innerHTML = '<p class="av-text-danger" style="padding:8px 0;">No se pudo cargar la receta de este servicio.</p>';
     }
 }
 
+// plantillas-paquete-catalogo: un servicio marcado es_paquete arma su propia
+// jerarquía base/items al confirmar (POST /ordenes/{id}/paquetes) -- se
+// oculta el editor de consumos (no aplica: son varias líneas, no una) y el
+// grupo "es paquete base"/"paquete padre" (redundante, el paquete YA es su
+// propia base).
+async function mostrarPanelPaquete() {
+    const wrap = document.getElementById('oaPaqueteWrap');
+    const consumosWrap = document.getElementById('oaConsumosWrap');
+    const basePadreGroup = document.getElementById('oaBasePadreGroup');
+    const btnConfirmar = document.getElementById('btnOaAnexarConfirmar');
+    const componentesEl = document.getElementById('oaPaqueteComponentes');
+    const dispEl = document.getElementById('oaPaqueteDisponibilidad');
+    const totalEl = document.getElementById('oaPaqueteTotal');
+    if (!_svcSeleccionado || !wrap || !componentesEl || !dispEl) return;
+    // Fix de revisión: mismo criterio que mostrarConsumosServicio -- si el
+    // usuario elige otro servicio antes de que resuelvan estos dos fetch,
+    // no pintar la respuesta vieja.
+    const svcId = _svcSeleccionado.id;
+
+    if (consumosWrap) consumosWrap.hidden = true;
+    // `#oaBasePadreGroup` trae `display:flex` inline (index.html): un inline
+    // style siempre gana sobre la regla `[hidden]{display:none}` del user
+    // agent, así que ocultarlo es `style.display`, no el atributo `hidden`.
+    if (basePadreGroup) basePadreGroup.style.display = 'none';
+    if (btnConfirmar) btnConfirmar.textContent = 'Agregar paquete';
+    wrap.hidden = false;
+    componentesEl.innerHTML = '<p class="av-muted" style="padding:8px 0;">Cargando componentes…</p>';
+    dispEl.innerHTML = '';
+    if (totalEl) totalEl.textContent = '';
+
+    try {
+        const [paquete, disponibilidad] = await Promise.all([
+            fetchAPI(`/catalogo/${svcId}/componentes`),
+            fetchAPI(`/catalogo/${svcId}/disponibilidad`),
+        ]);
+        if (_svcSeleccionado?.id !== svcId) return;
+        componentesEl.innerHTML = (paquete.componentes || []).map(c => `
+            <div class="oa-consumo-row">
+                <div class="oa-consumo-info"><strong>${escapeHtml(c.nombre)}</strong><span>cantidad ${c.cantidad}${c.activo ? '' : ' · inactivo (se omite)'}</span></div>
+                <div class="oa-consumo-qty num">${money(c.subtotal)}</div>
+            </div>`).join('') || '<p class="av-muted" style="padding:8px 0;">Este paquete no tiene componentes.</p>';
+        if (totalEl) totalEl.textContent = `Total: ${money(paquete.total_paquete)}`;
+
+        const insumos = disponibilidad.insumos || [];
+        dispEl.innerHTML = insumos.length === 0
+            ? '<p class="av-muted" style="padding:8px 0;">No consume insumos con receta fija.</p>'
+            : insumos.map(i => `
+                <div class="oa-consumo-row">
+                    <div class="oa-consumo-info"><strong>${escapeHtml(i.nombre)}</strong><span>requiere ${i.requerido} ${escapeHtml(i.unidad)} · hay ${i.disponible} ${escapeHtml(i.unidad)}</span></div>
+                    <div class="oa-consumo-qty num${i.faltante > 0 ? ' av-text-danger' : ''}">${i.faltante > 0 ? `faltan ${i.faltante}` : 'ok'}</div>
+                </div>`).join('');
+    } catch (e) {
+        if (_svcSeleccionado?.id !== svcId) return;
+        componentesEl.innerHTML = `<p class="av-text-danger" style="padding:8px 0;">No se pudo cargar el paquete: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
+function ocultarPanelPaquete() {
+    const wrap = document.getElementById('oaPaqueteWrap');
+    const basePadreGroup = document.getElementById('oaBasePadreGroup');
+    const btnConfirmar = document.getElementById('btnOaAnexarConfirmar');
+    if (wrap) wrap.hidden = true;
+    if (basePadreGroup) basePadreGroup.style.display = 'flex';
+    if (btnConfirmar) btnConfirmar.textContent = 'Anexar a la orden';
+}
+
 async function confirmarAnexo() {
     if (!_svcSeleccionado) {
         showNotification('Elegí un servicio del catálogo primero.', 'warning');
+        return;
+    }
+    if (_svcSeleccionado.es_paquete) {
+        try {
+            const resp = await fetchAPI(`/ordenes/${_ordenId}/paquetes`, {
+                method: 'POST',
+                body: JSON.stringify({ catalogo_servicio_id: _svcSeleccionado.id }),
+            });
+            showNotification('Paquete anexado a la orden.', 'success');
+            if (resp?.advertencias?.length) {
+                showNotification(resp.advertencias.map(a => a.mensaje || JSON.stringify(a)).join(' — '), 'warning');
+            }
+            cerrarAnexarPanel();
+            await cargarOrden();
+        } catch (e) {
+            showNotification('No se pudo anexar el paquete: ' + e.message, 'error');
+        }
         return;
     }
     const tipo = CATEGORIA_TIPO[(_svcSeleccionado.categoria || '').toUpperCase()] || 'OTRO';

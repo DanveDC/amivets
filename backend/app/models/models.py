@@ -1353,6 +1353,20 @@ class CatalogoServicio(Base):
         cascade="all, delete-orphan",
     )
 
+    # plantillas-paquete-catalogo: marca este servicio como plantilla de
+    # paquete (design D1). Un nivel solo: un componente no puede ser paquete
+    # y un paquete no puede contenerse a si mismo -- reglas cruzadas, se
+    # validan en el router (PostgreSQL rechaza subqueries en un CHECK, mismo
+    # criterio que ck_servicio_base_sin_padre).
+    es_paquete = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    componentes = relationship(
+        "CatalogoPaqueteComponente",
+        foreign_keys="CatalogoPaqueteComponente.paquete_id",
+        back_populates="paquete",
+        cascade="all, delete-orphan",
+        order_by="(CatalogoPaqueteComponente.posicion, CatalogoPaqueteComponente.id)",
+    )
+
 
 class RecetaServicio(Base):
     """Receta (BOM) de un servicio del catalogo: que materiales consume y cuanto.
@@ -1381,6 +1395,40 @@ class RecetaServicio(Base):
 
     def __repr__(self):
         return f"<RecetaServicio svc={self.catalogo_servicio_id} inv={self.inventario_id}>"
+
+
+class CatalogoPaqueteComponente(Base):
+    """Componente de una plantilla de paquete del catalogo
+    (plantillas-paquete-catalogo, design D1).
+
+    Una fila = un servicio del catalogo (`componente_id`) que integra el
+    paquete `paquete_id`, con la cantidad que tendra la linea de la orden al
+    anexar el paquete. Un nivel solo: "el componente no puede ser un paquete",
+    "un componente no puede convertirse en paquete" y "sin CONSULTA" son
+    reglas cruzadas -- se validan en routers/catalogo.py, no aca (PostgreSQL
+    rechaza subqueries en un CHECK, mismo criterio que
+    ck_servicio_base_sin_padre).
+    """
+    __tablename__ = "catalogo_paquete_componentes"
+
+    id = Column(Integer, primary_key=True)
+    paquete_id = Column(Integer, ForeignKey("catalogo_servicios.id", ondelete="CASCADE"), nullable=False, index=True)
+    componente_id = Column(Integer, ForeignKey("catalogo_servicios.id"), nullable=False, index=True)
+    cantidad = Column(Numeric(12, 3), nullable=False)
+    posicion = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("paquete_id", "componente_id", name="uq_paquete_componente"),
+        CheckConstraint("cantidad > 0", name="ck_paquete_componente_cantidad"),
+        CheckConstraint("paquete_id <> componente_id", name="ck_paquete_componente_no_self"),
+    )
+
+    paquete = relationship("CatalogoServicio", foreign_keys=[paquete_id], back_populates="componentes")
+    componente = relationship("CatalogoServicio", foreign_keys=[componente_id])
+
+    def __repr__(self):
+        return f"<CatalogoPaqueteComponente paquete={self.paquete_id} componente={self.componente_id}>"
 
 
 class ConsumoMaterial(Base):

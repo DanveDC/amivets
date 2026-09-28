@@ -25,6 +25,7 @@ from app.routers.servicios import validar_tipo_servicio_por_rol
 from app.schemas.schemas import (
     ConfirmarServiciosRequest,
     FacturaResponse,
+    OrdenAnexarPaquete,
     OrdenFacturarBody,
     OrdenServicioAnexarServicio,
     OrdenServicioAnular,
@@ -32,9 +33,10 @@ from app.schemas.schemas import (
     OrdenServicioCreate,
     OrdenServicioDetalleResponse,
     OrdenServicioResponse,
+    PaqueteAnexadoResponse,
     ServicioConsultaResponse,
 )
-from app.services import orden_service
+from app.services import orden_service, paquete_service
 from app.services.facturacion_service import FacturacionService
 
 # Mismos roles que POST /api/facturas/ (routers/facturas.py, _ROLES_FACTURACION):
@@ -279,6 +281,14 @@ def anexar_servicio_orden(
     orden = orden_service.obtener_orden(db, orden_id)
     orden_service.asegurar_recibe_trabajo(orden)
 
+    # plantillas-paquete-catalogo (delta orden-servicio-carrito): un item
+    # marcado es_paquete=true no se anexa suelto por acá -- se armaría a medio
+    # construir (solo la base, sin sus componentes). Tiene su propio endpoint
+    # atómico, POST /ordenes/{id}/paquetes. Guard compartido con
+    # agregar_servicio_consulta, crear_servicio_directo y
+    # actualizar_servicio_impl (ver paquete_service.rechazar_si_es_paquete).
+    paquete_service.rechazar_si_es_paquete(db, data.catalogo_servicio_id)
+
     validar_tipo_servicio_por_rol(current_user, data.tipo_servicio)
 
     servicio, advertencias = orden_service.crear_servicio_en_orden(
@@ -311,6 +321,39 @@ def anexar_servicio_orden(
     if advertencias:
         resp.advertencias = advertencias
     return resp
+
+
+@router.post("/{orden_id}/paquetes", response_model=PaqueteAnexadoResponse, status_code=status.HTTP_201_CREATED)
+def anexar_paquete_orden(
+    orden_id: int,
+    data: OrdenAnexarPaquete,
+    db: Session = Depends(get_db),
+    # Mismos roles que POST /{orden_id}/servicios (design D3): admin/
+    # recepción/veterinario anexan; recepción queda bloqueada en paquetes con
+    # alguna línea clínica por validar_tipo_servicio_por_rol, corrida sobre la
+    # base y cada componente ANTES de crear nada (paquete_service.anexar_paquete).
+    current_user: Usuario = Depends(require_roles("admin", "recepcionista", "veterinario")),
+):
+    """Anexa una plantilla de paquete del catálogo a la orden en un solo paso
+    (plantillas-paquete-catalogo, design D3): una línea base al precio propio
+    del paquete más un ítem por componente activo anclado a ella, todo en la
+    misma transacción -- ver `paquete_service.anexar_paquete`.
+    """
+    orden = orden_service.obtener_orden(db, orden_id)
+    orden_service.asegurar_recibe_trabajo(orden)
+
+    base, items, advertencias = paquete_service.anexar_paquete(
+        db, orden, data.catalogo_servicio_id, current_user
+    )
+    db.commit()
+    db.refresh(base)
+    for item in items:
+        db.refresh(item)
+    return PaqueteAnexadoResponse(
+        base=ServicioConsultaResponse.model_validate(base),
+        items=[ServicioConsultaResponse.model_validate(i) for i in items],
+        advertencias=advertencias,
+    )
 
 
 @router.post("/{orden_id}/confirmar", response_model=OrdenServicioDetalleResponse)

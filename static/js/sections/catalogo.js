@@ -152,8 +152,19 @@ async function cargarDetalle(id) {
             cargarMaterialesCache(),
             fetchAPI(`/catalogo/${id}/costo`),
         ]);
+        // plantillas-paquete-catalogo: componentes y disponibilidad solo hacen
+        // falta para un paquete -- para el resto de los servicios se ahorran
+        // las dos llamadas.
+        let paquete = null;
+        let disponibilidad = null;
+        if (servicio.es_paquete) {
+            [paquete, disponibilidad] = await Promise.all([
+                fetchAPI(`/catalogo/${id}/componentes`),
+                fetchAPI(`/catalogo/${id}/disponibilidad`),
+            ]);
+        }
         if (id !== selectedId) return; // superseded por otra selección mientras cargaba
-        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales, costo);
+        renderDetalle(servicio, recetas || [], historial || [], usuarios, materiales, costo, paquete, disponibilidad);
     } catch (err) {
         detalle.innerHTML = `<p class="rp-empty-text">Error al cargar el servicio: ${escapeHtml(err.message)}</p>`;
     }
@@ -165,9 +176,10 @@ function pillComision(s) {
     return '';
 }
 
-function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo) {
+function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo, paquete = null, disponibilidad = null) {
     const detalle = document.getElementById('catalogoDetalle');
     if (!detalle) return;
+    const esAdmin = getRole() === 'admin';
 
     // Costo desde GET /catalogo/{id}/costo (catalogo-servicios-configurable):
     // precio por UNIDAD BASE del material (envase / contenido). Antes se
@@ -211,6 +223,77 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
                 </div>`;
         }).join('');
 
+    // plantillas-paquete-catalogo: "Componentes del paquete" (solo si
+    // `servicio.es_paquete`) e "Insumos y stock" (agregación de la propia
+    // receta + la de cada componente activo, design D4). Edición solo admin.
+    const filasComponentes = !paquete || paquete.componentes.length === 0
+        ? '<tr><td colspan="5" class="rp-empty-text">Sin componentes todavía.</td></tr>'
+        : paquete.componentes.map((c, idx) => `
+            <tr data-componente-row-id="${c.id}" style="${c.activo ? '' : 'opacity:0.55;'}">
+                <td>${escapeHtml(c.nombre)}${c.activo ? '' : ' <span class="av-pill av-pill--neutral" style="font-size:10px;">inactivo</span>'}</td>
+                <td>
+                    ${esAdmin
+                        ? `<input type="number" class="cat-cantidad-input paquete-cantidad" value="${Number(c.cantidad)}" step="0.001" min="0.001" aria-label="Cantidad de ${escapeHtml(c.nombre)}">`
+                        : Number(c.cantidad)}
+                </td>
+                <td class="rp-num">${formatMoney(c.subtotal)}</td>
+                ${esAdmin ? `
+                <td style="white-space:nowrap;">
+                    <button type="button" class="cat-icon-btn paquete-subir" title="Subir" aria-label="Subir ${escapeHtml(c.nombre)}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+                    <button type="button" class="cat-icon-btn paquete-bajar" title="Bajar" aria-label="Bajar ${escapeHtml(c.nombre)}" ${idx === paquete.componentes.length - 1 ? 'disabled' : ''}>↓</button>
+                </td>
+                <td style="text-align:right;">
+                    <button type="button" class="cat-icon-btn paquete-quitar" title="Quitar" aria-label="Quitar ${escapeHtml(c.nombre)}">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </td>` : '<td></td><td></td>'}
+            </tr>`).join('');
+
+    const seccionPaquete = !servicio.es_paquete ? '' : `
+        <div class="cat-hr"></div>
+        <div class="cat-detail-section">
+            <div class="cat-detail-section-head">
+                <span style="font-size:14px; font-weight:600;">Componentes del paquete</span>
+                <span style="font-size:12px; color:var(--text-muted);">total del paquete ${formatMoney(paquete?.total_paquete ?? servicio.precio_ref)}</span>
+                <div class="av-spacer"></div>
+                ${esAdmin ? '<button type="button" class="av-btn" id="btnCatAgregarComponente">+ Agregar componente</button>' : ''}
+            </div>
+            ${esAdmin ? `
+            <div id="catAgregarComponenteRow" class="cat-agregar-row" hidden>
+                <select id="catComponenteSelect" aria-label="Servicio del catálogo"><option value="">Seleccionar…</option></select>
+                <input type="number" id="catComponenteCantidad" step="0.001" min="0.001" value="1" placeholder="Cantidad" aria-label="Cantidad" style="width:100px;">
+                <button type="button" class="av-btn av-btn--primary" id="btnCatConfirmarComponente">Agregar</button>
+                <span id="catComponenteError" class="rp-empty-text" role="alert" style="padding:0; display:none;"></span>
+            </div>` : ''}
+            <table class="rp-table cat-receta-table">
+                <thead><tr><th>Servicio</th><th>Cantidad</th><th>Subtotal</th><th colspan="2"></th></tr></thead>
+                <tbody id="catPaqueteComponentesBody">${filasComponentes}</tbody>
+            </table>
+        </div>`;
+
+    const filasInsumosStock = !disponibilidad || disponibilidad.insumos.length === 0
+        ? '<tr><td colspan="4" class="rp-empty-text">Sin insumos en la receta.</td></tr>'
+        : disponibilidad.insumos.map((i) => `
+            <tr>
+                <td>${escapeHtml(i.nombre)}</td>
+                <td class="rp-num">${i.requerido} ${escapeHtml(i.unidad)}</td>
+                <td class="rp-num">${i.disponible} ${escapeHtml(i.unidad)}</td>
+                <td class="rp-num${i.faltante > 0 ? ' av-text-danger' : ''}">${i.faltante}</td>
+            </tr>`).join('');
+
+    const seccionDisponibilidad = !servicio.es_paquete ? '' : `
+        <div class="cat-hr"></div>
+        <div class="cat-detail-section">
+            <div class="cat-detail-section-head">
+                <span style="font-size:14px; font-weight:600;">Insumos y stock</span>
+                <span style="font-size:12px; ${disponibilidad && !disponibilidad.suficiente ? 'color:var(--accent);' : 'color:var(--text-muted);'}">${disponibilidad?.suficiente ? 'Stock suficiente para el paquete completo' : 'Stock insuficiente para algún insumo'}</span>
+            </div>
+            <table class="rp-table cat-receta-table">
+                <thead><tr><th>Material</th><th>Requerido</th><th>Disponible</th><th>Faltante</th></tr></thead>
+                <tbody>${filasInsumosStock}</tbody>
+            </table>
+        </div>`;
+
     detalle.innerHTML = `
         <div class="cat-detail-head">
             <div class="cat-detail-heading">
@@ -219,6 +302,7 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
                     <span class="av-pill">${escapeHtml(servicio.categoria)}</span>
                     <span class="av-pill ${servicio.activo ? 'av-pill--ok' : 'av-pill--neutral'}">${servicio.activo ? 'Activo' : 'Inactivo'}</span>
                     ${servicio.precio_variable ? '<span class="av-pill av-pill--warn">Precio variable</span>' : ''}
+                    ${servicio.es_paquete ? '<span class="av-pill av-pill--info">PAQUETE</span>' : ''}
                     ${pillComision(servicio)}
                 </div>
             </div>
@@ -230,6 +314,9 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
             <button type="button" class="av-btn" id="btnCatEditar">Editar</button>
             ${servicio.activo ? '<button type="button" class="av-btn" style="color:var(--accent); border-color:var(--accent);" id="btnCatDesactivar">Desactivar</button>' : ''}
         </div>
+
+        ${seccionPaquete}
+        ${seccionDisponibilidad}
 
         <div class="cat-hr"></div>
 
@@ -337,6 +424,130 @@ function renderDetalle(servicio, recetas, historial, usuarios, materiales, costo
         }
     });
     document.getElementById('btnCatConfirmarInsumo')?.addEventListener('click', () => agregarReceta(servicio.id));
+
+    if (servicio.es_paquete && esAdmin) wirePaqueteComponentes(servicio.id);
+}
+
+// ============================================================
+// COMPONENTES DEL PAQUETE (plantillas-paquete-catalogo) — solo admin edita;
+// veterinario/otros ven la sección de renderDetalle en modo lectura (sin estos
+// listeners, porque los botones de edición ni se pintan).
+// ============================================================
+
+function wirePaqueteComponentes(paqueteId) {
+    const body = document.getElementById('catPaqueteComponentesBody');
+    body?.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-componente-row-id]');
+        if (!row) return;
+        const rowId = row.dataset.componenteRowId;
+        if (e.target.closest('.paquete-quitar')) return quitarComponentePaquete(rowId);
+        if (e.target.closest('.paquete-subir')) return moverComponentePaquete(paqueteId, row, -1);
+        if (e.target.closest('.paquete-bajar')) return moverComponentePaquete(paqueteId, row, 1);
+    });
+    body?.addEventListener('change', (e) => {
+        const inp = e.target.closest('.paquete-cantidad');
+        if (!inp) return;
+        const row = inp.closest('[data-componente-row-id]');
+        if (row) actualizarCantidadComponentePaquete(row.dataset.componenteRowId, inp.value);
+    });
+
+    document.getElementById('btnCatAgregarComponente')?.addEventListener('click', async () => {
+        const row = document.getElementById('catAgregarComponenteRow');
+        if (!row) return;
+        row.hidden = !row.hidden;
+        if (!row.hidden) await cargarComponentesDisponiblesSelect();
+    });
+    document.getElementById('btnCatConfirmarComponente')?.addEventListener('click', () => agregarComponentePaqueteUI(paqueteId));
+}
+
+function showComponenteError(msg) {
+    const el = document.getElementById('catComponenteError');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.display = msg ? 'inline' : 'none';
+}
+
+// Candidatos del <select> "Agregar componente": activos, que no sean ellos
+// mismos un paquete (un nivel solo, design D1) y que no sean CONSULTA (design
+// D5) -- el backend igual valida todo esto, esto solo evita un 422 obvio.
+async function cargarComponentesDisponiblesSelect() {
+    const select = document.getElementById('catComponenteSelect');
+    if (!select) return;
+    try {
+        const servicios = await fetchAPI('/catalogo?solo_activos=true&limit=500') || [];
+        const candidatos = servicios.filter(s =>
+            !s.es_paquete && (s.categoria || '').toUpperCase() !== 'CONSULTA' && s.id !== selectedId
+        );
+        select.innerHTML = '<option value="">Seleccionar…</option>' + candidatos.map(s =>
+            `<option value="${s.id}">${escapeHtml(s.nombre)} (${escapeHtml(s.categoria)})</option>`
+        ).join('');
+    } catch (err) {
+        select.innerHTML = '<option value="">Error al cargar servicios</option>';
+    }
+}
+
+async function agregarComponentePaqueteUI(paqueteId) {
+    const componenteId = parseInt(document.getElementById('catComponenteSelect')?.value, 10);
+    const cantidad = parseFloat(document.getElementById('catComponenteCantidad')?.value);
+    showComponenteError('');
+    if (!componenteId) { showComponenteError('Elegí un servicio.'); return; }
+    if (!(cantidad > 0)) { showComponenteError('Ingresá una cantidad mayor a 0.'); return; }
+    try {
+        await fetchAPI(`/catalogo/${paqueteId}/componentes`, {
+            method: 'POST',
+            body: JSON.stringify({ componente_id: componenteId, cantidad }),
+        });
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showComponenteError('Error: ' + err.message);
+    }
+}
+
+async function quitarComponentePaquete(rowId) {
+    try {
+        await fetchAPI(`/catalogo/componentes/${rowId}`, { method: 'DELETE' });
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showNotification('Error al quitar componente: ' + err.message, 'error');
+    }
+}
+
+async function actualizarCantidadComponentePaquete(rowId, valor) {
+    const cantidad = parseFloat(valor);
+    if (!(cantidad > 0)) { showNotification('La cantidad debe ser mayor a 0.', 'error'); return; }
+    try {
+        await fetchAPI(`/catalogo/componentes/${rowId}`, { method: 'PUT', body: JSON.stringify({ cantidad }) });
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showNotification('Error al actualizar cantidad: ' + err.message, 'error');
+    }
+}
+
+// Reordenar (design D5, "Reordenar componentes"): el front intercambia la
+// `posicion` de la fila con su vecino con dos PUT -- no hay un endpoint de
+// "mover" dedicado.
+async function moverComponentePaquete(paqueteId, row, delta) {
+    const vecino = delta < 0 ? row.previousElementSibling : row.nextElementSibling;
+    if (!vecino || !vecino.dataset.componenteRowId) return;
+    const filaId = row.dataset.componenteRowId;
+    const vecinoId = vecino.dataset.componenteRowId;
+    try {
+        const [listado] = await Promise.all([listarComponentesPaqueteUI(paqueteId)]);
+        const filaActual = listado.componentes.find(c => String(c.id) === filaId);
+        const filaVecina = listado.componentes.find(c => String(c.id) === vecinoId);
+        if (!filaActual || !filaVecina) return;
+        await Promise.all([
+            fetchAPI(`/catalogo/componentes/${filaId}`, { method: 'PUT', body: JSON.stringify({ posicion: filaVecina.posicion }) }),
+            fetchAPI(`/catalogo/componentes/${vecinoId}`, { method: 'PUT', body: JSON.stringify({ posicion: filaActual.posicion }) }),
+        ]);
+        if (selectedId) await cargarDetalle(selectedId);
+    } catch (err) {
+        showNotification('Error al reordenar: ' + err.message, 'error');
+    }
+}
+
+function listarComponentesPaqueteUI(paqueteId) {
+    return fetchAPI(`/catalogo/${paqueteId}/componentes`);
 }
 
 // ============================================================
@@ -494,6 +705,12 @@ export async function abrirModalServicio(id = null) {
     if (motivoGroup) motivoGroup.hidden = true;
     cargarComisionModal(null);
 
+    // plantillas-paquete-catalogo: "Es paquete" es admin-only (design D5),
+    // igual que el grupo de comisión de arriba.
+    const esPaqueteGroup = document.getElementById('catalogoEsPaqueteGroup');
+    if (esPaqueteGroup) esPaqueteGroup.hidden = getRole() !== 'admin';
+    document.getElementById('catalogoEsPaquete').checked = false;
+
     if (id) {
         try {
             const s = await fetchAPI(`/catalogo/${id}`);
@@ -505,6 +722,7 @@ export async function abrirModalServicio(id = null) {
             document.getElementById('catalogoPrecioVariable').checked = s.precio_variable;
             document.getElementById('catalogoArea').value = s.area_id ? String(s.area_id) : '';
             document.getElementById('catalogoAdjunto').value = s.requiere_adjunto === true ? 'si' : (s.requiere_adjunto === false ? 'no' : '');
+            document.getElementById('catalogoEsPaquete').checked = !!s.es_paquete;
             cargarComisionModal(s);
             gatePrecioInput({ inputId: 'catalogoPrecioRef', hintId: 'catalogoPrecioRefHint', motivoGroupId: 'catalogoMotivoGroup' });
         } catch (err) {
@@ -541,6 +759,14 @@ export async function guardarServicio(e) {
     if (!areaGroup?.hidden) {
         const area = document.getElementById('catalogoArea').value;
         payload.area_id = area ? Number(area) : null;
+    }
+    // plantillas-paquete-catalogo: "Es paquete" solo se manda si el grupo es
+    // visible (admin) -- el backend igual es admin-only, esto evita mandar
+    // `es_paquete=false` de un rol que ni ve el checkbox y "cambiar" el valor
+    // sin querer si algún día backend deja de ser idempotente en el mismo valor.
+    const esPaqueteGroup = document.getElementById('catalogoEsPaqueteGroup');
+    if (!esPaqueteGroup?.hidden) {
+        payload.es_paquete = document.getElementById('catalogoEsPaquete').checked;
     }
     if (!document.getElementById('catalogoComisionGroup')?.hidden) {
         const comision = payloadComision();

@@ -1142,12 +1142,32 @@
                                 </div>
                                 <div id="oaConsumosList"></div>
                             </div>
+                            <!-- plantillas-paquete-catalogo: al elegir un servicio marcado
+                                 es_paquete, se ocultan #oaConsumosWrap y #oaBasePadreGroup
+                                 (una plantilla ya trae su propia jerarquía base/items) y se
+                                 muestra este bloque con los componentes, el total y la
+                                 disponibilidad de insumos antes de confirmar con "Agregar
+                                 paquete" (ver seleccionarServicio en orden-abierta.js). -->
+                            <div id="oaPaqueteWrap" hidden style="margin-top:12px;">
+                                <div class="oa-consumos-head">
+                                    <strong>Componentes del paquete</strong>
+                                    <span id="oaPaqueteTotal"></span>
+                                </div>
+                                <div id="oaPaqueteComponentes"></div>
+                                <div class="oa-consumos-head" style="margin-top:10px;">
+                                    <strong>Insumos y stock</strong>
+                                </div>
+                                <div id="oaPaqueteDisponibilidad"></div>
+                            </div>
                             <!-- servicio-base-paquete-items: marcar este servicio como
                                  "paquete base", o anclarlo como item adicional de un
                                  paquete base ya anexado a esta orden. Mutuamente
                                  excluyentes (ver confirmarAnexo/wireAnexarPaquete en
-                                 orden-abierta.js). -->
-                            <div class="oa-anexar-paquete" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+                                 orden-abierta.js). Oculto en bloque (#oaBasePadreGroup)
+                                 cuando el servicio elegido es una plantilla de paquete
+                                 (plantillas-paquete-catalogo): esas líneas arman su propia
+                                 jerarquía base/items, esto es solo para armarla a mano. -->
+                            <div class="oa-anexar-paquete" id="oaBasePadreGroup" style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
                                 <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
                                     <input type="checkbox" id="oaEsBase"> Es un paquete base (puede tener items adicionales)
                                 </label>
@@ -2813,6 +2833,13 @@
                         <option value="si">Obligatorio</option>
                         <option value="no">No hace falta</option>
                     </select>
+                </div>
+                <!-- plantillas-paquete-catalogo: marca el servicio como plantilla de
+                     paquete (design D5). Admin-only, mismo criterio que la comisión
+                     de abajo -- la composición decide qué se factura. -->
+                <div class="form-group" id="catalogoEsPaqueteGroup" hidden style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="checkbox" id="catalogoEsPaquete" style="width:auto;">
+                    <label for="catalogoEsPaquete" style="margin:0;">Es paquete</label>
                 </div>
                 <div class="form-group" id="catalogoComisionGroup" hidden>
                     <label for="catalogoTipoComision">Comisión del encargado</label>

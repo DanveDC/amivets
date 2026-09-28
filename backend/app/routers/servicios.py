@@ -162,6 +162,14 @@ def actualizar_servicio_impl(
     update_dict = update_data.model_dump(exclude_unset=True)
     consumos_override = update_dict.pop("consumos", None)
 
+    # plantillas-paquete-catalogo: re-apuntar una línea existente a un item
+    # es_paquete=true la dejaría a precio de paquete sin sus componentes,
+    # mismo problema que anexarlo suelto. Solo se chequea cuando el payload
+    # trae el campo (import local, ver crear_servicio_directo arriba).
+    if "catalogo_servicio_id" in update_dict:
+        from app.services.paquete_service import rechazar_si_es_paquete
+        rechazar_si_es_paquete(db, update_dict["catalogo_servicio_id"])
+
     # M2: editar cantidad/consumos de un servicio que se queda del lado
     # consumido cambiaria solo la columna, sin tocar el ledger ni
     # ConsumoMaterial -> la reversa posterior devolveria un monto distinto al
@@ -332,6 +340,13 @@ def crear_servicio_directo(
         raise HTTPException(status_code=404, detail="Mascota no encontrada")
 
     validar_tipo_servicio_por_rol(current_user, servicio_data.tipo_servicio)
+
+    # plantillas-paquete-catalogo: mismo guard que anexar_servicio_orden y
+    # agregar_servicio_consulta. Import local -- paquete_service importa
+    # validar_tipo_servicio_por_rol DE ESTE módulo, un import a nivel de
+    # módulo acá arriba sería circular.
+    from app.services.paquete_service import rechazar_si_es_paquete
+    rechazar_si_es_paquete(db, servicio_data.catalogo_servicio_id)
 
     if not servicio_data.orden_id:
         raise HTTPException(

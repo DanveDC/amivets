@@ -1101,6 +1101,10 @@ class CatalogoServicioCreate(CatalogoServicioBase):
     tipo_comision_servicio: TIPOS_COMISION_SERVICIO = "HEREDA"
     monto_fijo_servicio: Optional[Decimal] = Field(None, ge=0)
     porcentaje_servicio: Optional[Decimal] = Field(None, ge=0, le=100)
+    # plantillas-paquete-catalogo: marca este servicio como plantilla de
+    # paquete (design D1/D5). Admin-only -- el router valida el rol y las
+    # reglas cruzadas (sin CONSULTA, no ser ya componente de otro paquete).
+    es_paquete: bool = False
 
     @model_validator(mode="after")
     def validar_comision(self):
@@ -1147,6 +1151,8 @@ class CatalogoServicioUpdate(BaseModel):
     tipo_comision_servicio: Optional[TIPOS_COMISION_SERVICIO] = None
     monto_fijo_servicio: Optional[Decimal] = Field(None, ge=0)
     porcentaje_servicio: Optional[Decimal] = Field(None, ge=0, le=100)
+    # plantillas-paquete-catalogo (ver CatalogoServicioCreate).
+    es_paquete: Optional[bool] = None
 
 
 class CatalogoServicioResponse(CatalogoServicioBase):
@@ -1157,8 +1163,73 @@ class CatalogoServicioResponse(CatalogoServicioBase):
     tipo_comision_servicio: str = "HEREDA"
     monto_fijo_servicio: Optional[Decimal] = None
     porcentaje_servicio: Optional[Decimal] = None
+    # plantillas-paquete-catalogo (design D1/D5).
+    es_paquete: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ========== PLANTILLAS DE PAQUETE (plantillas-paquete-catalogo) ==========
+# Componentes de una plantilla de paquete (design D5) y disponibilidad de
+# insumos de un servicio del catálogo (design D4, pura + wrapper con DB).
+
+
+class PaqueteComponenteCreate(BaseModel):
+    componente_id: int = Field(..., gt=0)
+    cantidad: Decimal = Field(..., gt=0)
+
+
+class PaqueteComponenteUpdate(BaseModel):
+    cantidad: Optional[Decimal] = Field(None, gt=0)
+    posicion: Optional[int] = Field(None, ge=0)
+
+
+class PaqueteComponenteResponse(BaseModel):
+    id: int
+    paquete_id: int
+    componente_id: int
+    nombre: str
+    categoria: str
+    precio_ref: float
+    activo: bool
+    cantidad: Decimal
+    posicion: int
+    subtotal: float
+
+    @field_serializer('cantidad', when_used='json')
+    def _serializar_cantidad(self, v):
+        return float(v) if v is not None else None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaqueteComponentesResponse(BaseModel):
+    paquete_id: int
+    precio_propio: float
+    total_paquete: float
+    componentes: List[PaqueteComponenteResponse] = []
+
+
+class DisponibilidadInsumo(BaseModel):
+    inventario_id: int
+    nombre: str
+    unidad: str
+    requerido: float
+    disponible: float
+    faltante: float
+    origenes: List[str] = []
+
+
+class ComponenteOmitido(BaseModel):
+    catalogo_servicio_id: int
+    nombre: str
+
+
+class DisponibilidadServicioResponse(BaseModel):
+    catalogo_servicio_id: int
+    suficiente: bool
+    insumos: List[DisponibilidadInsumo] = []
+    componentes_omitidos: List[ComponenteOmitido] = []
 
 
 # ========== ABONO SCHEMAS ==========
@@ -1444,6 +1515,22 @@ class OrdenServicioAnexarServicio(BaseModel):
     # -- ver orden_service.crear_servicio_en_orden.
     servicio_padre_id: Optional[int] = Field(None, gt=0)
     es_base: bool = False
+
+
+class OrdenAnexarPaquete(BaseModel):
+    """POST /api/ordenes/{id}/paquetes (plantillas-paquete-catalogo, design D3):
+    anexa una plantilla de paquete completa (base + items activos) en una sola
+    transacción -- la hermana "de un solo paso" de anexar servicios sueltos
+    con es_base/servicio_padre_id a mano."""
+    catalogo_servicio_id: int = Field(..., gt=0)
+
+
+class PaqueteAnexadoResponse(BaseModel):
+    base: ServicioConsultaResponse
+    items: List[ServicioConsultaResponse] = []
+    # Una por componente inactivo omitido y una por material con faltante
+    # (design D3/D4) -- nunca bloquea el anexo, solo informa.
+    advertencias: List[dict] = []
 
 
 class OrdenServicioAnular(BaseModel):

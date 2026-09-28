@@ -731,6 +731,92 @@ async function deleteTestCatalogoServicio(request, id, token = null) {
 }
 
 // ===========================================================================
+// Plantillas de paquete (plantillas-paquete-catalogo): es_paquete, componentes
+// del paquete, disponibilidad de insumos y anexo de paquete a una orden.
+// Mismo criterio del resto del archivo: "create"/"do" helpers throw loudly,
+// para que un contrato roto falle en la línea de setup, no 10 líneas después.
+// ===========================================================================
+
+/** PUT /api/catalogo/{id} { es_paquete }. Admin-only (design D5); pasa el
+ * token del rol que se quiere probar (para los 403 de veterinario/otros). */
+async function marcarPaquete(request, servicioId, esPaquete, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.put(`/api/catalogo/${servicioId}`, {
+    headers: authHeaders(authToken),
+    data: { es_paquete: esPaquete },
+  });
+  return res;
+}
+
+/** POST /api/catalogo/{paqueteId}/componentes { componente_id, cantidad }.
+ * Admin-only. Throws on rejection -- para setup; los specs que prueban el
+ * 404/422/409 llaman `request.post` directo. */
+async function agregarComponentePaquete(request, paqueteId, { componenteId, cantidad = 1 }, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.post(`/api/catalogo/${paqueteId}/componentes`, {
+    headers: authHeaders(authToken),
+    data: { componente_id: componenteId, cantidad },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to agregar componente ${componenteId} al paquete ${paqueteId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+/** GET /api/catalogo/{paqueteId}/componentes. Throws on rejection. */
+async function listarComponentesPaquete(request, paqueteId, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.get(`/api/catalogo/${paqueteId}/componentes`, { headers: authHeaders(authToken) });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to listar componentes del paquete ${paqueteId}: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** GET /api/catalogo/{servicioId}/disponibilidad. Throws on rejection. */
+async function disponibilidadCatalogo(request, servicioId, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.get(`/api/catalogo/${servicioId}/disponibilidad`, { headers: authHeaders(authToken) });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to leer disponibilidad de ${servicioId}: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** POST /api/catalogo/{servicioId}/recetas { inventario_id, cantidad,
+ * unidad_medida }. Throws on rejection. `unidadMedida` default 'ml': el
+ * material de prueba de `createTestProduct` no fija `unidad_medida`, así que
+ * el caller debe pasar la misma unidad que le dio al material. */
+async function agregarRecetaCatalogo(request, servicioId, { inventarioId, cantidad, unidadMedida = 'ml' }, token = null) {
+  const authToken = token || (await getAdminToken(request));
+  const res = await request.post(`/api/catalogo/${servicioId}/recetas`, {
+    headers: authHeaders(authToken),
+    data: { inventario_id: inventarioId, cantidad, unidad_medida: unidadMedida },
+  });
+  if (!res.ok()) {
+    throw new Error(`[amivets-e2e] Failed to agregar receta a ${servicioId}: ${res.status()} ${await res.text()}`);
+  }
+  return res.json();
+}
+
+/** POST /api/ordenes/{ordenId}/paquetes { catalogo_servicio_id }. Same
+ * "create" convention as anexarServicioOrden: throws on rejection. */
+async function anexarPaqueteOrden(request, ordenId, catalogoServicioId, token = null) {
+  const res = await request.post(`/api/ordenes/${ordenId}/paquetes`, {
+    headers: token ? authHeaders(token) : {},
+    data: { catalogo_servicio_id: catalogoServicioId },
+  });
+  if (!res.ok()) {
+    throw new Error(
+      `[amivets-e2e] Failed to anexar paquete ${catalogoServicioId} to orden ${ordenId}: ${res.status()} ${await res.text()}`
+    );
+  }
+  return res.json();
+}
+
+// ===========================================================================
 // Despacho y bandejas (/api/areas, /api/servicios/{id}/tomar,
 // /api/servicios/bandeja, /api/notificaciones) — Tarea 06, etapa 5.
 // ===========================================================================
@@ -1270,6 +1356,12 @@ module.exports = {
   anularTestFactura,
   createTestCatalogoServicio,
   deleteTestCatalogoServicio,
+  marcarPaquete,
+  agregarComponentePaquete,
+  listarComponentesPaquete,
+  disponibilidadCatalogo,
+  agregarRecetaCatalogo,
+  anexarPaqueteOrden,
   createTestArea,
   desactivarTestArea,
   agregarGestorArea,
